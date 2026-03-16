@@ -172,6 +172,26 @@ export type ProvisioningStatusResponse = {
   steps: ProvisioningStep[]
 }
 
+export type SiteRuntimeService = {
+  name: string
+  container_name: string
+  state: string
+  health_status: string
+  started_at?: string | null
+  finished_at?: string | null
+  status_text: string
+}
+
+export type SiteRuntimeStatus = {
+  site: SiteSummary
+  runtime_mode: string
+  controllable: boolean
+  overall_status: string
+  last_error: string
+  services: SiteRuntimeService[]
+  runtime?: SiteRuntimeMetadata | null
+}
+
 type MessageResponse = {
   message: string
 }
@@ -394,6 +414,28 @@ export const api = {
 
   getProvisioningStatus(siteID: string) {
     return apiFetch<ProvisioningStatusResponse>(`/sites/${encodeURIComponent(siteID)}/provisioning`)
+  },
+
+  getSiteRuntime(siteID: string) {
+    return apiFetch<SiteRuntimeStatus>(`/sites/${encodeURIComponent(siteID)}/runtime`)
+  },
+
+  startSiteRuntime(siteID: string) {
+    return apiFetch<SiteRuntimeStatus>(`/sites/${encodeURIComponent(siteID)}/runtime/start`, {
+      method: "POST",
+    })
+  },
+
+  restartSiteRuntime(siteID: string) {
+    return apiFetch<SiteRuntimeStatus>(`/sites/${encodeURIComponent(siteID)}/runtime/restart`, {
+      method: "POST",
+    })
+  },
+
+  stopSiteRuntime(siteID: string) {
+    return apiFetch<SiteRuntimeStatus>(`/sites/${encodeURIComponent(siteID)}/runtime/stop`, {
+      method: "POST",
+    })
   },
 
   markNotificationRead(notificationID: string) {

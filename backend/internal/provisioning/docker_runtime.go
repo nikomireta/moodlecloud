@@ -30,6 +30,19 @@ type DockerLocalRuntime struct {
 	httpClient *http.Client
 }
 
+type runtimeAction string
+
+const (
+	runtimeActionStart   runtimeAction = "start"
+	runtimeActionRestart runtimeAction = "restart"
+	runtimeActionStop    runtimeAction = "stop"
+)
+
+type runtimeServiceTarget struct {
+	Name          string
+	ContainerName string
+}
+
 func NewDockerLocalRuntime(cfg config.Config) (*DockerLocalRuntime, error) {
 	dockerClient, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
@@ -175,6 +188,99 @@ func (r *DockerLocalRuntime) Cleanup(ctx context.Context, site store.Site, metad
 		return errors.New(strings.Join(errs, "; "))
 	}
 	return nil
+}
+
+func (r *DockerLocalRuntime) GetRuntimeStatus(ctx context.Context, site store.Site, job store.ProvisioningJob, metadata *store.SiteRuntimeMetadata) (SiteRuntimeStatus, error) {
+	if metadata == nil {
+		return BuildMinimalRuntimeStatus(site, job, metadata), nil
+	}
+	if strings.TrimSpace(job.RuntimeMode) != "docker_local" {
+		return BuildMinimalRuntimeStatus(site, job, metadata), nil
+	}
+
+	services, lastError, err := r.inspectRuntimeServices(ctx, *metadata)
+	if err != nil {
+		return SiteRuntimeStatus{}, err
+	}
+
+	routeReady := false
+	routeObservation := ""
+	if shouldCheckRuntimeRoute(site, services) {
+		routeReady, routeObservation = r.probeSiteRoute(site.SiteURL)
+		if !routeReady && lastError == "" {
+			lastError = humanizeRouteObservation(routeObservation)
+		}
+	}
+
+	overallStatus := deriveOverallRuntimeStatus(site, services, routeReady)
+	if overallStatus == "running" {
+		lastError = ""
+	}
+	if lastError == "" {
+		lastError = strings.TrimSpace(metadata.LastHealthError)
+	}
+
+	return SiteRuntimeStatus{
+		Site:          site,
+		RuntimeMode:   job.RuntimeMode,
+		Controllable:  site.Status == "active",
+		OverallStatus: overallStatus,
+		LastError:     lastError,
+		Services:      services,
+		Runtime:       metadata,
+	}, nil
+}
+
+func (r *DockerLocalRuntime) StartSite(ctx context.Context, site store.Site, job store.ProvisioningJob, metadata *store.SiteRuntimeMetadata) (SiteRuntimeStatus, error) {
+	return r.changeSiteRuntime(ctx, site, job, metadata, runtimeActionStart)
+}
+
+func (r *DockerLocalRuntime) RestartSite(ctx context.Context, site store.Site, job store.ProvisioningJob, metadata *store.SiteRuntimeMetadata) (SiteRuntimeStatus, error) {
+	return r.changeSiteRuntime(ctx, site, job, metadata, runtimeActionRestart)
+}
+
+func (r *DockerLocalRuntime) StopSite(ctx context.Context, site store.Site, job store.ProvisioningJob, metadata *store.SiteRuntimeMetadata) (SiteRuntimeStatus, error) {
+	return r.changeSiteRuntime(ctx, site, job, metadata, runtimeActionStop)
+}
+
+func (r *DockerLocalRuntime) changeSiteRuntime(ctx context.Context, site store.Site, job store.ProvisioningJob, metadata *store.SiteRuntimeMetadata, action runtimeAction) (SiteRuntimeStatus, error) {
+	if strings.TrimSpace(job.RuntimeMode) != "docker_local" {
+		return BuildMinimalRuntimeStatus(site, job, metadata), ErrRuntimeControlUnsupported
+	}
+	if metadata == nil {
+		return BuildMinimalRuntimeStatus(site, job, metadata), ErrRuntimeMetadataMissing
+	}
+	if site.Status != "active" {
+		return BuildMinimalRuntimeStatus(site, job, metadata), ErrRuntimeNotControllable
+	}
+
+	targets := runtimeActionTargets(*metadata, action)
+	for _, target := range targets {
+		switch action {
+		case runtimeActionStart:
+			if err := r.startContainerIfNeeded(ctx, target.ContainerName); err != nil {
+				return SiteRuntimeStatus{}, err
+			}
+		case runtimeActionRestart:
+			if err := r.restartContainerIfNeeded(ctx, target.ContainerName); err != nil {
+				return SiteRuntimeStatus{}, err
+			}
+		case runtimeActionStop:
+			if err := r.stopContainerIfNeeded(ctx, target.ContainerName); err != nil {
+				return SiteRuntimeStatus{}, err
+			}
+		default:
+			return SiteRuntimeStatus{}, fmt.Errorf("unsupported runtime action: %s", action)
+		}
+	}
+
+	if action == runtimeActionStart || action == runtimeActionRestart {
+		if err := r.ValidateRoute(ctx, site, *metadata); err != nil {
+			return SiteRuntimeStatus{}, err
+		}
+	}
+
+	return r.GetRuntimeStatus(ctx, site, job, metadata)
 }
 
 func (r *DockerLocalRuntime) ensureImage(ctx context.Context, metadata store.SiteRuntimeMetadata) error {
@@ -467,6 +573,119 @@ func (r *DockerLocalRuntime) removeContainerIfExists(ctx context.Context, name s
 	return nil
 }
 
+func (r *DockerLocalRuntime) inspectRuntimeServices(ctx context.Context, metadata store.SiteRuntimeMetadata) ([]SiteRuntimeService, string, error) {
+	targets := []runtimeServiceTarget{
+		{Name: "web", ContainerName: metadata.WebContainerName},
+		{Name: "cron", ContainerName: metadata.CronContainerName},
+	}
+
+	services := make([]SiteRuntimeService, 0, len(targets))
+	lastError := ""
+	for _, target := range targets {
+		service, err := r.inspectRuntimeService(ctx, target)
+		if err != nil {
+			return nil, "", err
+		}
+		if lastError == "" && strings.TrimSpace(service.StatusText) == "Container tidak ditemukan" {
+			lastError = fmt.Sprintf("Container %s tidak ditemukan", target.Name)
+		}
+		services = append(services, service)
+	}
+	return services, lastError, nil
+}
+
+func (r *DockerLocalRuntime) inspectRuntimeService(ctx context.Context, target runtimeServiceTarget) (SiteRuntimeService, error) {
+	inspect, err := r.docker.ContainerInspect(ctx, target.ContainerName)
+	if err != nil {
+		if errdefs.IsNotFound(err) {
+			return SiteRuntimeService{
+				Name:          target.Name,
+				ContainerName: target.ContainerName,
+				State:         "missing",
+				HealthStatus:  "unknown",
+				StatusText:    "Container tidak ditemukan",
+			}, nil
+		}
+		return SiteRuntimeService{}, fmt.Errorf("inspect container %s: %w", target.ContainerName, err)
+	}
+
+	service := SiteRuntimeService{
+		Name:          target.Name,
+		ContainerName: target.ContainerName,
+		State:         "unknown",
+		HealthStatus:  "unknown",
+		StatusText:    "Status belum diketahui",
+	}
+
+	if inspect.State != nil {
+		service.State = strings.TrimSpace(inspect.State.Status)
+		if service.State == "" {
+			service.State = "unknown"
+		}
+		if inspect.State.Health != nil && strings.TrimSpace(inspect.State.Health.Status) != "" {
+			service.HealthStatus = strings.TrimSpace(inspect.State.Health.Status)
+		}
+		service.StartedAt = parseDockerTimestamp(inspect.State.StartedAt)
+		service.FinishedAt = parseDockerTimestamp(inspect.State.FinishedAt)
+	}
+	service.StatusText = describeRuntimeService(service.State, service.HealthStatus)
+
+	return service, nil
+}
+
+func (r *DockerLocalRuntime) startContainerIfNeeded(ctx context.Context, containerName string) error {
+	inspect, err := r.docker.ContainerInspect(ctx, containerName)
+	if err != nil {
+		if errdefs.IsNotFound(err) {
+			return fmt.Errorf("container %s tidak ditemukan", containerName)
+		}
+		return fmt.Errorf("inspect container %s: %w", containerName, err)
+	}
+	if inspect.State != nil && inspect.State.Running {
+		return nil
+	}
+	if err := r.docker.ContainerStart(ctx, inspect.ID, container.StartOptions{}); err != nil && !errdefs.IsConflict(err) {
+		return fmt.Errorf("start container %s: %w", containerName, err)
+	}
+	return nil
+}
+
+func (r *DockerLocalRuntime) stopContainerIfNeeded(ctx context.Context, containerName string) error {
+	inspect, err := r.docker.ContainerInspect(ctx, containerName)
+	if err != nil {
+		if errdefs.IsNotFound(err) {
+			return nil
+		}
+		return fmt.Errorf("inspect container %s: %w", containerName, err)
+	}
+	if inspect.State == nil || !inspect.State.Running {
+		return nil
+	}
+	timeout := 10
+	if err := r.docker.ContainerStop(ctx, inspect.ID, container.StopOptions{Timeout: &timeout}); err != nil && !errdefs.IsNotFound(err) {
+		return fmt.Errorf("stop container %s: %w", containerName, err)
+	}
+	return nil
+}
+
+func (r *DockerLocalRuntime) restartContainerIfNeeded(ctx context.Context, containerName string) error {
+	inspect, err := r.docker.ContainerInspect(ctx, containerName)
+	if err != nil {
+		if errdefs.IsNotFound(err) {
+			return fmt.Errorf("container %s tidak ditemukan", containerName)
+		}
+		return fmt.Errorf("inspect container %s: %w", containerName, err)
+	}
+	if inspect.State == nil || !inspect.State.Running {
+		return r.startContainerIfNeeded(ctx, containerName)
+	}
+	timeout := 10
+	if err := r.docker.ContainerRestart(ctx, inspect.ID, container.StopOptions{Timeout: &timeout}); err != nil {
+		return fmt.Errorf("restart container %s: %w", containerName, err)
+	}
+	return nil
+}
+
 func (r *DockerLocalRuntime) runtimeEnv(site store.Site, metadata store.SiteRuntimeMetadata) []string {
 	dbPassword := DatabasePassword(r.cfg.SiteRuntimeSecret, site.ID.String())
 	return []string{
@@ -735,4 +954,129 @@ func logIfChanged(previous *string, current string) {
 	}
 	log.Print(current)
 	*previous = current
+}
+
+func runtimeActionTargets(metadata store.SiteRuntimeMetadata, action runtimeAction) []runtimeServiceTarget {
+	switch action {
+	case runtimeActionStop:
+		return []runtimeServiceTarget{
+			{Name: "cron", ContainerName: metadata.CronContainerName},
+			{Name: "web", ContainerName: metadata.WebContainerName},
+		}
+	default:
+		return []runtimeServiceTarget{
+			{Name: "web", ContainerName: metadata.WebContainerName},
+			{Name: "cron", ContainerName: metadata.CronContainerName},
+		}
+	}
+}
+
+func deriveOverallRuntimeStatus(site store.Site, services []SiteRuntimeService, routeReady bool) string {
+	switch strings.TrimSpace(strings.ToLower(site.Status)) {
+	case "pending", "provisioning":
+		return "provisioning"
+	case "failed":
+		return "failed"
+	}
+
+	web := findRuntimeService(services, "web")
+	cron := findRuntimeService(services, "cron")
+	if web == nil || cron == nil {
+		return "unknown"
+	}
+
+	if web.State == "missing" || cron.State == "missing" {
+		return "unknown"
+	}
+	if !isRunningState(web.State) && !isRunningState(cron.State) {
+		return "stopped"
+	}
+	if isRunningState(web.State) && isRunningState(cron.State) {
+		if !isHealthyState(web.HealthStatus) || !isHealthyState(cron.HealthStatus) || !routeReady {
+			return "degraded"
+		}
+		return "running"
+	}
+	return "degraded"
+}
+
+func findRuntimeService(services []SiteRuntimeService, name string) *SiteRuntimeService {
+	for i := range services {
+		if services[i].Name == name {
+			return &services[i]
+		}
+	}
+	return nil
+}
+
+func shouldCheckRuntimeRoute(site store.Site, services []SiteRuntimeService) bool {
+	if strings.TrimSpace(strings.ToLower(site.Status)) != "active" {
+		return false
+	}
+	web := findRuntimeService(services, "web")
+	cron := findRuntimeService(services, "cron")
+	return web != nil && cron != nil && isRunningState(web.State) && isRunningState(cron.State)
+}
+
+func isRunningState(state string) bool {
+	return strings.EqualFold(strings.TrimSpace(state), "running")
+}
+
+func isHealthyState(status string) bool {
+	status = strings.TrimSpace(strings.ToLower(status))
+	return status == "" || status == "healthy"
+}
+
+func describeRuntimeService(state, healthStatus string) string {
+	switch strings.TrimSpace(strings.ToLower(state)) {
+	case "running":
+		switch strings.TrimSpace(strings.ToLower(healthStatus)) {
+		case "", "healthy":
+			return "Berjalan"
+		case "starting":
+			return "Menyiapkan service"
+		default:
+			return "Berjalan tapi tidak sehat"
+		}
+	case "exited":
+		return "Berhenti"
+	case "created":
+		return "Siap dijalankan"
+	case "restarting":
+		return "Memulai ulang"
+	case "paused":
+		return "Sedang dipause"
+	case "dead":
+		return "Container mati"
+	case "missing":
+		return "Container tidak ditemukan"
+	default:
+		return "Status belum diketahui"
+	}
+}
+
+func parseDockerTimestamp(value string) *time.Time {
+	value = strings.TrimSpace(value)
+	if value == "" || value == "0001-01-01T00:00:00Z" {
+		return nil
+	}
+	parsed, err := time.Parse(time.RFC3339Nano, value)
+	if err != nil {
+		return nil
+	}
+	return &parsed
+}
+
+func humanizeRouteObservation(observation string) string {
+	observation = strings.TrimSpace(observation)
+	switch {
+	case observation == "":
+		return ""
+	case strings.Contains(observation, "route_probe_status="):
+		return fmt.Sprintf("Route situs belum siap (%s)", strings.TrimPrefix(observation, "route_probe_"))
+	case strings.Contains(observation, "route_probe_error"):
+		return "Route situs belum merespons"
+	default:
+		return observation
+	}
 }

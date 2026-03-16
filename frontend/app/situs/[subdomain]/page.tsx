@@ -59,9 +59,10 @@ import {
 import { Textarea } from "@/components/ui/textarea"
 import { Checkbox } from "@/components/ui/checkbox"
 import Link from "next/link"
-import { use, useState } from "react"
+import { use, useEffect, useState } from "react"
 import { ProtectedRoute } from "@/components/auth/protected-route"
 import { buildAdminURL, buildSiteURL, siteHostFromURL, SITE_BASE_DOMAIN } from "@/lib/site-url"
+import { api, isAPIError, type SiteRuntimeStatus, type SiteSummary } from "@/lib/api"
 
 // Mockup data
 const getSiteData = (subdomain: string) => ({
@@ -165,12 +166,90 @@ const notificationPreferences = {
   allowUnsubscribe: true,
 }
 
+function siteStatusBadge(status: string) {
+  switch (status) {
+    case "active":
+      return {
+        label: "Aktif",
+        className: "text-green-600 border-green-600 text-xs",
+      }
+    case "provisioning":
+    case "pending":
+      return {
+        label: "Sedang Dibuat",
+        className: "text-orange-600 border-orange-600 text-xs",
+      }
+    case "failed":
+      return {
+        label: "Gagal",
+        className: "text-red-600 border-red-600 text-xs",
+      }
+    default:
+      return {
+        label: "Tidak Diketahui",
+        className: "text-muted-foreground border-border text-xs",
+      }
+  }
+}
+
+function runtimeStatusBadge(status: string) {
+  switch (status) {
+    case "running":
+      return {
+        label: "Running",
+        className: "text-green-600 border-green-600/50 bg-green-500/10 text-xs",
+      }
+    case "degraded":
+      return {
+        label: "Degraded",
+        className: "text-amber-600 border-amber-600/50 bg-amber-500/10 text-xs",
+      }
+    case "stopped":
+      return {
+        label: "Stopped",
+        className: "text-slate-600 border-slate-600/50 bg-slate-500/10 text-xs",
+      }
+    case "failed":
+      return {
+        label: "Failed",
+        className: "text-red-600 border-red-600/50 bg-red-500/10 text-xs",
+      }
+    case "provisioning":
+      return {
+        label: "Provisioning",
+        className: "text-orange-600 border-orange-600/50 bg-orange-500/10 text-xs",
+      }
+    default:
+      return {
+        label: "Unknown",
+        className: "text-muted-foreground border-border bg-muted/30 text-xs",
+      }
+  }
+}
+
+function findRuntimeService(runtimeStatus: SiteRuntimeStatus | null, name: string) {
+  return runtimeStatus?.services.find((service) => service.name === name) ?? null
+}
+
+function formatRuntimeValue(value?: string | null) {
+  if (!value) {
+    return "-"
+  }
+  return value
+}
+
+function isRuntimeControllable(runtimeStatus: SiteRuntimeStatus | null) {
+  return Boolean(runtimeStatus?.controllable && runtimeStatus.runtime_mode === "docker_local")
+}
+
 export default function SiteDetailPage({ params }: { params: Promise<{ subdomain: string }> }) {
   const { subdomain } = use(params)
-  const siteUrl = buildSiteURL(subdomain)
-  const adminUrl = buildAdminURL(subdomain)
-  const siteHost = siteHostFromURL(siteUrl, subdomain)
-  const site = getSiteData(subdomain)
+  const mockSite = getSiteData(subdomain)
+  const site = mockSite
+  const [siteData, setSiteData] = useState<SiteSummary | null>(null)
+  const [runtimeStatus, setRuntimeStatus] = useState<SiteRuntimeStatus | null>(null)
+  const [runtimeError, setRuntimeError] = useState("")
+  const [runtimeAction, setRuntimeAction] = useState<"start" | "restart" | "stop" | null>(null)
   const [activeTab, setActiveTab] = useState("ringkasan")
 
   // Laporan period state — max 7 days
@@ -238,6 +317,96 @@ export default function SiteDetailPage({ params }: { params: Promise<{ subdomain
     { name: "Nina Putri",    role: "Siswa", sessions:  7 + seed % 2, timeOnline: `${1 + seed % 2}j 20m`, submissions: 1, lastAction: "Bahasa Inggris" },
   ]
 
+  useEffect(() => {
+    let cancelled = false
+
+    const load = async () => {
+      try {
+        const siteResponse = await api.getSiteBySubdomain(subdomain)
+        if (cancelled) {
+          return
+        }
+        setSiteData(siteResponse.site)
+
+        try {
+          const runtimeResponse = await api.getSiteRuntime(siteResponse.site.id)
+          if (cancelled) {
+            return
+          }
+          setRuntimeStatus(runtimeResponse)
+          setRuntimeError(runtimeResponse.last_error ?? "")
+        } catch (error) {
+          if (cancelled) {
+            return
+          }
+          setRuntimeError(isAPIError(error) ? error.message : "Gagal memuat status runtime")
+        }
+      } catch (error) {
+        if (cancelled) {
+          return
+        }
+        setRuntimeError(isAPIError(error) ? error.message : "Gagal memuat situs")
+      }
+    }
+
+    void load()
+
+    return () => {
+      cancelled = true
+    }
+  }, [subdomain])
+
+  const siteUrl = siteData?.site_url ?? buildSiteURL(subdomain)
+  const adminUrl = siteData?.admin_url ?? buildAdminURL(subdomain)
+  const siteHost = siteHostFromURL(siteUrl, subdomain)
+  const siteName = siteData?.name ?? mockSite.name
+  const siteStatus = siteData?.status ?? "active"
+  const siteBadge = siteStatusBadge(siteStatus)
+  const runtimeBadge = runtimeStatusBadge(runtimeStatus?.overall_status ?? "unknown")
+  const webService = findRuntimeService(runtimeStatus, "web")
+  const cronService = findRuntimeService(runtimeStatus, "cron")
+  const canControlRuntime = isRuntimeControllable(runtimeStatus)
+  const canStart =
+    canControlRuntime &&
+    ((webService?.state ?? "unknown") !== "running" || (cronService?.state ?? "unknown") !== "running")
+  const canRestart = canControlRuntime && ["running", "degraded", "unknown"].includes(runtimeStatus?.overall_status ?? "")
+  const canStop =
+    canControlRuntime &&
+    ((webService?.state ?? "unknown") === "running" || (cronService?.state ?? "unknown") === "running")
+
+  const handleRuntimeAction = async (action: "start" | "restart" | "stop") => {
+    if (!siteData) {
+      return
+    }
+
+    setRuntimeAction(action)
+    try {
+      const nextStatus =
+        action === "start"
+          ? await api.startSiteRuntime(siteData.id)
+          : action === "restart"
+            ? await api.restartSiteRuntime(siteData.id)
+            : await api.stopSiteRuntime(siteData.id)
+      setRuntimeStatus(nextStatus)
+      setSiteData(nextStatus.site)
+      setRuntimeError(nextStatus.last_error ?? "")
+    } catch (error) {
+      setRuntimeError(isAPIError(error) ? error.message : "Aksi runtime gagal dijalankan")
+      try {
+        const refreshedStatus = await api.getSiteRuntime(siteData.id)
+        setRuntimeStatus(refreshedStatus)
+        setSiteData(refreshedStatus.site)
+        if (refreshedStatus.last_error) {
+          setRuntimeError(refreshedStatus.last_error)
+        }
+      } catch {
+        // Keep the previous runtime state if refresh fails.
+      }
+    } finally {
+      setRuntimeAction(null)
+    }
+  }
+
   const handleCopyUrl = () => {
     navigator.clipboard.writeText(siteUrl)
   }
@@ -266,9 +435,12 @@ export default function SiteDetailPage({ params }: { params: Promise<{ subdomain
               </div>
               <div>
                 <div className="flex items-center gap-3">
-                  <h1 className="text-xl font-semibold">{site.name}</h1>
-                  <Badge variant="outline" className="text-green-600 border-green-600 text-xs">
-                    Aktif
+                  <h1 className="text-xl font-semibold">{siteName}</h1>
+                  <Badge variant="outline" className={siteBadge.className}>
+                    {siteBadge.label}
+                  </Badge>
+                  <Badge variant="outline" className={runtimeBadge.className}>
+                    {runtimeBadge.label}
                   </Badge>
                 </div>
                 <div className="flex items-center gap-2 mt-1">
@@ -277,15 +449,59 @@ export default function SiteDetailPage({ params }: { params: Promise<{ subdomain
                     <Copy className="h-3.5 w-3.5" />
                   </button>
                 </div>
+                <div className="flex flex-wrap items-center gap-2 mt-2 text-xs text-muted-foreground">
+                  <span>Runtime: {runtimeStatus?.runtime_mode ?? "-"}</span>
+                  <span>•</span>
+                  <span>Web: {webService?.status_text ?? "-"}</span>
+                  <span>•</span>
+                  <span>Cron: {cronService?.status_text ?? "-"}</span>
+                  {(runtimeError || runtimeStatus?.last_error) ? (
+                    <>
+                      <span>•</span>
+                      <span>{runtimeError || runtimeStatus?.last_error}</span>
+                    </>
+                  ) : null}
+                </div>
               </div>
             </div>
             
-            <Link href={siteUrl} target="_blank">
-              <Button>
-                <ExternalLink className="mr-2 h-4 w-4" />
-                Buka Situs
-              </Button>
-            </Link>
+            <div className="flex flex-wrap gap-2">
+              {canControlRuntime ? (
+                <>
+                  <Button
+                    variant="outline"
+                    className="border-border"
+                    onClick={() => handleRuntimeAction("start")}
+                    disabled={!canStart || runtimeAction !== null}
+                  >
+                    Start
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="border-border"
+                    onClick={() => handleRuntimeAction("restart")}
+                    disabled={!canRestart || runtimeAction !== null}
+                  >
+                    Restart
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="border-border"
+                    onClick={() => handleRuntimeAction("stop")}
+                    disabled={!canStop || runtimeAction !== null}
+                  >
+                    Stop
+                  </Button>
+                </>
+              ) : null}
+
+              <Link href={siteUrl} target="_blank">
+                <Button>
+                  <ExternalLink className="mr-2 h-4 w-4" />
+                  Buka Situs
+                </Button>
+              </Link>
+            </div>
           </div>
 
           {/* Tabs */}
@@ -475,57 +691,65 @@ export default function SiteDetailPage({ params }: { params: Promise<{ subdomain
                     <div className="flex items-center justify-between py-2 border-b border-border">
                       <div className="flex items-center gap-2">
                         <Database className="h-4 w-4 text-muted-foreground" />
-                        <span className="text-sm text-muted-foreground">Moodle</span>
+                        <span className="text-sm text-muted-foreground">Runtime</span>
                       </div>
-                      <span className="text-sm font-medium">{site.moodleVersion}</span>
+                      <span className="text-sm font-medium">{runtimeStatus?.runtime_mode ?? "-"}</span>
                     </div>
                     <div className="flex items-center justify-between py-2 border-b border-border">
                       <div className="flex items-center gap-2">
                         <Zap className="h-4 w-4 text-muted-foreground" />
-                        <span className="text-sm text-muted-foreground">PHP</span>
+                        <span className="text-sm text-muted-foreground">Image</span>
                       </div>
-                      <span className="text-sm font-medium">{site.phpVersion}</span>
+                      <span className="text-sm font-medium">{runtimeStatus?.runtime ? `${runtimeStatus.runtime.image_repository}:${runtimeStatus.runtime.image_tag}` : "-"}</span>
                     </div>
                     <div className="flex items-center justify-between py-2 border-b border-border">
                       <div className="flex items-center gap-2">
                         <Globe className="h-4 w-4 text-muted-foreground" />
-                        <span className="text-sm text-muted-foreground">Bandwidth</span>
+                        <span className="text-sm text-muted-foreground">Web Service</span>
                       </div>
-                      <span className="text-sm font-medium">{site.stats.bandwidth}</span>
+                      <span className="text-sm font-medium">{webService?.status_text ?? "-"}</span>
                     </div>
                     <div className="flex items-center justify-between py-2">
                       <div className="flex items-center gap-2">
                         <Shield className="h-4 w-4 text-muted-foreground" />
-                        <span className="text-sm text-muted-foreground">SSL Certificate</span>
+                        <span className="text-sm text-muted-foreground">Cron Service</span>
                       </div>
-                      <Badge variant="outline" className="text-green-600 border-green-600/50 bg-green-500/10 text-xs">Aktif</Badge>
+                      <Badge variant="outline" className={cronService?.health_status === "healthy" ? "text-green-600 border-green-600/50 bg-green-500/10 text-xs" : "text-amber-600 border-amber-600/50 bg-amber-500/10 text-xs"}>
+                        {cronService?.status_text ?? "-"}
+                      </Badge>
                     </div>
                   </div>
                 </Card>
               </div>
 
-              {/* Quick Actions */}
+              {/* Runtime Info */}
               <Card className="p-6 border-border">
-                <h3 className="font-semibold mb-4">Aksi Cepat</h3>
+                <h3 className="font-semibold mb-4">Runtime Situs</h3>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  <Button variant="outline" className="justify-start h-auto py-3 border-border">
-                    <RefreshCw className="mr-2 h-4 w-4" />
-                    <span className="text-sm">Restart Situs</span>
-                  </Button>
-                  <Button variant="outline" className="justify-start h-auto py-3 border-border">
-                    <Download className="mr-2 h-4 w-4" />
-                    <span className="text-sm">Backup Sekarang</span>
-                  </Button>
-                  <Button variant="outline" className="justify-start h-auto py-3 border-border">
-                    <Upload className="mr-2 h-4 w-4" />
-                    <span className="text-sm">Restore Backup</span>
-                  </Button>
-                  <Link href={adminUrl} target="_blank" className="w-full">
-                    <Button variant="outline" className="justify-start h-auto py-3 w-full border-border">
-                      <Settings className="mr-2 h-4 w-4" />
-                      <span className="text-sm">Admin Panel</span>
-                    </Button>
-                  </Link>
+                  <div className="rounded-lg border border-border p-4">
+                    <p className="text-xs text-muted-foreground">Image</p>
+                    <p className="text-sm font-medium mt-2 break-all">{runtimeStatus?.runtime ? `${runtimeStatus.runtime.image_repository}:${runtimeStatus.runtime.image_tag}` : "-"}</p>
+                  </div>
+                  <div className="rounded-lg border border-border p-4">
+                    <p className="text-xs text-muted-foreground">Volume</p>
+                    <p className="text-sm font-medium mt-2 break-all">{formatRuntimeValue(runtimeStatus?.runtime?.volume_name)}</p>
+                  </div>
+                  <div className="rounded-lg border border-border p-4">
+                    <p className="text-xs text-muted-foreground">Database</p>
+                    <p className="text-sm font-medium mt-2 break-all">{formatRuntimeValue(runtimeStatus?.runtime?.database_name)}</p>
+                  </div>
+                  <div className="rounded-lg border border-border p-4">
+                    <p className="text-xs text-muted-foreground">Health</p>
+                    <p className="text-sm font-medium mt-2 break-all">{formatRuntimeValue(runtimeStatus?.runtime?.health_status ?? runtimeStatus?.overall_status)}</p>
+                  </div>
+                  <div className="rounded-lg border border-border p-4 sm:col-span-2">
+                    <p className="text-xs text-muted-foreground">Web Container</p>
+                    <p className="text-sm font-medium mt-2 break-all">{formatRuntimeValue(runtimeStatus?.runtime?.web_container_name)}</p>
+                  </div>
+                  <div className="rounded-lg border border-border p-4 sm:col-span-2">
+                    <p className="text-xs text-muted-foreground">Cron Container</p>
+                    <p className="text-sm font-medium mt-2 break-all">{formatRuntimeValue(runtimeStatus?.runtime?.cron_container_name)}</p>
+                  </div>
                 </div>
               </Card>
             </TabsContent>
@@ -917,7 +1141,7 @@ export default function SiteDetailPage({ params }: { params: Promise<{ subdomain
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div>
                     <Label className="text-muted-foreground">Nama Situs</Label>
-                    <Input defaultValue={site.name} className="mt-2 border-border" />
+                    <Input key={siteName} defaultValue={siteName} className="mt-2 border-border" />
                   </div>
                   <div>
                     <Label className="text-muted-foreground">Subdomain</Label>

@@ -13,6 +13,7 @@ import (
 	"moodlecloud/backend/internal/config"
 	"moodlecloud/backend/internal/httpapi"
 	"moodlecloud/backend/internal/mail"
+	"moodlecloud/backend/internal/provisioning"
 	"moodlecloud/backend/internal/store"
 )
 
@@ -61,8 +62,13 @@ func main() {
 	})
 	defer asynqClient.Close()
 
+	runtime, err := provisioning.NewRuntime(cfg)
+	if err != nil {
+		log.Fatalf("create provisioning runtime: %v", err)
+	}
+
 	mailer := mail.NewSMTPMailer(cfg.SMTPHost, cfg.SMTPPort, cfg.SMTPFrom, cfg.FrontendOrigin)
-	server := httpapi.New(cfg, st, mailer, asynqClient)
+	server := httpapi.New(cfg, st, mailer, asynqClient, runtime)
 
 	httpServer := &http.Server{
 		Addr:    cfg.HTTPAddr,

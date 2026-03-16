@@ -4,12 +4,40 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"moodlecloud/backend/internal/config"
 	"moodlecloud/backend/internal/store"
 )
+
+var (
+	ErrRuntimeControlUnsupported = errors.New("site runtime control unsupported")
+	ErrRuntimeMetadataMissing    = errors.New("site runtime metadata missing")
+	ErrRuntimeNotControllable    = errors.New("site runtime is not controllable")
+)
+
+type SiteRuntimeService struct {
+	Name          string     `json:"name"`
+	ContainerName string     `json:"container_name"`
+	State         string     `json:"state"`
+	HealthStatus  string     `json:"health_status"`
+	StartedAt     *time.Time `json:"started_at,omitempty"`
+	FinishedAt    *time.Time `json:"finished_at,omitempty"`
+	StatusText    string     `json:"status_text"`
+}
+
+type SiteRuntimeStatus struct {
+	Site          store.Site                 `json:"site"`
+	RuntimeMode   string                     `json:"runtime_mode"`
+	Controllable  bool                       `json:"controllable"`
+	OverallStatus string                     `json:"overall_status"`
+	LastError     string                     `json:"last_error"`
+	Services      []SiteRuntimeService       `json:"services"`
+	Runtime       *store.SiteRuntimeMetadata `json:"runtime,omitempty"`
+}
 
 type Runtime interface {
 	Provision(ctx context.Context, site store.Site) (store.SiteRuntimeMetadata, error)
@@ -18,6 +46,10 @@ type Runtime interface {
 	ValidateRoute(ctx context.Context, site store.Site, metadata store.SiteRuntimeMetadata) error
 	Finalize(ctx context.Context, site store.Site, metadata store.SiteRuntimeMetadata) error
 	Cleanup(ctx context.Context, site store.Site, metadata *store.SiteRuntimeMetadata, failedStep string) error
+	GetRuntimeStatus(ctx context.Context, site store.Site, job store.ProvisioningJob, metadata *store.SiteRuntimeMetadata) (SiteRuntimeStatus, error)
+	StartSite(ctx context.Context, site store.Site, job store.ProvisioningJob, metadata *store.SiteRuntimeMetadata) (SiteRuntimeStatus, error)
+	RestartSite(ctx context.Context, site store.Site, job store.ProvisioningJob, metadata *store.SiteRuntimeMetadata) (SiteRuntimeStatus, error)
+	StopSite(ctx context.Context, site store.Site, job store.ProvisioningJob, metadata *store.SiteRuntimeMetadata) (SiteRuntimeStatus, error)
 }
 
 func NewRuntime(cfg config.Config) (Runtime, error) {
@@ -109,4 +141,53 @@ func truncateResourceSegment(value string, limit int) string {
 		return value
 	}
 	return strings.Trim(value[:limit], "-_")
+}
+
+func BuildMinimalRuntimeStatus(site store.Site, job store.ProvisioningJob, metadata *store.SiteRuntimeMetadata) SiteRuntimeStatus {
+	lastError := strings.TrimSpace(site.LastError)
+	if lastError == "" {
+		lastError = strings.TrimSpace(job.LastError)
+	}
+	if lastError == "" && metadata != nil {
+		lastError = strings.TrimSpace(metadata.LastHealthError)
+	}
+
+	overallStatus := "unknown"
+	switch strings.TrimSpace(strings.ToLower(site.Status)) {
+	case "pending", "provisioning":
+		overallStatus = "provisioning"
+	case "failed":
+		overallStatus = "failed"
+	case "active":
+		overallStatus = minimalOverallStatus(metadata)
+	}
+
+	return SiteRuntimeStatus{
+		Site:          site,
+		RuntimeMode:   strings.TrimSpace(job.RuntimeMode),
+		Controllable:  false,
+		OverallStatus: overallStatus,
+		LastError:     lastError,
+		Runtime:       metadata,
+		Services:      []SiteRuntimeService{},
+	}
+}
+
+func minimalOverallStatus(metadata *store.SiteRuntimeMetadata) string {
+	if metadata == nil {
+		return "unknown"
+	}
+
+	switch strings.TrimSpace(strings.ToLower(metadata.HealthStatus)) {
+	case "healthy", "running":
+		return "running"
+	case "degraded":
+		return "degraded"
+	case "stopped":
+		return "stopped"
+	case "failed":
+		return "failed"
+	default:
+		return "unknown"
+	}
 }

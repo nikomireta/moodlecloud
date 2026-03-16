@@ -42,3 +42,19 @@ func (SimulatedRuntime) Finalize(_ context.Context, _ store.Site, _ store.SiteRu
 func (SimulatedRuntime) Cleanup(_ context.Context, _ store.Site, _ *store.SiteRuntimeMetadata, _ string) error {
 	return nil
 }
+
+func (SimulatedRuntime) GetRuntimeStatus(_ context.Context, site store.Site, job store.ProvisioningJob, metadata *store.SiteRuntimeMetadata) (SiteRuntimeStatus, error) {
+	return BuildMinimalRuntimeStatus(site, job, metadata), nil
+}
+
+func (SimulatedRuntime) StartSite(_ context.Context, site store.Site, job store.ProvisioningJob, metadata *store.SiteRuntimeMetadata) (SiteRuntimeStatus, error) {
+	return BuildMinimalRuntimeStatus(site, job, metadata), ErrRuntimeControlUnsupported
+}
+
+func (SimulatedRuntime) RestartSite(_ context.Context, site store.Site, job store.ProvisioningJob, metadata *store.SiteRuntimeMetadata) (SiteRuntimeStatus, error) {
+	return BuildMinimalRuntimeStatus(site, job, metadata), ErrRuntimeControlUnsupported
+}
+
+func (SimulatedRuntime) StopSite(_ context.Context, site store.Site, job store.ProvisioningJob, metadata *store.SiteRuntimeMetadata) (SiteRuntimeStatus, error) {
+	return BuildMinimalRuntimeStatus(site, job, metadata), ErrRuntimeControlUnsupported
+}

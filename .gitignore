@@ -1,0 +1,26 @@
+.DS_Store
+*.log
+
+# Local environment files
+.env
+backend/.env
+
+# Go build artifacts
+*.exe
+*.out
+*.test
+/backend/bin/
+/backend/dist/
+
+# Node / Next.js artifacts
+node_modules/
+.next/
+.turbo/
+coverage/
+tsconfig.tsbuildinfo
+frontend/node_modules/
+frontend/.next/
+frontend/tsconfig.tsbuildinfo
+
+# Local tooling artifacts
+.playwright-cli/

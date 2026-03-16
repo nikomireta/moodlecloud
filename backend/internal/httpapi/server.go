@@ -29,6 +29,7 @@ type Server struct {
 	store       *store.Store
 	mailer      mail.Mailer
 	asynqClient *asynq.Client
+	runtime     provisioning.Runtime
 }
 
 type listSessionsResponse struct {
@@ -43,12 +44,13 @@ const (
 	sessionContextKey contextKey = "session"
 )
 
-func New(cfg config.Config, st *store.Store, mailer mail.Mailer, client *asynq.Client) *Server {
+func New(cfg config.Config, st *store.Store, mailer mail.Mailer, client *asynq.Client, runtime provisioning.Runtime) *Server {
 	return &Server{
 		cfg:         cfg,
 		store:       st,
 		mailer:      mailer,
 		asynqClient: client,
+		runtime:     runtime,
 	}
 }
 
@@ -96,6 +98,10 @@ func (s *Server) Router() http.Handler {
 			r.Post("/sites", s.handleCreateSite)
 			r.Get("/sites/{siteID}", s.handleGetSiteByID)
 			r.Get("/sites/{siteID}/provisioning", s.handleGetProvisioningBySiteID)
+			r.Get("/sites/{siteID}/runtime", s.handleGetSiteRuntime)
+			r.Post("/sites/{siteID}/runtime/start", s.handleStartSiteRuntime)
+			r.Post("/sites/{siteID}/runtime/restart", s.handleRestartSiteRuntime)
+			r.Post("/sites/{siteID}/runtime/stop", s.handleStopSiteRuntime)
 			r.Get("/sites/by-subdomain/{subdomain}", s.handleGetSiteBySubdomain)
 
 			r.Get("/notifications", s.handleListNotifications)
@@ -656,6 +662,72 @@ func (s *Server) handleGetProvisioningBySiteID(w http.ResponseWriter, r *http.Re
 	writeJSON(w, http.StatusOK, status)
 }
 
+func (s *Server) handleGetSiteRuntime(w http.ResponseWriter, r *http.Request) {
+	s.handleSiteRuntimeAction(w, r, "status")
+}
+
+func (s *Server) handleStartSiteRuntime(w http.ResponseWriter, r *http.Request) {
+	s.handleSiteRuntimeAction(w, r, "start")
+}
+
+func (s *Server) handleRestartSiteRuntime(w http.ResponseWriter, r *http.Request) {
+	s.handleSiteRuntimeAction(w, r, "restart")
+}
+
+func (s *Server) handleStopSiteRuntime(w http.ResponseWriter, r *http.Request) {
+	s.handleSiteRuntimeAction(w, r, "stop")
+}
+
+func (s *Server) handleSiteRuntimeAction(w http.ResponseWriter, r *http.Request, action string) {
+	user := currentUser(r.Context())
+	siteID, err := uuid.Parse(chi.URLParam(r, "siteID"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "Site ID tidak valid")
+		return
+	}
+
+	provisioningStatus, err := s.store.GetProvisioningStatusBySiteID(r.Context(), user.ID, siteID)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "Runtime situs tidak ditemukan")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	var runtimeStatus provisioning.SiteRuntimeStatus
+	switch action {
+	case "status":
+		runtimeStatus, err = s.runtime.GetRuntimeStatus(r.Context(), provisioningStatus.Site, provisioningStatus.Job, provisioningStatus.Runtime)
+	case "start":
+		runtimeStatus, err = s.runtime.StartSite(r.Context(), provisioningStatus.Site, provisioningStatus.Job, provisioningStatus.Runtime)
+	case "restart":
+		runtimeStatus, err = s.runtime.RestartSite(r.Context(), provisioningStatus.Site, provisioningStatus.Job, provisioningStatus.Runtime)
+	case "stop":
+		runtimeStatus, err = s.runtime.StopSite(r.Context(), provisioningStatus.Site, provisioningStatus.Job, provisioningStatus.Runtime)
+	default:
+		writeError(w, http.StatusInternalServerError, "Aksi runtime tidak didukung")
+		return
+	}
+	if err != nil {
+		switch {
+		case errors.Is(err, provisioning.ErrRuntimeControlUnsupported):
+			writeError(w, http.StatusConflict, "Runtime situs tidak mendukung aksi ini")
+		case errors.Is(err, provisioning.ErrRuntimeMetadataMissing):
+			writeError(w, http.StatusConflict, "Metadata runtime situs belum tersedia")
+		case errors.Is(err, provisioning.ErrRuntimeNotControllable):
+			writeError(w, http.StatusConflict, "Situs belum siap dikontrol")
+		default:
+			writeError(w, http.StatusInternalServerError, err.Error())
+		}
+		return
+	}
+
+	s.persistRuntimeHealth(r.Context(), &runtimeStatus)
+	writeJSON(w, http.StatusOK, runtimeStatus)
+}
+
 func (s *Server) handleGetSiteBySubdomain(w http.ResponseWriter, r *http.Request) {
 	user := currentUser(r.Context())
 	site, err := s.store.GetSiteBySubdomainForOwner(r.Context(), user.ID, chi.URLParam(r, "subdomain"))
@@ -668,6 +740,27 @@ func (s *Server) handleGetSiteBySubdomain(w http.ResponseWriter, r *http.Request
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]interface{}{"site": site})
+}
+
+func (s *Server) persistRuntimeHealth(ctx context.Context, runtimeStatus *provisioning.SiteRuntimeStatus) {
+	if runtimeStatus == nil || runtimeStatus.Runtime == nil {
+		return
+	}
+
+	healthStatus := strings.TrimSpace(runtimeStatus.OverallStatus)
+	if healthStatus == "running" {
+		healthStatus = "healthy"
+	}
+	if healthStatus == "" {
+		healthStatus = "unknown"
+	}
+	runtimeStatus.Runtime.HealthStatus = healthStatus
+	runtimeStatus.Runtime.LastHealthError = runtimeStatus.LastError
+	now := time.Now().UTC()
+	runtimeStatus.Runtime.LastHealthCheckedAt = &now
+	if err := s.store.UpdateSiteRuntimeHealth(ctx, runtimeStatus.Site.ID, healthStatus, runtimeStatus.LastError); err != nil {
+		log.Printf("persist runtime health error: %v", err)
+	}
 }
 
 func (s *Server) handleListNotifications(w http.ResponseWriter, r *http.Request) {

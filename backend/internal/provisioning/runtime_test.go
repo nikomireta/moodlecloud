@@ -190,3 +190,61 @@ func TestCronContainerHealthcheck(t *testing.T) {
 		t.Fatalf("healthcheck.StartPeriod = %s, want %s", healthcheck.StartPeriod, 120*time.Second)
 	}
 }
+
+func TestBuildMinimalRuntimeStatus(t *testing.T) {
+	site := store.Site{Status: "active"}
+	job := store.ProvisioningJob{RuntimeMode: "simulated"}
+	metadata := &store.SiteRuntimeMetadata{HealthStatus: "healthy"}
+
+	status := BuildMinimalRuntimeStatus(site, job, metadata)
+
+	if status.OverallStatus != "running" {
+		t.Fatalf("OverallStatus = %q, want %q", status.OverallStatus, "running")
+	}
+	if status.Controllable {
+		t.Fatal("expected minimal runtime status to be uncontrollable")
+	}
+}
+
+func TestDeriveOverallRuntimeStatus(t *testing.T) {
+	runningServices := []SiteRuntimeService{
+		{Name: "web", State: "running", HealthStatus: "healthy"},
+		{Name: "cron", State: "running", HealthStatus: "healthy"},
+	}
+	if got := deriveOverallRuntimeStatus(store.Site{Status: "active"}, runningServices, true); got != "running" {
+		t.Fatalf("deriveOverallRuntimeStatus() = %q, want %q", got, "running")
+	}
+
+	degradedServices := []SiteRuntimeService{
+		{Name: "web", State: "running", HealthStatus: "unhealthy"},
+		{Name: "cron", State: "running", HealthStatus: "healthy"},
+	}
+	if got := deriveOverallRuntimeStatus(store.Site{Status: "active"}, degradedServices, true); got != "degraded" {
+		t.Fatalf("deriveOverallRuntimeStatus() = %q, want %q", got, "degraded")
+	}
+
+	stoppedServices := []SiteRuntimeService{
+		{Name: "web", State: "exited", HealthStatus: "unknown"},
+		{Name: "cron", State: "exited", HealthStatus: "unknown"},
+	}
+	if got := deriveOverallRuntimeStatus(store.Site{Status: "active"}, stoppedServices, false); got != "stopped" {
+		t.Fatalf("deriveOverallRuntimeStatus() = %q, want %q", got, "stopped")
+	}
+}
+
+func TestRuntimeActionTargets(t *testing.T) {
+	metadata := store.SiteRuntimeMetadata{
+		WebContainerName:  "web-demo",
+		CronContainerName: "cron-demo",
+	}
+
+	startTargets := runtimeActionTargets(metadata, runtimeActionStart)
+	if len(startTargets) != 2 || startTargets[0].Name != "web" || startTargets[1].Name != "cron" {
+		t.Fatalf("start target order = %#v", startTargets)
+	}
+
+	stopTargets := runtimeActionTargets(metadata, runtimeActionStop)
+	if len(stopTargets) != 2 || stopTargets[0].Name != "cron" || stopTargets[1].Name != "web" {
+		t.Fatalf("stop target order = %#v", stopTargets)
+	}
+}
