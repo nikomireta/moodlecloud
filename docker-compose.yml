@@ -1,0 +1,67 @@
+services:
+  traefik:
+    image: traefik:v3.6.7
+    command:
+      - --providers.docker=true
+      - --providers.docker.endpoint=unix:///var/run/docker.sock
+      - --providers.docker.watch=true
+      - --providers.docker.exposedbydefault=false
+      - --providers.docker.network=moodlecloud-proxy
+      - --entrypoints.web.address=:80
+      - --api.dashboard=true
+      - --api.insecure=true
+    ports:
+      - "80:80"
+      - "8088:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - proxy
+
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: moodlecloud
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d moodlecloud"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks:
+      - proxy
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks:
+      - proxy
+
+  mailpit:
+    image: axllent/mailpit:v1.26
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+    networks:
+      - proxy
+
+volumes:
+  postgres-data:
+  redis-data:
+
+networks:
+  proxy:
+    name: moodlecloud-proxy
