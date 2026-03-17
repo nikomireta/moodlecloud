@@ -1324,6 +1324,63 @@ func (s *Store) FailProvisioningJob(ctx context.Context, jobID uuid.UUID, stepID
 	return site, nil
 }
 
+// ResetProvisioningSteps resets all provisioning events for a job back to
+// "pending" status. This is used when Asynq retries a failed provisioning
+// task so the frontend progress UI shows a clean slate and the worker can
+// re-run every step from the beginning.
+// ListOrphanedProvisioningJobs returns provisioning jobs that have been stuck
+// in "pending" status for longer than the given threshold. These are jobs
+// where the database transaction committed but the Asynq task was never
+// enqueued (e.g., API crash between DB commit and Redis enqueue).
+func (s *Store) ListOrphanedProvisioningJobs(ctx context.Context, staleThreshold time.Duration) ([]ProvisioningJob, error) {
+	cutoff := time.Now().UTC().Add(-staleThreshold)
+	rows, err := s.pool.Query(ctx, `
+		SELECT id, site_id, runtime_mode, status, current_step, percent, last_error, created_at, updated_at
+		FROM provisioning_jobs
+		WHERE status = 'pending' AND created_at < $1
+		ORDER BY created_at ASC
+	`, cutoff)
+	if err != nil {
+		return nil, fmt.Errorf("list orphaned provisioning jobs: %w", err)
+	}
+	defer rows.Close()
+
+	var jobs []ProvisioningJob
+	for rows.Next() {
+		var job ProvisioningJob
+		if err := rows.Scan(&job.ID, &job.SiteID, &job.RuntimeMode, &job.Status, &job.CurrentStep, &job.Percent, &job.LastError, &job.CreatedAt, &job.UpdatedAt); err != nil {
+			return nil, fmt.Errorf("scan orphaned provisioning job: %w", err)
+		}
+		jobs = append(jobs, job)
+	}
+	return jobs, rows.Err()
+}
+
+func (s *Store) ResetProvisioningSteps(ctx context.Context, jobID uuid.UUID) error {
+	if _, err := s.pool.Exec(ctx, `
+		UPDATE provisioning_events
+		SET status = 'pending', updated_at = NOW()
+		WHERE job_id = $1 AND status IN ('in_progress', 'error', 'completed')
+	`, jobID); err != nil {
+		return fmt.Errorf("reset provisioning steps: %w", err)
+	}
+	if _, err := s.pool.Exec(ctx, `
+		UPDATE provisioning_jobs
+		SET status = 'running', current_step = '', last_error = '', percent = 0, updated_at = NOW()
+		WHERE id = $1
+	`, jobID); err != nil {
+		return fmt.Errorf("reset provisioning job status: %w", err)
+	}
+	if _, err := s.pool.Exec(ctx, `
+		UPDATE sites
+		SET status = 'provisioning', provisioning_step = '', last_error = '', updated_at = NOW()
+		WHERE id = (SELECT site_id FROM provisioning_jobs WHERE id = $1)
+	`, jobID); err != nil {
+		return fmt.Errorf("reset site status for retry: %w", err)
+	}
+	return nil
+}
+
 func (s *Store) CreateNotification(ctx context.Context, params CreateNotificationParams) (Notification, error) {
 	notification := Notification{
 		ID:        uuid.New(),
@@ -1507,6 +1564,7 @@ func validateHostCapacity(ctx context.Context, tx pgx.Tx, plan Plan, capacity Ho
 			COALESCE(SUM(web_cpu_millicores + cron_cpu_millicores), 0),
 			COALESCE(SUM(web_memory_mib + cron_memory_mib), 0)
 		FROM sites
+		WHERE status NOT IN ('failed', 'deleted')
 	`).Scan(&reservedStorage, &reservedCPU, &reservedMemory); err != nil {
 		return fmt.Errorf("read host capacity reservations: %w", err)
 	}

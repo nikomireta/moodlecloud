@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/hibiken/asynq"
@@ -19,6 +21,8 @@ type Handler struct {
 	Runtime           Runtime
 	SiteDBAdminURL    string
 	SiteRuntimeSecret string
+	RedisAddr         string
+	RedisPassword     string
 }
 
 func (h Handler) HandleProvisionSiteTask(ctx context.Context, task *asynq.Task) error {
@@ -37,13 +41,22 @@ func (h Handler) HandleProvisionSiteTask(ctx context.Context, task *asynq.Task) 
 		return fmt.Errorf("load provisioning context: %w", err)
 	}
 
-	if err := h.runStep(ctx, jobID, "provision", 15, func(ctx context.Context) error {
-		metadata, err := h.Runtime.Provision(ctx, site)
+	// On retry attempts, reset any previously-failed step events back to
+	// pending so the frontend progress UI shows a clean slate and the
+	// worker can re-run from the beginning.
+	if err := h.Store.ResetProvisioningSteps(ctx, jobID); err != nil {
+		log.Printf("provisioning: warning: could not reset step events job=%s: %v", jobID, err)
+	}
+
+	log.Printf("provisioning: starting job=%s site=%s", jobID, site.Subdomain)
+
+	if err := h.runStep(ctx, jobID, "provision", 15, func(stepCtx context.Context) error {
+		metadata, err := h.Runtime.Provision(stepCtx, site)
 		if err != nil {
 			return err
 		}
 		runtimeMetadata = &metadata
-		_, err = h.Store.UpsertSiteRuntimeMetadata(ctx, store.UpsertSiteRuntimeMetadataParams{
+		_, err = h.Store.UpsertSiteRuntimeMetadata(stepCtx, store.UpsertSiteRuntimeMetadataParams{
 			SiteID:            metadata.SiteID,
 			ImageRepository:   metadata.ImageRepository,
 			ImageTag:          metadata.ImageTag,
@@ -64,29 +77,29 @@ func (h Handler) HandleProvisionSiteTask(ctx context.Context, task *asynq.Task) 
 		return h.failJob(ctx, jobID, site, runtimeMetadata, "provision", errors.New("runtime metadata belum tersedia"))
 	}
 
-	if err := h.runStep(ctx, jobID, "database", 35, func(ctx context.Context) error {
-		return h.Runtime.CreateDatabase(ctx, site, *runtimeMetadata)
+	if err := h.runStep(ctx, jobID, "database", 35, func(stepCtx context.Context) error {
+		return h.Runtime.CreateDatabase(stepCtx, site, *runtimeMetadata)
 	}); err != nil {
 		return h.failJob(ctx, jobID, site, runtimeMetadata, "database", err)
 	}
 
-	if err := h.runStep(ctx, jobID, "install", 60, func(ctx context.Context) error {
-		return h.Runtime.Install(ctx, site, *runtimeMetadata)
+	if err := h.runStep(ctx, jobID, "install", 60, func(stepCtx context.Context) error {
+		return h.Runtime.Install(stepCtx, site, *runtimeMetadata)
 	}); err != nil {
 		return h.failJob(ctx, jobID, site, runtimeMetadata, "install", err)
 	}
 
-	if err := h.runStep(ctx, jobID, "ssl", 85, func(ctx context.Context) error {
-		return h.Runtime.ValidateRoute(ctx, site, *runtimeMetadata)
+	if err := h.runStep(ctx, jobID, "ssl", 85, func(stepCtx context.Context) error {
+		return h.Runtime.ValidateRoute(stepCtx, site, *runtimeMetadata)
 	}); err != nil {
 		return h.failJob(ctx, jobID, site, runtimeMetadata, "ssl", err)
 	}
 
-	if err := h.runStep(ctx, jobID, "finalize", 100, func(ctx context.Context) error {
-		if err := h.Runtime.Finalize(ctx, site, *runtimeMetadata); err != nil {
+	if err := h.runStep(ctx, jobID, "finalize", 100, func(stepCtx context.Context) error {
+		if err := h.Runtime.Finalize(stepCtx, site, *runtimeMetadata); err != nil {
 			return err
 		}
-		return h.Store.UpdateSiteRuntimeHealth(ctx, site.ID, "healthy", "")
+		return h.Store.UpdateSiteRuntimeHealth(stepCtx, site.ID, "healthy", "")
 	}); err != nil {
 		return h.failJob(ctx, jobID, site, runtimeMetadata, "finalize", err)
 	}
@@ -95,6 +108,8 @@ func (h Handler) HandleProvisionSiteTask(ctx context.Context, task *asynq.Task) 
 	if err != nil {
 		return h.failJob(ctx, jobID, site, runtimeMetadata, "finalize", err)
 	}
+
+	log.Printf("provisioning: completed job=%s site=%s", jobID, site.Subdomain)
 
 	if _, err := h.Store.CreateNotification(ctx, store.CreateNotificationParams{
 		UserID:    site.OwnerUserID,
@@ -113,19 +128,46 @@ func (h Handler) HandleProvisionSiteTask(ctx context.Context, task *asynq.Task) 
 	return nil
 }
 
+// runStep executes a provisioning step with a per-step context timeout.
+// The step function receives a child context that will be cancelled if the
+// step exceeds its allowed duration, preventing indefinite blocking on
+// hung Docker operations or network calls.
 func (h Handler) runStep(ctx context.Context, jobID uuid.UUID, stepID string, percent int, fn func(context.Context) error) error {
 	if err := h.Store.StartProvisioningStep(ctx, jobID, stepID, percent); err != nil {
 		return err
 	}
-	if err := fn(ctx); err != nil {
+
+	timeout := stepTimeout(stepID)
+	stepCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	log.Printf("provisioning: step=%s started job=%s timeout=%s", stepID, jobID, timeout)
+
+	if err := fn(stepCtx); err != nil {
+		if stepCtx.Err() != nil && ctx.Err() == nil {
+			// The step context timed out but the parent context is still
+			// alive — this is a per-step timeout, not an Asynq-level
+			// cancellation.
+			return fmt.Errorf("step %s timed out after %s: %w", stepID, timeout, err)
+		}
 		return err
 	}
+
+	log.Printf("provisioning: step=%s completed job=%s", stepID, jobID)
 	return h.Store.CompleteProvisioningStep(ctx, jobID, stepID, percent)
 }
 
 func (h Handler) failJob(ctx context.Context, jobID uuid.UUID, site store.Site, runtimeMetadata *store.SiteRuntimeMetadata, stepID string, original error) error {
+	log.Printf("provisioning: failed job=%s site=%s step=%s error=%v", jobID, site.Subdomain, stepID, original)
+
 	if runtimeMetadata != nil {
-		_ = h.Runtime.Cleanup(ctx, site, runtimeMetadata, stepID)
+		// Use a fresh context for cleanup since the step context may have
+		// been cancelled. Give cleanup a generous 2-minute deadline.
+		cleanupCtx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+		if err := h.Runtime.Cleanup(cleanupCtx, site, runtimeMetadata, stepID); err != nil {
+			log.Printf("provisioning: cleanup error job=%s site=%s step=%s: %v", jobID, site.Subdomain, stepID, err)
+		}
 		_ = h.Store.UpdateSiteRuntimeHealth(ctx, site.ID, "failed", original.Error())
 	}
 	site, err := h.Store.FailProvisioningJob(ctx, jobID, stepID, original.Error())

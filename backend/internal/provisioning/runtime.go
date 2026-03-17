@@ -240,3 +240,48 @@ func minimalOverallStatus(metadata *store.SiteRuntimeMetadata) string {
 		return "unknown"
 	}
 }
+
+// cleanupIncludesDatabase returns true when the failed step implies that a
+// database and database user may have been created and should be removed
+// during cleanup. Steps "database" and "install" create DB resources.
+func cleanupIncludesDatabase(failedStep string) bool {
+	switch strings.TrimSpace(strings.ToLower(failedStep)) {
+	case "database", "install":
+		return true
+	default:
+		return false
+	}
+}
+
+// cleanupIncludesVolume returns true when the failed step implies that a
+// Docker volume was created and should be removed during cleanup.
+// The volume is created during the "provision" step and persists through
+// later steps.
+func cleanupIncludesVolume(failedStep string) bool {
+	switch strings.TrimSpace(strings.ToLower(failedStep)) {
+	case "provision", "database", "install":
+		return true
+	default:
+		return false
+	}
+}
+
+// stepTimeouts returns the per-step context timeout for a provisioning step.
+// Each step gets a bounded deadline to prevent the worker from blocking
+// indefinitely on a hung Docker daemon or network issue.
+func stepTimeout(stepID string) time.Duration {
+	switch strings.TrimSpace(strings.ToLower(stepID)) {
+	case "provision":
+		return 3 * time.Minute
+	case "database":
+		return 2 * time.Minute
+	case "install":
+		return 8 * time.Minute
+	case "ssl":
+		return 3 * time.Minute
+	case "finalize":
+		return 2 * time.Minute
+	default:
+		return 5 * time.Minute
+	}
+}

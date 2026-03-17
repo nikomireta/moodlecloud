@@ -6,7 +6,7 @@ services:
       - --providers.docker.endpoint=unix:///var/run/docker.sock
       - --providers.docker.watch=true
       - --providers.docker.exposedbydefault=false
-      - --providers.docker.network=moodlecloud-proxy
+      - --providers.docker.network=moodlepilot-proxy
       - --entrypoints.web.address=:80
       - --api.dashboard=true
       - --api.insecure=true
@@ -64,4 +64,4 @@ volumes:
 
 networks:
   proxy:
-    name: moodlecloud-proxy
+    name: moodlepilot-proxy

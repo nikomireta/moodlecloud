@@ -9,25 +9,29 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger 
 } from "@/components/ui/dropdown-menu"
-import { ExternalLink, MoreHorizontal, Settings, Trash2, Globe, Clock, Users, ChevronRight } from "lucide-react"
+import { MoreHorizontal, Globe, Clock, Users, Play, RotateCcw, Square } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { buildSiteHost, buildSiteURL } from "@/lib/site-url"
+import { api } from "@/lib/api"
+import { useState } from "react"
 
 interface SiteCardProps {
   id?: string
   name: string
   subdomain: string
-  status: "aktif" | "sedang_dibuat" | "nonaktif"
+  status: "aktif" | "sedang_dibuat" | "nonaktif" | "gagal"
   siteUrl?: string
   siteHost?: string
   users?: number
   runtimeHealth?: string
   lastActivity?: string
+  onAction?: () => void
 }
 
 function runtimeStatusBadge(status: string) {
   switch (status) {
+    case "healthy":
     case "running":
       return {
         label: "Running",
@@ -61,8 +65,10 @@ function runtimeStatusBadge(status: string) {
   }
 }
 
-export function SiteCard({ id, name, subdomain, status, siteUrl, siteHost, users, runtimeHealth, lastActivity }: SiteCardProps) {
+export function SiteCard({ id, name, subdomain, status, siteUrl, siteHost, users, runtimeHealth, lastActivity, onAction }: SiteCardProps) {
   const router = useRouter()
+  const [actionLoading, setActionLoading] = useState<string | null>(null)
+
   const statusConfig = {
     aktif: {
       label: "Aktif",
@@ -79,6 +85,11 @@ export function SiteCard({ id, name, subdomain, status, siteUrl, siteHost, users
       color: "bg-muted-foreground",
       textColor: "text-muted-foreground",
     },
+    gagal: {
+      label: "Gagal",
+      color: "bg-destructive",
+      textColor: "text-destructive",
+    },
   }
 
   const { label, color, textColor } = statusConfig[status]
@@ -94,65 +105,91 @@ export function SiteCard({ id, name, subdomain, status, siteUrl, siteHost, users
     }
   }
 
+  const handleRuntimeAction = async (action: "start" | "restart" | "stop") => {
+    if (!id) return
+    setActionLoading(action)
+    try {
+      if (action === "start") await api.startSiteRuntime(id)
+      else if (action === "restart") await api.restartSiteRuntime(id)
+      else if (action === "stop") await api.stopSiteRuntime(id)
+      onAction?.()
+    } catch {
+      // silently fail — user can retry
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
   return (
     <Card 
       className="group relative overflow-hidden border-border bg-card p-4 transition-all hover:border-muted-foreground/50 cursor-pointer"
       onClick={handleCardClick}
     >
+      {/* Top row: icon + name + badge + menu */}
       <div className="flex items-start justify-between">
-        <div className="flex items-start gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
+        <div className="flex items-start gap-3 min-w-0">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted">
             <Globe className="h-5 w-5 text-muted-foreground" />
           </div>
-          <div className="space-y-1">
+          <div className="min-w-0 space-y-1">
             <div className="flex items-center gap-2">
-              <h3 className="font-medium leading-none">{name}</h3>
+              <h3 className="truncate font-medium leading-none">{name}</h3>
               {status === "aktif" && runtimeHealth && (
-                <div className={`rounded border px-1.5 py-0.5 text-[10px] font-medium ${runtimeStatusBadge(runtimeHealth).className}`}>
+                <div className={`shrink-0 rounded border px-1.5 py-0.5 font-medium ${runtimeStatusBadge(runtimeHealth).className}`}>
                   {runtimeStatusBadge(runtimeHealth).label}
                 </div>
               )}
             </div>
-            <p className="text-sm text-muted-foreground">
+            <p className="truncate text-sm text-muted-foreground">
               {resolvedSiteHost}
             </p>
           </div>
         </div>
         
-        <div onClick={(e) => e.stopPropagation()}>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button 
-                variant="ghost" 
-                size="icon" 
-                className="h-8 w-8 opacity-0 transition-opacity group-hover:opacity-100"
-              >
-                <MoreHorizontal className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <Link href={resolvedSiteUrl} target="_blank">
-                <DropdownMenuItem>
-                  <ExternalLink className="mr-2 h-4 w-4" />
-                  Buka Situs
+        {/* Always-visible menu for active sites */}
+        {status === "aktif" && id && (
+          <div onClick={(e) => e.stopPropagation()} className="shrink-0">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  className="h-8 w-8"
+                >
+                  <MoreHorizontal className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem 
+                  onClick={() => handleRuntimeAction("start")}
+                  disabled={actionLoading !== null}
+                >
+                  <Play className="mr-2 h-4 w-4" />
+                  {actionLoading === "start" ? "Starting..." : "Start"}
                 </DropdownMenuItem>
-              </Link>
-              <Link href={`/situs/${subdomain}/pengaturan`}>
-                <DropdownMenuItem>
-                  <Settings className="mr-2 h-4 w-4" />
-                  Pengaturan
+                <DropdownMenuItem 
+                  onClick={() => handleRuntimeAction("restart")}
+                  disabled={actionLoading !== null}
+                >
+                  <RotateCcw className="mr-2 h-4 w-4" />
+                  {actionLoading === "restart" ? "Restarting..." : "Restart"}
                 </DropdownMenuItem>
-              </Link>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem className="text-destructive">
-                <Trash2 className="mr-2 h-4 w-4" />
-                Hapus
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem 
+                  onClick={() => handleRuntimeAction("stop")}
+                  disabled={actionLoading !== null}
+                  className="text-destructive"
+                >
+                  <Square className="mr-2 h-4 w-4" />
+                  {actionLoading === "stop" ? "Stopping..." : "Stop"}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        )}
       </div>
 
+      {/* Bottom row: status + meta (left) | action link (right) */}
       <div className="mt-4 flex items-center justify-between">
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-1.5">
@@ -177,23 +214,30 @@ export function SiteCard({ id, name, subdomain, status, siteUrl, siteHost, users
           )}
         </div>
         
-        {status === "aktif" && (
-          <Link 
-            href={resolvedSiteUrl}
-            target="_blank"
-            className="text-xs text-muted-foreground transition-colors hover:text-foreground"
-          >
-            Kunjungi
-          </Link>
-        )}
-        
-        {status === "sedang_dibuat" && (
-          <span className="text-xs text-muted-foreground">
-            Lihat Progress
-          </span>
-        )}
-        
-        <ChevronRight className="h-4 w-4 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+        <div className="shrink-0">
+          {status === "aktif" && (
+            <Link 
+              href={resolvedSiteUrl}
+              target="_blank"
+              className="text-xs text-muted-foreground transition-colors hover:text-foreground"
+              onClick={(e) => e.stopPropagation()}
+            >
+              Kunjungi →
+            </Link>
+          )}
+          
+          {status === "sedang_dibuat" && (
+            <span className="text-xs text-warning">
+              Lihat Progress →
+            </span>
+          )}
+
+          {status === "gagal" && (
+            <span className="text-xs text-destructive">
+              Provisioning gagal
+            </span>
+          )}
+        </div>
       </div>
     </Card>
   )

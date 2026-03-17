@@ -38,6 +38,8 @@ type Config struct {
 	MoodleImageTag           string
 	SiteRuntimeSecret        string
 	UsageMeterSchedule       string
+	HealthCheckSchedule      string
+	ReconcileSchedule        string
 	HostStorageBudgetBytes   int64
 	HostCPUMillicoresBudget  int
 	HostMemoryMiBBudget      int
@@ -82,6 +84,8 @@ func Load() (Config, error) {
 		MoodleImageTag:           getEnv("MOODLE_IMAGE_TAG", "5.1-local"),
 		SiteRuntimeSecret:        getEnv("SITE_RUNTIME_SECRET", "local-runtime-secret"),
 		UsageMeterSchedule:       getEnv("USAGE_METER_SCHEDULE", "@every 5m"),
+		HealthCheckSchedule:      getEnv("HEALTH_CHECK_SCHEDULE", "@every 2m"),
+		ReconcileSchedule:        getEnv("RECONCILE_SCHEDULE", "@every 1m"),
 		RunMigrations:            getEnv("RUN_MIGRATIONS", "true") != "false",
 		PlaywrightSeedName:       getEnv("PLAYWRIGHT_SEED_NAME", "Playwright Test"),
 		PlaywrightSeedEmail:      getEnv("PLAYWRIGHT_SEED_EMAIL", "playwright@example.com"),

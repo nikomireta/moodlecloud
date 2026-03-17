@@ -180,16 +180,42 @@ func (r *DockerLocalRuntime) Cleanup(ctx context.Context, site store.Site, metad
 		log.Printf("provisioning: preserving runtime artifacts for site=%s step=%s", site.Subdomain, failedStep)
 		return nil
 	}
+
+	log.Printf("provisioning: cleaning up resources for site=%s failed_step=%s", site.Subdomain, failedStep)
+
 	var errs []string
+
+	// Always attempt to remove containers.
 	if err := r.removeContainerIfExists(ctx, metadata.CronContainerName); err != nil {
 		errs = append(errs, err.Error())
 	}
 	if err := r.removeContainerIfExists(ctx, metadata.WebContainerName); err != nil {
 		errs = append(errs, err.Error())
 	}
+
+	// For failures at or after the database step, clean up the database and user.
+	if cleanupIncludesDatabase(failedStep) {
+		if err := r.dropDatabaseIfExists(ctx, metadata.DatabaseName); err != nil {
+			errs = append(errs, err.Error())
+		}
+		if err := r.dropDatabaseUserIfExists(ctx, metadata.DatabaseUser); err != nil {
+			errs = append(errs, err.Error())
+		}
+	}
+
+	// For failures at or after the provision step, clean up the volume.
+	if cleanupIncludesVolume(failedStep) {
+		if err := r.removeVolumeIfExists(ctx, metadata.VolumeName); err != nil {
+			errs = append(errs, err.Error())
+		}
+	}
+
 	if len(errs) > 0 {
+		log.Printf("provisioning: cleanup errors for site=%s: %s", site.Subdomain, strings.Join(errs, "; "))
 		return errors.New(strings.Join(errs, "; "))
 	}
+
+	log.Printf("provisioning: cleanup completed for site=%s", site.Subdomain)
 	return nil
 }
 

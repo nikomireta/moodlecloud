@@ -293,6 +293,65 @@ func TestRuntimeActionTargets(t *testing.T) {
 	}
 }
 
+func TestCleanupIncludesDatabase(t *testing.T) {
+	cases := []struct {
+		step string
+		want bool
+	}{
+		{"provision", false},
+		{"database", true},
+		{"install", true},
+		{"ssl", false},
+		{"finalize", false},
+		{"", false},
+	}
+	for _, tc := range cases {
+		if got := cleanupIncludesDatabase(tc.step); got != tc.want {
+			t.Errorf("cleanupIncludesDatabase(%q) = %v, want %v", tc.step, got, tc.want)
+		}
+	}
+}
+
+func TestCleanupIncludesVolume(t *testing.T) {
+	cases := []struct {
+		step string
+		want bool
+	}{
+		{"provision", true},
+		{"database", true},
+		{"install", true},
+		{"ssl", false},
+		{"finalize", false},
+		{"", false},
+	}
+	for _, tc := range cases {
+		if got := cleanupIncludesVolume(tc.step); got != tc.want {
+			t.Errorf("cleanupIncludesVolume(%q) = %v, want %v", tc.step, got, tc.want)
+		}
+	}
+}
+
+func TestStepTimeout(t *testing.T) {
+	cases := []struct {
+		step    string
+		wantMin time.Duration
+		wantMax time.Duration
+	}{
+		{"provision", 1 * time.Minute, 5 * time.Minute},
+		{"database", 1 * time.Minute, 5 * time.Minute},
+		{"install", 5 * time.Minute, 10 * time.Minute},
+		{"ssl", 1 * time.Minute, 5 * time.Minute},
+		{"finalize", 1 * time.Minute, 5 * time.Minute},
+		{"unknown", 1 * time.Minute, 10 * time.Minute},
+	}
+	for _, tc := range cases {
+		got := stepTimeout(tc.step)
+		if got < tc.wantMin || got > tc.wantMax {
+			t.Errorf("stepTimeout(%q) = %s, want between %s and %s", tc.step, got, tc.wantMin, tc.wantMax)
+		}
+	}
+}
+
 func TestContainerResourcesForService(t *testing.T) {
 	runtime := DockerLocalRuntime{
 		cfg: config.Config{
