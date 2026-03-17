@@ -17,7 +17,10 @@ type Store struct {
 	pool *pgxpool.Pool
 }
 
-var ErrNotFound = errors.New("not found")
+var (
+	ErrNotFound         = errors.New("not found")
+	ErrCapacityExceeded = errors.New("host capacity exceeded")
+)
 
 func Open(ctx context.Context, databaseURL string) (*Store, error) {
 	pool, err := pgxpool.New(ctx, databaseURL)
@@ -59,6 +62,12 @@ func (s *Store) SeedPlans(ctx context.Context) error {
 				"api":          false,
 				"analytics":    false,
 			},
+			UsersActiveLimit:  100,
+			StorageBytesLimit: 2 * 1024 * 1024 * 1024,
+			WebCPUMillicores:  1000,
+			WebMemoryMiB:      1536,
+			CronCPUMillicores: 250,
+			CronMemoryMiB:     512,
 		},
 		{
 			Code:         "professional",
@@ -78,6 +87,12 @@ func (s *Store) SeedPlans(ctx context.Context) error {
 				"api":          true,
 				"analytics":    true,
 			},
+			UsersActiveLimit:  1000,
+			StorageBytesLimit: 100 * 1024 * 1024 * 1024,
+			WebCPUMillicores:  2000,
+			WebMemoryMiB:      3072,
+			CronCPUMillicores: 500,
+			CronMemoryMiB:     1024,
 		},
 		{
 			Code:         "enterprise",
@@ -86,9 +101,9 @@ func (s *Store) SeedPlans(ctx context.Context) error {
 			PriceMonthly: nil,
 			PriceYearly:  nil,
 			Features: map[string]interface{}{
-				"sites":        "Unlimited",
-				"users":        "Unlimited",
-				"storage":      "Unlimited",
+				"sites":        "Custom",
+				"users":        "5.000 pengguna",
+				"storage":      "250 GB",
 				"bandwidth":    "Unlimited",
 				"backup":       "Real-time",
 				"support":      "Dedicated",
@@ -97,6 +112,12 @@ func (s *Store) SeedPlans(ctx context.Context) error {
 				"api":          true,
 				"analytics":    true,
 			},
+			UsersActiveLimit:  5000,
+			StorageBytesLimit: 250 * 1024 * 1024 * 1024,
+			WebCPUMillicores:  4000,
+			WebMemoryMiB:      6144,
+			CronCPUMillicores: 1000,
+			CronMemoryMiB:     1536,
 		},
 	}
 
@@ -107,16 +128,26 @@ func (s *Store) SeedPlans(ctx context.Context) error {
 		}
 
 		_, err = s.pool.Exec(ctx, `
-			INSERT INTO plans (code, name, description, price_monthly, price_yearly, features, created_at, updated_at)
-			VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
+			INSERT INTO plans (
+				code, name, description, price_monthly, price_yearly, features,
+				users_active_limit, storage_bytes_limit, web_cpu_millicores, web_memory_mib,
+				cron_cpu_millicores, cron_memory_mib, created_at, updated_at
+			)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW(), NOW())
 			ON CONFLICT (code) DO UPDATE SET
 				name = EXCLUDED.name,
 				description = EXCLUDED.description,
 				price_monthly = EXCLUDED.price_monthly,
 				price_yearly = EXCLUDED.price_yearly,
 				features = EXCLUDED.features,
+				users_active_limit = EXCLUDED.users_active_limit,
+				storage_bytes_limit = EXCLUDED.storage_bytes_limit,
+				web_cpu_millicores = EXCLUDED.web_cpu_millicores,
+				web_memory_mib = EXCLUDED.web_memory_mib,
+				cron_cpu_millicores = EXCLUDED.cron_cpu_millicores,
+				cron_memory_mib = EXCLUDED.cron_memory_mib,
 				updated_at = NOW()
-		`, plan.Code, plan.Name, plan.Description, plan.PriceMonthly, plan.PriceYearly, featuresJSON)
+		`, plan.Code, plan.Name, plan.Description, plan.PriceMonthly, plan.PriceYearly, featuresJSON, plan.UsersActiveLimit, plan.StorageBytesLimit, plan.WebCPUMillicores, plan.WebMemoryMiB, plan.CronCPUMillicores, plan.CronMemoryMiB)
 		if err != nil {
 			return fmt.Errorf("upsert plan %s: %w", plan.Code, err)
 		}
@@ -182,7 +213,10 @@ func (s *Store) SeedPlaywrightUser(ctx context.Context, params SeedPlaywrightUse
 
 func (s *Store) ListPlans(ctx context.Context) ([]Plan, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT code, name, description, price_monthly, price_yearly, features, created_at, updated_at
+		SELECT
+			code, name, description, price_monthly, price_yearly, features,
+			users_active_limit, storage_bytes_limit, web_cpu_millicores, web_memory_mib,
+			cron_cpu_millicores, cron_memory_mib, created_at, updated_at
 		FROM plans
 		ORDER BY CASE code
 			WHEN 'starter' THEN 1
@@ -199,7 +233,22 @@ func (s *Store) ListPlans(ctx context.Context) ([]Plan, error) {
 	for rows.Next() {
 		var plan Plan
 		var featuresJSON []byte
-		if err := rows.Scan(&plan.Code, &plan.Name, &plan.Description, &plan.PriceMonthly, &plan.PriceYearly, &featuresJSON, &plan.CreatedAt, &plan.UpdatedAt); err != nil {
+		if err := rows.Scan(
+			&plan.Code,
+			&plan.Name,
+			&plan.Description,
+			&plan.PriceMonthly,
+			&plan.PriceYearly,
+			&featuresJSON,
+			&plan.UsersActiveLimit,
+			&plan.StorageBytesLimit,
+			&plan.WebCPUMillicores,
+			&plan.WebMemoryMiB,
+			&plan.CronCPUMillicores,
+			&plan.CronMemoryMiB,
+			&plan.CreatedAt,
+			&plan.UpdatedAt,
+		); err != nil {
 			return nil, fmt.Errorf("scan plan: %w", err)
 		}
 		if err := json.Unmarshal(featuresJSON, &plan.Features); err != nil {
@@ -214,9 +263,27 @@ func (s *Store) GetPlanByCode(ctx context.Context, code string) (Plan, error) {
 	var plan Plan
 	var featuresJSON []byte
 	err := s.pool.QueryRow(ctx, `
-		SELECT code, name, description, price_monthly, price_yearly, features, created_at, updated_at
+		SELECT
+			code, name, description, price_monthly, price_yearly, features,
+			users_active_limit, storage_bytes_limit, web_cpu_millicores, web_memory_mib,
+			cron_cpu_millicores, cron_memory_mib, created_at, updated_at
 		FROM plans WHERE code = $1
-	`, code).Scan(&plan.Code, &plan.Name, &plan.Description, &plan.PriceMonthly, &plan.PriceYearly, &featuresJSON, &plan.CreatedAt, &plan.UpdatedAt)
+	`, code).Scan(
+		&plan.Code,
+		&plan.Name,
+		&plan.Description,
+		&plan.PriceMonthly,
+		&plan.PriceYearly,
+		&featuresJSON,
+		&plan.UsersActiveLimit,
+		&plan.StorageBytesLimit,
+		&plan.WebCPUMillicores,
+		&plan.WebMemoryMiB,
+		&plan.CronCPUMillicores,
+		&plan.CronMemoryMiB,
+		&plan.CreatedAt,
+		&plan.UpdatedAt,
+	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return Plan{}, ErrNotFound
@@ -600,7 +667,11 @@ func (s *Store) ListUserSessions(ctx context.Context, userID uuid.UUID) ([]Sessi
 
 func (s *Store) ListSitesByOwner(ctx context.Context, ownerUserID uuid.UUID) ([]Site, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT id, owner_user_id, name, subdomain, plan_code, region, status, site_url, admin_url, admin_name, admin_email, moodle_username, provisioning_step, last_error, activated_at, created_at, updated_at
+		SELECT
+			id, owner_user_id, name, subdomain, plan_code, region, status, site_url, admin_url,
+			admin_name, admin_email, moodle_username, provisioning_step, last_error,
+			users_active_limit, storage_bytes_limit, web_cpu_millicores, web_memory_mib,
+			cron_cpu_millicores, cron_memory_mib, activated_at, created_at, updated_at
 		FROM sites
 		WHERE owner_user_id = $1
 		ORDER BY created_at DESC
@@ -630,30 +701,43 @@ func (s *Store) IsSubdomainAvailable(ctx context.Context, subdomain string) (boo
 	return count == 0, nil
 }
 
-func (s *Store) CreateSite(ctx context.Context, params CreateSiteParams, runtimeMode string) (Site, ProvisioningJob, []ProvisioningEvent, error) {
+func (s *Store) CreateSite(ctx context.Context, params CreateSiteParams, runtimeMode string, plan Plan, capacity HostCapacityPolicy) (Site, ProvisioningJob, []ProvisioningEvent, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return Site{}, ProvisioningJob{}, nil, fmt.Errorf("begin create site tx: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock($1)`, int64(2026031701)); err != nil {
+		return Site{}, ProvisioningJob{}, nil, fmt.Errorf("lock host capacity policy: %w", err)
+	}
+	if err := validateHostCapacity(ctx, tx, plan, capacity); err != nil {
+		return Site{}, ProvisioningJob{}, nil, err
+	}
+
 	now := time.Now().UTC()
 	site := Site{
-		ID:               uuid.New(),
-		OwnerUserID:      params.OwnerUserID,
-		Name:             params.Name,
-		Subdomain:        strings.ToLower(strings.TrimSpace(params.Subdomain)),
-		PlanCode:         params.PlanCode,
-		Region:           params.Region,
-		Status:           "pending",
-		SiteURL:          strings.TrimSpace(params.SiteURL),
-		AdminURL:         strings.TrimSpace(params.AdminURL),
-		AdminName:        params.AdminName,
-		AdminEmail:       params.AdminEmail,
-		MoodleUsername:   "admin",
-		ProvisioningStep: "pending",
-		CreatedAt:        now,
-		UpdatedAt:        now,
+		ID:                uuid.New(),
+		OwnerUserID:       params.OwnerUserID,
+		Name:              params.Name,
+		Subdomain:         strings.ToLower(strings.TrimSpace(params.Subdomain)),
+		PlanCode:          params.PlanCode,
+		Region:            params.Region,
+		Status:            "pending",
+		SiteURL:           strings.TrimSpace(params.SiteURL),
+		AdminURL:          strings.TrimSpace(params.AdminURL),
+		AdminName:         params.AdminName,
+		AdminEmail:        params.AdminEmail,
+		MoodleUsername:    "admin",
+		ProvisioningStep:  "pending",
+		UsersActiveLimit:  plan.UsersActiveLimit,
+		StorageBytesLimit: plan.StorageBytesLimit,
+		WebCPUMillicores:  plan.WebCPUMillicores,
+		WebMemoryMiB:      plan.WebMemoryMiB,
+		CronCPUMillicores: plan.CronCPUMillicores,
+		CronMemoryMiB:     plan.CronMemoryMiB,
+		CreatedAt:         now,
+		UpdatedAt:         now,
 	}
 	if site.SiteURL == "" {
 		site.SiteURL = fmt.Sprintf("https://%s.moodlecloud.id", site.Subdomain)
@@ -662,11 +746,26 @@ func (s *Store) CreateSite(ctx context.Context, params CreateSiteParams, runtime
 		site.AdminURL = fmt.Sprintf("%s/admin", strings.TrimRight(site.SiteURL, "/"))
 	}
 	_, err = tx.Exec(ctx, `
-		INSERT INTO sites (id, owner_user_id, name, subdomain, plan_code, region, status, site_url, admin_url, admin_name, admin_email, moodle_username, provisioning_step, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
-	`, site.ID, site.OwnerUserID, site.Name, site.Subdomain, site.PlanCode, site.Region, site.Status, site.SiteURL, site.AdminURL, site.AdminName, site.AdminEmail, site.MoodleUsername, site.ProvisioningStep, site.CreatedAt, site.UpdatedAt)
+		INSERT INTO sites (
+			id, owner_user_id, name, subdomain, plan_code, region, status, site_url, admin_url,
+			admin_name, admin_email, moodle_username, provisioning_step, users_active_limit,
+			storage_bytes_limit, web_cpu_millicores, web_memory_mib, cron_cpu_millicores,
+			cron_memory_mib, created_at, updated_at
+		)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
+	`, site.ID, site.OwnerUserID, site.Name, site.Subdomain, site.PlanCode, site.Region, site.Status, site.SiteURL, site.AdminURL, site.AdminName, site.AdminEmail, site.MoodleUsername, site.ProvisioningStep, site.UsersActiveLimit, site.StorageBytesLimit, site.WebCPUMillicores, site.WebMemoryMiB, site.CronCPUMillicores, site.CronMemoryMiB, site.CreatedAt, site.UpdatedAt)
 	if err != nil {
 		return Site{}, ProvisioningJob{}, nil, fmt.Errorf("insert site: %w", err)
+	}
+
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO site_usage_snapshots (
+			site_id, users_active_count, files_bytes_used, database_bytes_used, storage_bytes_used,
+			warning_level, over_limit, last_error, measured_at, created_at, updated_at
+		)
+		VALUES ($1, 0, 0, 0, 0, 'normal', FALSE, '', NULL, $2, $2)
+	`, site.ID, now); err != nil {
+		return Site{}, ProvisioningJob{}, nil, fmt.Errorf("insert site usage snapshot: %w", err)
 	}
 
 	job := ProvisioningJob{
@@ -792,14 +891,18 @@ func (s *Store) GetProvisioningContextByJobID(ctx context.Context, jobID uuid.UU
 		SELECT
 			pj.id, pj.site_id, pj.runtime_mode, pj.status, pj.current_step, pj.percent, pj.last_error, pj.created_at, pj.updated_at,
 			s.id, s.owner_user_id, s.name, s.subdomain, s.plan_code, s.region, s.status, s.site_url, s.admin_url,
-			s.admin_name, s.admin_email, s.moodle_username, s.provisioning_step, s.last_error, s.activated_at, s.created_at, s.updated_at
+			s.admin_name, s.admin_email, s.moodle_username, s.provisioning_step, s.last_error,
+			s.users_active_limit, s.storage_bytes_limit, s.web_cpu_millicores, s.web_memory_mib,
+			s.cron_cpu_millicores, s.cron_memory_mib, s.activated_at, s.created_at, s.updated_at
 		FROM provisioning_jobs pj
 		JOIN sites s ON s.id = pj.site_id
 		WHERE pj.id = $1
 	`, jobID).Scan(
 		&job.ID, &job.SiteID, &job.RuntimeMode, &job.Status, &job.CurrentStep, &job.Percent, &job.LastError, &job.CreatedAt, &job.UpdatedAt,
 		&site.ID, &site.OwnerUserID, &site.Name, &site.Subdomain, &site.PlanCode, &site.Region, &site.Status, &site.SiteURL, &site.AdminURL,
-		&site.AdminName, &site.AdminEmail, &site.MoodleUsername, &site.ProvisioningStep, &site.LastError, &site.ActivatedAt, &site.CreatedAt, &site.UpdatedAt,
+		&site.AdminName, &site.AdminEmail, &site.MoodleUsername, &site.ProvisioningStep, &site.LastError,
+		&site.UsersActiveLimit, &site.StorageBytesLimit, &site.WebCPUMillicores, &site.WebMemoryMiB,
+		&site.CronCPUMillicores, &site.CronMemoryMiB, &site.ActivatedAt, &site.CreatedAt, &site.UpdatedAt,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -821,11 +924,16 @@ func (s *Store) GetProvisioningContextByJobID(ctx context.Context, jobID uuid.UU
 func (s *Store) GetSiteBySubdomainForOwner(ctx context.Context, ownerUserID uuid.UUID, subdomain string) (Site, error) {
 	var site Site
 	err := s.pool.QueryRow(ctx, `
-		SELECT id, owner_user_id, name, subdomain, plan_code, region, status, site_url, admin_url, admin_name, admin_email, moodle_username, provisioning_step, last_error, activated_at, created_at, updated_at
+		SELECT
+			id, owner_user_id, name, subdomain, plan_code, region, status, site_url, admin_url,
+			admin_name, admin_email, moodle_username, provisioning_step, last_error,
+			users_active_limit, storage_bytes_limit, web_cpu_millicores, web_memory_mib,
+			cron_cpu_millicores, cron_memory_mib, activated_at, created_at, updated_at
 		FROM sites
 		WHERE owner_user_id = $1 AND subdomain = $2
 	`, ownerUserID, strings.ToLower(strings.TrimSpace(subdomain))).Scan(
-		&site.ID, &site.OwnerUserID, &site.Name, &site.Subdomain, &site.PlanCode, &site.Region, &site.Status, &site.SiteURL, &site.AdminURL, &site.AdminName, &site.AdminEmail, &site.MoodleUsername, &site.ProvisioningStep, &site.LastError, &site.ActivatedAt, &site.CreatedAt, &site.UpdatedAt,
+		&site.ID, &site.OwnerUserID, &site.Name, &site.Subdomain, &site.PlanCode, &site.Region, &site.Status, &site.SiteURL, &site.AdminURL, &site.AdminName, &site.AdminEmail, &site.MoodleUsername, &site.ProvisioningStep, &site.LastError,
+		&site.UsersActiveLimit, &site.StorageBytesLimit, &site.WebCPUMillicores, &site.WebMemoryMiB, &site.CronCPUMillicores, &site.CronMemoryMiB, &site.ActivatedAt, &site.CreatedAt, &site.UpdatedAt,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -839,11 +947,16 @@ func (s *Store) GetSiteBySubdomainForOwner(ctx context.Context, ownerUserID uuid
 func (s *Store) GetSiteByIDForOwner(ctx context.Context, ownerUserID, siteID uuid.UUID) (Site, error) {
 	var site Site
 	err := s.pool.QueryRow(ctx, `
-		SELECT id, owner_user_id, name, subdomain, plan_code, region, status, site_url, admin_url, admin_name, admin_email, moodle_username, provisioning_step, last_error, activated_at, created_at, updated_at
+		SELECT
+			id, owner_user_id, name, subdomain, plan_code, region, status, site_url, admin_url,
+			admin_name, admin_email, moodle_username, provisioning_step, last_error,
+			users_active_limit, storage_bytes_limit, web_cpu_millicores, web_memory_mib,
+			cron_cpu_millicores, cron_memory_mib, activated_at, created_at, updated_at
 		FROM sites
 		WHERE owner_user_id = $1 AND id = $2
 	`, ownerUserID, siteID).Scan(
-		&site.ID, &site.OwnerUserID, &site.Name, &site.Subdomain, &site.PlanCode, &site.Region, &site.Status, &site.SiteURL, &site.AdminURL, &site.AdminName, &site.AdminEmail, &site.MoodleUsername, &site.ProvisioningStep, &site.LastError, &site.ActivatedAt, &site.CreatedAt, &site.UpdatedAt,
+		&site.ID, &site.OwnerUserID, &site.Name, &site.Subdomain, &site.PlanCode, &site.Region, &site.Status, &site.SiteURL, &site.AdminURL, &site.AdminName, &site.AdminEmail, &site.MoodleUsername, &site.ProvisioningStep, &site.LastError,
+		&site.UsersActiveLimit, &site.StorageBytesLimit, &site.WebCPUMillicores, &site.WebMemoryMiB, &site.CronCPUMillicores, &site.CronMemoryMiB, &site.ActivatedAt, &site.CreatedAt, &site.UpdatedAt,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -918,6 +1031,128 @@ func (s *Store) getProvisioningStatusBySiteID(ctx context.Context, siteID uuid.U
 	}
 
 	return ProvisioningStatus{Site: site, Job: job, Runtime: runtimeMetadata, Events: events}, nil
+}
+
+func (s *Store) GetSiteUsageBySiteIDForOwner(ctx context.Context, ownerUserID, siteID uuid.UUID) (SiteUsageSnapshot, error) {
+	if _, err := s.GetSiteByIDForOwner(ctx, ownerUserID, siteID); err != nil {
+		return SiteUsageSnapshot{}, err
+	}
+
+	var usage SiteUsageSnapshot
+	err := s.pool.QueryRow(ctx, `
+		SELECT
+			site_id, users_active_count, files_bytes_used, database_bytes_used, storage_bytes_used,
+			warning_level, over_limit, last_error, measured_at, created_at, updated_at
+		FROM site_usage_snapshots
+		WHERE site_id = $1
+	`, siteID).Scan(
+		&usage.SiteID,
+		&usage.UsersActiveCount,
+		&usage.FilesBytesUsed,
+		&usage.DatabaseBytesUsed,
+		&usage.StorageBytesUsed,
+		&usage.WarningLevel,
+		&usage.OverLimit,
+		&usage.LastError,
+		&usage.MeasuredAt,
+		&usage.CreatedAt,
+		&usage.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return SiteUsageSnapshot{}, ErrNotFound
+		}
+		return SiteUsageSnapshot{}, fmt.Errorf("get site usage snapshot: %w", err)
+	}
+	return usage, nil
+}
+
+func (s *Store) UpsertSiteUsageSnapshot(ctx context.Context, usage SiteUsageSnapshot) (SiteUsageSnapshot, error) {
+	now := time.Now().UTC()
+	if usage.WarningLevel == "" {
+		usage.WarningLevel = "normal"
+	}
+
+	err := s.pool.QueryRow(ctx, `
+		INSERT INTO site_usage_snapshots (
+			site_id, users_active_count, files_bytes_used, database_bytes_used, storage_bytes_used,
+			warning_level, over_limit, last_error, measured_at, created_at, updated_at
+		)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $10)
+		ON CONFLICT (site_id) DO UPDATE SET
+			users_active_count = EXCLUDED.users_active_count,
+			files_bytes_used = EXCLUDED.files_bytes_used,
+			database_bytes_used = EXCLUDED.database_bytes_used,
+			storage_bytes_used = EXCLUDED.storage_bytes_used,
+			warning_level = EXCLUDED.warning_level,
+			over_limit = EXCLUDED.over_limit,
+			last_error = EXCLUDED.last_error,
+			measured_at = EXCLUDED.measured_at,
+			updated_at = EXCLUDED.updated_at
+		RETURNING
+			site_id, users_active_count, files_bytes_used, database_bytes_used, storage_bytes_used,
+			warning_level, over_limit, last_error, measured_at, created_at, updated_at
+	`, usage.SiteID, usage.UsersActiveCount, usage.FilesBytesUsed, usage.DatabaseBytesUsed, usage.StorageBytesUsed, usage.WarningLevel, usage.OverLimit, strings.TrimSpace(usage.LastError), usage.MeasuredAt, now).Scan(
+		&usage.SiteID,
+		&usage.UsersActiveCount,
+		&usage.FilesBytesUsed,
+		&usage.DatabaseBytesUsed,
+		&usage.StorageBytesUsed,
+		&usage.WarningLevel,
+		&usage.OverLimit,
+		&usage.LastError,
+		&usage.MeasuredAt,
+		&usage.CreatedAt,
+		&usage.UpdatedAt,
+	)
+	if err != nil {
+		return SiteUsageSnapshot{}, fmt.Errorf("upsert site usage snapshot: %w", err)
+	}
+	return usage, nil
+}
+
+func (s *Store) ListProvisioningContextsForUsageMetering(ctx context.Context) ([]SiteProvisioningContext, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT
+			s.id, s.owner_user_id, s.name, s.subdomain, s.plan_code, s.region, s.status, s.site_url, s.admin_url,
+			s.admin_name, s.admin_email, s.moodle_username, s.provisioning_step, s.last_error,
+			s.users_active_limit, s.storage_bytes_limit, s.web_cpu_millicores, s.web_memory_mib,
+			s.cron_cpu_millicores, s.cron_memory_mib, s.activated_at, s.created_at, s.updated_at,
+			pj.id, pj.site_id, pj.runtime_mode, pj.status, pj.current_step, pj.percent, pj.last_error, pj.created_at, pj.updated_at,
+			srm.site_id, srm.image_repository, srm.image_tag, srm.web_container_name, srm.cron_container_name,
+			srm.volume_name, srm.database_name, srm.database_user, srm.health_status, srm.last_health_error,
+			srm.last_health_checked_at, srm.created_at, srm.updated_at
+		FROM sites s
+		JOIN provisioning_jobs pj ON pj.site_id = s.id
+		JOIN site_runtime_metadata srm ON srm.site_id = s.id
+		WHERE pj.runtime_mode = 'docker_local'
+		ORDER BY s.created_at ASC
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("list provisioning contexts for usage metering: %w", err)
+	}
+	defer rows.Close()
+
+	contexts := make([]SiteProvisioningContext, 0)
+	for rows.Next() {
+		var item SiteProvisioningContext
+		var runtime SiteRuntimeMetadata
+		if err := rows.Scan(
+			&item.Site.ID, &item.Site.OwnerUserID, &item.Site.Name, &item.Site.Subdomain, &item.Site.PlanCode, &item.Site.Region, &item.Site.Status, &item.Site.SiteURL, &item.Site.AdminURL,
+			&item.Site.AdminName, &item.Site.AdminEmail, &item.Site.MoodleUsername, &item.Site.ProvisioningStep, &item.Site.LastError,
+			&item.Site.UsersActiveLimit, &item.Site.StorageBytesLimit, &item.Site.WebCPUMillicores, &item.Site.WebMemoryMiB,
+			&item.Site.CronCPUMillicores, &item.Site.CronMemoryMiB, &item.Site.ActivatedAt, &item.Site.CreatedAt, &item.Site.UpdatedAt,
+			&item.Job.ID, &item.Job.SiteID, &item.Job.RuntimeMode, &item.Job.Status, &item.Job.CurrentStep, &item.Job.Percent, &item.Job.LastError, &item.Job.CreatedAt, &item.Job.UpdatedAt,
+			&runtime.SiteID, &runtime.ImageRepository, &runtime.ImageTag, &runtime.WebContainerName, &runtime.CronContainerName,
+			&runtime.VolumeName, &runtime.DatabaseName, &runtime.DatabaseUser, &runtime.HealthStatus, &runtime.LastHealthError,
+			&runtime.LastHealthCheckedAt, &runtime.CreatedAt, &runtime.UpdatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("scan provisioning context for usage metering: %w", err)
+		}
+		item.Runtime = &runtime
+		contexts = append(contexts, item)
+	}
+	return contexts, rows.Err()
 }
 
 func (s *Store) StartProvisioningStep(ctx context.Context, jobID uuid.UUID, stepID string, percent int) error {
@@ -1243,11 +1478,42 @@ func scanSite(row interface {
 	Scan(dest ...interface{}) error
 }, site *Site) error {
 	if err := row.Scan(
-		&site.ID, &site.OwnerUserID, &site.Name, &site.Subdomain, &site.PlanCode, &site.Region, &site.Status, &site.SiteURL, &site.AdminURL, &site.AdminName, &site.AdminEmail, &site.MoodleUsername, &site.ProvisioningStep, &site.LastError, &site.ActivatedAt, &site.CreatedAt, &site.UpdatedAt,
+		&site.ID, &site.OwnerUserID, &site.Name, &site.Subdomain, &site.PlanCode, &site.Region, &site.Status, &site.SiteURL, &site.AdminURL, &site.AdminName, &site.AdminEmail, &site.MoodleUsername, &site.ProvisioningStep, &site.LastError,
+		&site.UsersActiveLimit, &site.StorageBytesLimit, &site.WebCPUMillicores, &site.WebMemoryMiB, &site.CronCPUMillicores, &site.CronMemoryMiB,
+		&site.ActivatedAt, &site.CreatedAt, &site.UpdatedAt,
 	); err != nil {
 		return fmt.Errorf("scan site: %w", err)
 	}
 	return nil
+}
+
+func validateHostCapacity(ctx context.Context, tx pgx.Tx, plan Plan, capacity HostCapacityPolicy) error {
+	var reservedStorage int64
+	var reservedCPU int64
+	var reservedMemory int64
+	if err := tx.QueryRow(ctx, `
+		SELECT
+			COALESCE(SUM(storage_bytes_limit), 0),
+			COALESCE(SUM(web_cpu_millicores + cron_cpu_millicores), 0),
+			COALESCE(SUM(web_memory_mib + cron_memory_mib), 0)
+		FROM sites
+	`).Scan(&reservedStorage, &reservedCPU, &reservedMemory); err != nil {
+		return fmt.Errorf("read host capacity reservations: %w", err)
+	}
+
+	requestedCPU := int64(plan.WebCPUMillicores + plan.CronCPUMillicores)
+	requestedMemory := int64(plan.WebMemoryMiB + plan.CronMemoryMiB)
+
+	switch {
+	case capacity.StorageBytesLimit > 0 && reservedStorage+plan.StorageBytesLimit > capacity.StorageBytesLimit:
+		return fmt.Errorf("%w: storage host tidak cukup untuk paket %s", ErrCapacityExceeded, plan.Code)
+	case capacity.CPUMillicoresLimit > 0 && reservedCPU+requestedCPU > int64(capacity.CPUMillicoresLimit):
+		return fmt.Errorf("%w: CPU host tidak cukup untuk paket %s", ErrCapacityExceeded, plan.Code)
+	case capacity.MemoryMiBLimit > 0 && reservedMemory+requestedMemory > int64(capacity.MemoryMiBLimit):
+		return fmt.Errorf("%w: memori host tidak cukup untuk paket %s", ErrCapacityExceeded, plan.Code)
+	default:
+		return nil
+	}
 }
 
 func int64Ptr(value int64) *int64 {

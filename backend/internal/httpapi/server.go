@@ -97,6 +97,7 @@ func (s *Server) Router() http.Handler {
 			r.Get("/sites", s.handleListSites)
 			r.Post("/sites", s.handleCreateSite)
 			r.Get("/sites/{siteID}", s.handleGetSiteByID)
+			r.Get("/sites/{siteID}/usage", s.handleGetSiteUsage)
 			r.Get("/sites/{siteID}/provisioning", s.handleGetProvisioningBySiteID)
 			r.Get("/sites/{siteID}/runtime", s.handleGetSiteRuntime)
 			r.Post("/sites/{siteID}/runtime/start", s.handleStartSiteRuntime)
@@ -567,7 +568,8 @@ func (s *Server) handleCreateSite(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "Region tidak didukung")
 		return
 	}
-	if _, err := s.store.GetPlanByCode(r.Context(), req.PlanCode); err != nil {
+	plan, err := s.store.GetPlanByCode(r.Context(), req.PlanCode)
+	if err != nil {
 		writeError(w, http.StatusBadRequest, "Paket tidak ditemukan")
 		return
 	}
@@ -595,8 +597,16 @@ func (s *Server) handleCreateSite(w http.ResponseWriter, r *http.Request) {
 		AdminEmail:  auth.SanitizeEmail(req.AdminEmail),
 		SiteURL:     siteURLForSubdomain(s.cfg, req.Subdomain),
 		AdminURL:    adminURLForSubdomain(s.cfg, req.Subdomain),
-	}, s.cfg.ProvisioningRuntimeMode)
+	}, s.cfg.ProvisioningRuntimeMode, plan, store.HostCapacityPolicy{
+		StorageBytesLimit:  s.cfg.HostStorageBudgetBytes,
+		CPUMillicoresLimit: s.cfg.HostCPUMillicoresBudget,
+		MemoryMiBLimit:     s.cfg.HostMemoryMiBBudget,
+	})
 	if err != nil {
+		if errors.Is(err, store.ErrCapacityExceeded) {
+			writeError(w, http.StatusConflict, err.Error())
+			return
+		}
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -641,6 +651,25 @@ func (s *Server) handleGetSiteByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]interface{}{"site": site})
+}
+
+func (s *Server) handleGetSiteUsage(w http.ResponseWriter, r *http.Request) {
+	user := currentUser(r.Context())
+	siteID, err := uuid.Parse(chi.URLParam(r, "siteID"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "Site ID tidak valid")
+		return
+	}
+	usage, err := s.store.GetSiteUsageBySiteIDForOwner(r.Context(), user.ID, siteID)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "Penggunaan situs tidak ditemukan")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]interface{}{"usage": usage})
 }
 
 func (s *Server) handleGetProvisioningBySiteID(w http.ResponseWriter, r *http.Request) {

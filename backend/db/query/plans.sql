@@ -1,5 +1,19 @@
 -- name: ListPlans :many
-SELECT code, name, description, price_monthly, price_yearly, features, created_at, updated_at
+SELECT
+  code,
+  name,
+  description,
+  price_monthly,
+  price_yearly,
+  features,
+  users_active_limit,
+  storage_bytes_limit,
+  web_cpu_millicores,
+  web_memory_mib,
+  cron_cpu_millicores,
+  cron_memory_mib,
+  created_at,
+  updated_at
 FROM plans
 ORDER BY
   CASE code

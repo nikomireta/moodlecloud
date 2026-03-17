@@ -41,34 +41,46 @@ type SessionLookup struct {
 }
 
 type Plan struct {
-	Code         string                 `json:"code"`
-	Name         string                 `json:"name"`
-	Description  string                 `json:"description"`
-	PriceMonthly *int64                 `json:"price_monthly"`
-	PriceYearly  *int64                 `json:"price_yearly"`
-	Features     map[string]interface{} `json:"features"`
-	CreatedAt    time.Time              `json:"created_at"`
-	UpdatedAt    time.Time              `json:"updated_at"`
+	Code              string                 `json:"code"`
+	Name              string                 `json:"name"`
+	Description       string                 `json:"description"`
+	PriceMonthly      *int64                 `json:"price_monthly"`
+	PriceYearly       *int64                 `json:"price_yearly"`
+	Features          map[string]interface{} `json:"features"`
+	UsersActiveLimit  int                    `json:"users_active_limit"`
+	StorageBytesLimit int64                  `json:"storage_bytes_limit"`
+	WebCPUMillicores  int                    `json:"web_cpu_millicores"`
+	WebMemoryMiB      int                    `json:"web_memory_mib"`
+	CronCPUMillicores int                    `json:"cron_cpu_millicores"`
+	CronMemoryMiB     int                    `json:"cron_memory_mib"`
+	CreatedAt         time.Time              `json:"created_at"`
+	UpdatedAt         time.Time              `json:"updated_at"`
 }
 
 type Site struct {
-	ID               uuid.UUID  `json:"id"`
-	OwnerUserID      uuid.UUID  `json:"owner_user_id"`
-	Name             string     `json:"name"`
-	Subdomain        string     `json:"subdomain"`
-	PlanCode         string     `json:"plan_code"`
-	Region           string     `json:"region"`
-	Status           string     `json:"status"`
-	SiteURL          string     `json:"site_url"`
-	AdminURL         string     `json:"admin_url"`
-	AdminName        string     `json:"admin_name"`
-	AdminEmail       string     `json:"admin_email"`
-	MoodleUsername   string     `json:"moodle_username"`
-	ProvisioningStep string     `json:"provisioning_step"`
-	LastError        string     `json:"last_error"`
-	ActivatedAt      *time.Time `json:"activated_at,omitempty"`
-	CreatedAt        time.Time  `json:"created_at"`
-	UpdatedAt        time.Time  `json:"updated_at"`
+	ID                uuid.UUID  `json:"id"`
+	OwnerUserID       uuid.UUID  `json:"owner_user_id"`
+	Name              string     `json:"name"`
+	Subdomain         string     `json:"subdomain"`
+	PlanCode          string     `json:"plan_code"`
+	Region            string     `json:"region"`
+	Status            string     `json:"status"`
+	SiteURL           string     `json:"site_url"`
+	AdminURL          string     `json:"admin_url"`
+	AdminName         string     `json:"admin_name"`
+	AdminEmail        string     `json:"admin_email"`
+	MoodleUsername    string     `json:"moodle_username"`
+	ProvisioningStep  string     `json:"provisioning_step"`
+	LastError         string     `json:"last_error"`
+	UsersActiveLimit  int        `json:"users_active_limit"`
+	StorageBytesLimit int64      `json:"storage_bytes_limit"`
+	WebCPUMillicores  int        `json:"web_cpu_millicores"`
+	WebMemoryMiB      int        `json:"web_memory_mib"`
+	CronCPUMillicores int        `json:"cron_cpu_millicores"`
+	CronMemoryMiB     int        `json:"cron_memory_mib"`
+	ActivatedAt       *time.Time `json:"activated_at,omitempty"`
+	CreatedAt         time.Time  `json:"created_at"`
+	UpdatedAt         time.Time  `json:"updated_at"`
 }
 
 type SiteRuntimeMetadata struct {
@@ -116,6 +128,26 @@ type ProvisioningStatus struct {
 	Job     ProvisioningJob      `json:"job"`
 	Runtime *SiteRuntimeMetadata `json:"runtime,omitempty"`
 	Events  []ProvisioningEvent  `json:"steps"`
+}
+
+type SiteProvisioningContext struct {
+	Site    Site
+	Job     ProvisioningJob
+	Runtime *SiteRuntimeMetadata
+}
+
+type SiteUsageSnapshot struct {
+	SiteID            uuid.UUID  `json:"site_id"`
+	UsersActiveCount  int        `json:"users_active_count"`
+	FilesBytesUsed    int64      `json:"files_bytes_used"`
+	DatabaseBytesUsed int64      `json:"database_bytes_used"`
+	StorageBytesUsed  int64      `json:"storage_bytes_used"`
+	WarningLevel      string     `json:"warning_level"`
+	OverLimit         bool       `json:"over_limit"`
+	LastError         string     `json:"last_error"`
+	MeasuredAt        *time.Time `json:"measured_at,omitempty"`
+	CreatedAt         time.Time  `json:"created_at"`
+	UpdatedAt         time.Time  `json:"updated_at"`
 }
 
 type Notification struct {
@@ -171,6 +203,12 @@ type CreateSiteParams struct {
 	AdminEmail  string
 	SiteURL     string
 	AdminURL    string
+}
+
+type HostCapacityPolicy struct {
+	StorageBytesLimit  int64
+	CPUMillicoresLimit int
+	MemoryMiBLimit     int
 }
 
 type UpsertSiteRuntimeMetadataParams struct {

@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/docker/docker/api/types/container"
 	"github.com/google/uuid"
 
 	"moodlecloud/backend/internal/config"
@@ -246,5 +247,39 @@ func TestRuntimeActionTargets(t *testing.T) {
 	stopTargets := runtimeActionTargets(metadata, runtimeActionStop)
 	if len(stopTargets) != 2 || stopTargets[0].Name != "cron" || stopTargets[1].Name != "web" {
 		t.Fatalf("stop target order = %#v", stopTargets)
+	}
+}
+
+func TestContainerResourcesForService(t *testing.T) {
+	runtime := DockerLocalRuntime{
+		cfg: config.Config{
+			DockerWebPidsLimit:  256,
+			DockerCronPidsLimit: 128,
+		},
+	}
+	site := store.Site{
+		WebCPUMillicores:  1000,
+		WebMemoryMiB:      1536,
+		CronCPUMillicores: 250,
+		CronMemoryMiB:     512,
+	}
+
+	webResources := runtime.containerResourcesForService(site, "web")
+	assertContainerResources(t, webResources, 1536*1024*1024, 1_000_000_000, 256)
+
+	cronResources := runtime.containerResourcesForService(site, "cron")
+	assertContainerResources(t, cronResources, 512*1024*1024, 250_000_000, 128)
+}
+
+func assertContainerResources(t *testing.T, resources container.Resources, wantMemory int64, wantNanoCPUs int64, wantPids int64) {
+	t.Helper()
+	if resources.Memory != wantMemory {
+		t.Fatalf("resources.Memory = %d, want %d", resources.Memory, wantMemory)
+	}
+	if resources.NanoCPUs != wantNanoCPUs {
+		t.Fatalf("resources.NanoCPUs = %d, want %d", resources.NanoCPUs, wantNanoCPUs)
+	}
+	if resources.PidsLimit == nil || *resources.PidsLimit != wantPids {
+		t.Fatalf("resources.PidsLimit = %#v, want %d", resources.PidsLimit, wantPids)
 	}
 }

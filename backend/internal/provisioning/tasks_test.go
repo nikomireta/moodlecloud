@@ -27,3 +27,13 @@ func TestNewProvisionSiteTask(t *testing.T) {
 		t.Fatalf("payload.JobID = %q, want %q", payload.JobID, jobID.String())
 	}
 }
+
+func TestNewMeterSiteUsageSweepTask(t *testing.T) {
+	task := NewMeterSiteUsageSweepTask()
+	if task.Type() != TaskTypeMeterSiteUsageSweep {
+		t.Fatalf("task.Type() = %q, want %q", task.Type(), TaskTypeMeterSiteUsageSweep)
+	}
+	if len(task.Payload()) != 0 {
+		t.Fatalf("expected empty payload, got %q", string(task.Payload()))
+	}
+}

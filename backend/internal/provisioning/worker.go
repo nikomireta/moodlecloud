@@ -17,6 +17,7 @@ type Handler struct {
 	Store             *store.Store
 	Mailer            mail.Mailer
 	Runtime           Runtime
+	SiteDBAdminURL    string
 	SiteRuntimeSecret string
 }
 

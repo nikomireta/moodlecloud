@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -33,6 +34,12 @@ type Config struct {
 	MoodleImageRepository   string
 	MoodleImageTag          string
 	SiteRuntimeSecret       string
+	UsageMeterSchedule      string
+	HostStorageBudgetBytes  int64
+	HostCPUMillicoresBudget int
+	HostMemoryMiBBudget     int
+	DockerWebPidsLimit      int64
+	DockerCronPidsLimit     int64
 	RunMigrations           bool
 	SeedPlaywrightUser      bool
 	PlaywrightSeedName      string
@@ -66,6 +73,7 @@ func Load() (Config, error) {
 		MoodleImageRepository:   getEnv("MOODLE_IMAGE_REPOSITORY", "local/moodle-app"),
 		MoodleImageTag:          getEnv("MOODLE_IMAGE_TAG", "5.1-local"),
 		SiteRuntimeSecret:       getEnv("SITE_RUNTIME_SECRET", "local-runtime-secret"),
+		UsageMeterSchedule:      getEnv("USAGE_METER_SCHEDULE", "@every 5m"),
 		RunMigrations:           getEnv("RUN_MIGRATIONS", "true") != "false",
 		PlaywrightSeedName:      getEnv("PLAYWRIGHT_SEED_NAME", "Playwright Test"),
 		PlaywrightSeedEmail:     getEnv("PLAYWRIGHT_SEED_EMAIL", "playwright@example.com"),
@@ -107,6 +115,40 @@ func Load() (Config, error) {
 		return Config{}, fmt.Errorf("parse VERIFY_EMAIL_TTL_MINUTES: %w", err)
 	}
 	cfg.VerifyEmailTTL = time.Duration(verifyEmailTTLMinutes) * time.Minute
+
+	hostStorageBudgetBytes, err := strconv.ParseInt(getEnv("HOST_STORAGE_BUDGET_BYTES", "536870912000"), 10, 64)
+	if err != nil {
+		return Config{}, fmt.Errorf("parse HOST_STORAGE_BUDGET_BYTES: %w", err)
+	}
+	cfg.HostStorageBudgetBytes = hostStorageBudgetBytes
+
+	hostCPUMillicoresBudget, err := strconv.Atoi(getEnv("HOST_CPU_MILLICORES_BUDGET", fmt.Sprintf("%d", runtime.NumCPU()*1000)))
+	if err != nil {
+		return Config{}, fmt.Errorf("parse HOST_CPU_MILLICORES_BUDGET: %w", err)
+	}
+	cfg.HostCPUMillicoresBudget = hostCPUMillicoresBudget
+
+	defaultMemoryBudget := detectHostMemoryMiB() * 3 / 4
+	if defaultMemoryBudget <= 0 {
+		defaultMemoryBudget = 8192
+	}
+	hostMemoryMiBBudget, err := strconv.Atoi(getEnv("HOST_MEMORY_MIB_BUDGET", fmt.Sprintf("%d", defaultMemoryBudget)))
+	if err != nil {
+		return Config{}, fmt.Errorf("parse HOST_MEMORY_MIB_BUDGET: %w", err)
+	}
+	cfg.HostMemoryMiBBudget = hostMemoryMiBBudget
+
+	webPidsLimit, err := strconv.ParseInt(getEnv("DOCKER_WEB_PIDS_LIMIT", "256"), 10, 64)
+	if err != nil {
+		return Config{}, fmt.Errorf("parse DOCKER_WEB_PIDS_LIMIT: %w", err)
+	}
+	cfg.DockerWebPidsLimit = webPidsLimit
+
+	cronPidsLimit, err := strconv.ParseInt(getEnv("DOCKER_CRON_PIDS_LIMIT", "128"), 10, 64)
+	if err != nil {
+		return Config{}, fmt.Errorf("parse DOCKER_CRON_PIDS_LIMIT: %w", err)
+	}
+	cfg.DockerCronPidsLimit = cronPidsLimit
 
 	return cfg, nil
 }
@@ -172,4 +214,26 @@ func loadDotEnvFile(path string) error {
 	}
 
 	return nil
+}
+
+func detectHostMemoryMiB() int {
+	data, err := os.ReadFile("/proc/meminfo")
+	if err != nil {
+		return 0
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		if !strings.HasPrefix(line, "MemTotal:") {
+			continue
+		}
+		fields := strings.Fields(line)
+		if len(fields) < 2 {
+			return 0
+		}
+		valueKiB, err := strconv.Atoi(fields[1])
+		if err != nil {
+			return 0
+		}
+		return valueKiB / 1024
+	}
+	return 0
 }

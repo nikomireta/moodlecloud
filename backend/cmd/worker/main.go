@@ -35,6 +35,7 @@ func main() {
 		Store:             st,
 		Mailer:            mail.NewSMTPMailer(cfg.SMTPHost, cfg.SMTPPort, cfg.SMTPFrom, cfg.FrontendOrigin),
 		Runtime:           runtime,
+		SiteDBAdminURL:    cfg.SiteDBAdminURL,
 		SiteRuntimeSecret: cfg.SiteRuntimeSecret,
 	}
 
@@ -50,6 +51,21 @@ func main() {
 
 	mux := asynq.NewServeMux()
 	mux.HandleFunc(provisioning.TaskTypeProvisionSite, handler.HandleProvisionSiteTask)
+	mux.HandleFunc(provisioning.TaskTypeMeterSiteUsageSweep, handler.HandleMeterSiteUsageSweepTask)
+
+	scheduler := asynq.NewScheduler(asynq.RedisClientOpt{
+		Addr:     cfg.RedisAddr,
+		Password: cfg.RedisPassword,
+	}, nil)
+	if _, err := scheduler.Register(cfg.UsageMeterSchedule, provisioning.NewMeterSiteUsageSweepTask()); err != nil {
+		log.Fatalf("register usage meter schedule: %v", err)
+	}
+	go func() {
+		if err := scheduler.Run(); err != nil {
+			log.Fatalf("run scheduler: %v", err)
+		}
+	}()
+	defer scheduler.Shutdown()
 
 	log.Println("worker listening")
 	if err := srv.Run(mux); err != nil {

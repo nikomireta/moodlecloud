@@ -24,3 +24,4 @@ frontend/tsconfig.tsbuildinfo
 
 # Local tooling artifacts
 .playwright-cli/
+backend/.env

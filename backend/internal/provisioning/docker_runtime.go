@@ -363,7 +363,7 @@ func (r *DockerLocalRuntime) ensureWebContainer(ctx context.Context, site store.
 		fmt.Sprintf("traefik.http.services.%s.loadbalancer.server.port", routerName(site)): "80",
 	}
 	env := r.runtimeEnv(site, metadata)
-	return r.ensureContainer(ctx, metadata.WebContainerName, imageRef(metadata), env, labels, nil, nil, metadata, false)
+	return r.ensureContainer(ctx, metadata.WebContainerName, imageRef(metadata), env, labels, nil, nil, metadata, false, r.containerResourcesForService(site, "web"))
 }
 
 func (r *DockerLocalRuntime) ensureCronContainer(ctx context.Context, site store.Site, metadata store.SiteRuntimeMetadata) error {
@@ -373,10 +373,10 @@ func (r *DockerLocalRuntime) ensureCronContainer(ctx context.Context, site store
 	}
 	env := r.runtimeEnv(site, metadata)
 	cmd := []string{"/usr/local/bin/cron.sh"}
-	return r.ensureContainer(ctx, metadata.CronContainerName, imageRef(metadata), env, labels, cmd, cronContainerHealthcheck(), metadata, false)
+	return r.ensureContainer(ctx, metadata.CronContainerName, imageRef(metadata), env, labels, cmd, cronContainerHealthcheck(), metadata, false, r.containerResourcesForService(site, "cron"))
 }
 
-func (r *DockerLocalRuntime) ensureContainer(ctx context.Context, name, image string, env []string, labels map[string]string, cmd []string, healthcheck *container.HealthConfig, metadata store.SiteRuntimeMetadata, attachTTY bool) error {
+func (r *DockerLocalRuntime) ensureContainer(ctx context.Context, name, image string, env []string, labels map[string]string, cmd []string, healthcheck *container.HealthConfig, metadata store.SiteRuntimeMetadata, attachTTY bool, resources container.Resources) error {
 	inspect, err := r.docker.ContainerInspect(ctx, name)
 	if err == nil {
 		if inspect.State != nil && inspect.State.Running {
@@ -402,6 +402,7 @@ func (r *DockerLocalRuntime) ensureContainer(ctx context.Context, name, image st
 	hostConfig := &container.HostConfig{
 		RestartPolicy: container.RestartPolicy{Name: "unless-stopped"},
 		Binds:         []string{fmt.Sprintf("%s:/var/www/moodledata", metadata.VolumeName)},
+		Resources:     resources,
 	}
 	networkingConfig := &networktypes.NetworkingConfig{
 		EndpointsConfig: map[string]*networktypes.EndpointSettings{
@@ -416,6 +417,35 @@ func (r *DockerLocalRuntime) ensureContainer(ctx context.Context, name, image st
 		return fmt.Errorf("start container %s: %w", name, err)
 	}
 	return nil
+}
+
+func (r *DockerLocalRuntime) containerResourcesForService(site store.Site, serviceName string) container.Resources {
+	var memoryMiB int
+	var cpuMillicores int
+	var pidsLimit int64
+
+	switch serviceName {
+	case "cron":
+		memoryMiB = site.CronMemoryMiB
+		cpuMillicores = site.CronCPUMillicores
+		pidsLimit = r.cfg.DockerCronPidsLimit
+	default:
+		memoryMiB = site.WebMemoryMiB
+		cpuMillicores = site.WebCPUMillicores
+		pidsLimit = r.cfg.DockerWebPidsLimit
+	}
+
+	resources := container.Resources{}
+	if memoryMiB > 0 {
+		resources.Memory = int64(memoryMiB) * 1024 * 1024
+	}
+	if cpuMillicores > 0 {
+		resources.NanoCPUs = int64(cpuMillicores) * 1_000_000
+	}
+	if pidsLimit > 0 {
+		resources.PidsLimit = &pidsLimit
+	}
+	return resources
 }
 
 func cronContainerHealthcheck() *container.HealthConfig {

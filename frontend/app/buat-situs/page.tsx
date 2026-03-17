@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
+import { toast } from "sonner"
 import { Header } from "@/components/layout/header"
 import { Footer } from "@/components/layout/footer"
 import { Button } from "@/components/ui/button"
@@ -136,10 +137,15 @@ export default function BuatSitusPage() {
 
       router.push(completed ? `/situs-berhasil/${nextSubdomain}` : `/proses-pembuatan/${nextSubdomain}`)
     } catch (error) {
-      console.error("failed to create site", error)
-      if (isAPIError(error) && error.status === 409) {
+      if (isAPIError(error) && error.status === 409 && error.message.toLowerCase().includes("subdomain")) {
         setCurrentStep(1)
         setSubdomainAvailable(false)
+        toast.error(error.message)
+      } else if (isAPIError(error)) {
+        toast.error(error.message)
+      } else {
+        console.error("failed to create site", error)
+        toast.error("Gagal membuat situs. Coba lagi beberapa saat lagi.")
       }
     } finally {
       setIsSubmitting(false)
