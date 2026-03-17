@@ -5,7 +5,7 @@ import { Toaster } from "@/components/ui/sonner"
 export function ToastProvider() {
   return (
     <Toaster 
-      position="bottom-right"
+      position="top-right"
       toastOptions={{
         classNames: {
           toast: "bg-card border-border text-foreground",

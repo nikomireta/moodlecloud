@@ -79,6 +79,7 @@ type Site struct {
 	CronCPUMillicores int        `json:"cron_cpu_millicores"`
 	CronMemoryMiB     int        `json:"cron_memory_mib"`
 	ActivatedAt       *time.Time `json:"activated_at,omitempty"`
+	RuntimeHealth     string     `json:"runtime_health,omitempty"`
 	CreatedAt         time.Time  `json:"created_at"`
 	UpdatedAt         time.Time  `json:"updated_at"`
 }

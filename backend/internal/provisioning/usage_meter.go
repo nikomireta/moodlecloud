@@ -10,7 +10,7 @@ import (
 	"github.com/hibiken/asynq"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"moodlecloud/backend/internal/store"
+	"moodlepilot/backend/internal/store"
 )
 
 func (h Handler) HandleMeterSiteUsageSweepTask(ctx context.Context, _ *asynq.Task) error {

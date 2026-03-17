@@ -8,8 +8,8 @@ import (
 	"github.com/docker/docker/api/types/container"
 	"github.com/google/uuid"
 
-	"moodlecloud/backend/internal/config"
-	"moodlecloud/backend/internal/store"
+	"moodlepilot/backend/internal/config"
+	"moodlepilot/backend/internal/store"
 )
 
 func TestBuildSiteURLs(t *testing.T) {
@@ -144,7 +144,7 @@ func TestCustomDomainHelpers(t *testing.T) {
 	if !CustomDomainSupported(cfg) {
 		t.Fatal("expected custom domain to be supported when feature and resolver are configured")
 	}
-	if got := CustomDomainTXTName("lms.sekolah.sch.id"); got != "_moodlecloud-verify.lms.sekolah.sch.id" {
+	if got := CustomDomainTXTName("lms.sekolah.sch.id"); got != "_moodlepilot-verify.lms.sekolah.sch.id" {
 		t.Fatalf("CustomDomainTXTName() = %q", got)
 	}
 }

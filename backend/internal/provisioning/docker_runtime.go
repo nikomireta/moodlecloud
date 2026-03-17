@@ -22,8 +22,8 @@ import (
 	"github.com/docker/docker/pkg/stdcopy"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"moodlecloud/backend/internal/config"
-	"moodlecloud/backend/internal/store"
+	"moodlepilot/backend/internal/config"
+	"moodlepilot/backend/internal/store"
 )
 
 type DockerLocalRuntime struct {
@@ -358,8 +358,8 @@ func (r *DockerLocalRuntime) ensureVolume(ctx context.Context, metadata store.Si
 	if _, err := r.docker.VolumeCreate(ctx, volumetypes.CreateOptions{
 		Name: metadata.VolumeName,
 		Labels: map[string]string{
-			"moodlecloud.managed": "true",
-			"moodlecloud.site-id": metadata.SiteID.String(),
+			"moodlepilot.managed": "true",
+			"moodlepilot.site-id": metadata.SiteID.String(),
 		},
 	}); err != nil {
 		return fmt.Errorf("create docker volume: %w", err)
@@ -418,8 +418,8 @@ func (r *DockerLocalRuntime) recreateWebContainer(ctx context.Context, site stor
 func (r *DockerLocalRuntime) webContainerLabels(site store.Site, customDomain *store.SiteCustomDomain) map[string]string {
 	router := routerName(site)
 	labels := map[string]string{
-		"moodlecloud.managed":    "true",
-		"moodlecloud.site-id":    site.ID.String(),
+		"moodlepilot.managed":    "true",
+		"moodlepilot.site-id":    site.ID.String(),
 		"traefik.enable":         "true",
 		"traefik.docker.network": r.cfg.DockerProxyNetwork,
 		fmt.Sprintf("traefik.http.routers.%s.rule", router):                      buildHostRule(r.routeHosts(site, customDomain)),
@@ -439,8 +439,8 @@ func (r *DockerLocalRuntime) webContainerLabels(site store.Site, customDomain *s
 
 func (r *DockerLocalRuntime) ensureCronContainer(ctx context.Context, site store.Site, metadata store.SiteRuntimeMetadata) error {
 	labels := map[string]string{
-		"moodlecloud.managed": "true",
-		"moodlecloud.site-id": site.ID.String(),
+		"moodlepilot.managed": "true",
+		"moodlepilot.site-id": site.ID.String(),
 	}
 	env := r.runtimeEnv(site, metadata)
 	cmd := []string{"/usr/local/bin/cron.sh"}

@@ -12,8 +12,8 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
-	"moodlecloud/backend/internal/provisioning"
-	"moodlecloud/backend/internal/store"
+	"moodlepilot/backend/internal/provisioning"
+	"moodlepilot/backend/internal/store"
 )
 
 type siteSettingsResponse struct {

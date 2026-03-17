@@ -1,6 +1,6 @@
 'use client'
 
-// MoodleCloud Indonesia - Landing Page
+// Moodlepilot Indonesia - Landing Page
 import { Header } from "@/components/layout/header"
 import { Footer } from "@/components/layout/footer"
 import { Button } from "@/components/ui/button"
@@ -23,7 +23,7 @@ export default function HomePage() {
             <div className="grid gap-12 lg:grid-cols-2 lg:gap-8 items-center">
               <div className="flex flex-col justify-center">
                 <h1 className="text-4xl font-bold tracking-tight sm:text-5xl lg:text-6xl text-balance">
-                  Platform Manajemen Moodle Cloud untuk Indonesia
+                  Platform Manajemen Moodlepilot untuk Indonesia
                 </h1>
                 <p className="mt-6 text-lg text-muted-foreground max-w-lg text-pretty">
                   Buat, kelola, dan skalakan situs Moodle Anda dengan mudah. Infrastruktur cloud yang andal, performa tinggi, dan dukungan penuh dalam bahasa Indonesia.
@@ -139,7 +139,7 @@ export default function HomePage() {
                 Cara Kerja
               </h2>
               <p className="mt-4 text-lg text-muted-foreground max-w-2xl mx-auto">
-                Tiga langkah sederhana untuk mulai menggunakan MoodleCloud
+                Tiga langkah sederhana untuk mulai menggunakan Moodlepilot
               </p>
             </div>
 
@@ -148,7 +148,7 @@ export default function HomePage() {
                 {
                   number: "01",
                   title: "Daftar Akun",
-                  description: "Buat akun MoodleCloud Anda dengan email dalam waktu kurang dari 2 menit"
+                  description: "Buat akun Moodlepilot Anda dengan email dalam waktu kurang dari 2 menit"
                 },
                 {
                   number: "02",
@@ -249,7 +249,7 @@ export default function HomePage() {
               Siap Memulai?
             </h2>
             <p className="text-lg text-muted-foreground mb-8 max-w-2xl mx-auto">
-              Bergabunglah dengan ribuan institusi pendidikan yang telah mempercayai MoodleCloud untuk mengelola pembelajaran mereka
+              Bergabunglah dengan ribuan institusi pendidikan yang telah mempercayai Moodlepilot untuk mengelola pembelajaran mereka
             </p>
             <div className="flex flex-col gap-3 sm:flex-row justify-center">
               <Link href={isLoggedIn ? "/dashboard" : "/daftar"}>

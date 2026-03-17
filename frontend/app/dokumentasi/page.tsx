@@ -32,9 +32,9 @@ const docCategories = [
   {
     icon: Rocket,
     title: "Memulai",
-    description: "Panduan langkah demi langkah untuk memulai dengan MoodleCloud",
+    description: "Panduan langkah demi langkah untuk memulai dengan Moodlepilot",
     articles: [
-      "Membuat Akun MoodleCloud",
+      "Membuat Akun Moodlepilot",
       "Membuat Situs Moodle Pertama",
       "Mengonfigurasi Domain Kustom",
       "Mengelola Pengguna Moodle",
@@ -125,11 +125,11 @@ const faqs = [
   },
   {
     question: "Plugin apa saja yang didukung?",
-    answer: "MoodleCloud mendukung sebagian besar plugin resmi Moodle. Untuk plugin khusus, silakan hubungi tim support kami untuk instalasi.",
+    answer: "Moodlepilot mendukung sebagian besar plugin resmi Moodle. Untuk plugin khusus, silakan hubungi tim support kami untuk instalasi.",
   },
   {
     question: "Bagaimana cara menghubungi support?",
-    answer: "Anda dapat menghubungi tim support melalui fitur live chat di dashboard, email ke support@moodlecloud.id, atau melalui WhatsApp di jam kerja.",
+    answer: "Anda dapat menghubungi tim support melalui fitur live chat di dashboard, email ke support@moodlepilot.id, atau melalui WhatsApp di jam kerja.",
   },
 ]
 
@@ -159,7 +159,7 @@ export default function DocumentationPage() {
                 Pusat Bantuan
               </h1>
               <p className="mt-4 text-lg text-muted-foreground">
-                Temukan jawaban, panduan, dan dokumentasi untuk MoodleCloud
+                Temukan jawaban, panduan, dan dokumentasi untuk Moodlepilot
               </p>
               
               {/* Search */}

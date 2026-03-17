@@ -11,7 +11,7 @@ import (
 	"regexp"
 	"strings"
 
-	"moodlecloud/backend/internal/ai"
+	"moodlepilot/backend/internal/ai"
 )
 
 type Generator struct {

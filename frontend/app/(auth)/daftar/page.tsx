@@ -111,7 +111,7 @@ export default function RegisterPage() {
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-foreground">
               <Cloud className="h-6 w-6 text-background" />
             </div>
-            <span className="text-xl font-semibold">MoodleCloud</span>
+            <span className="text-xl font-semibold">Moodlepilot</span>
           </Link>
           <p className="text-muted-foreground text-sm">
             Buat akun untuk memulai

@@ -15,7 +15,7 @@ const mockArticle = {
   excerpt: "Pelajari cara mengatur Moodle dari awal, mulai dari membuat kursus pertama hingga mengundang siswa.",
   category: "Tutorial",
   author: {
-    name: "Tim MoodleCloud",
+    name: "Tim Moodlepilot",
     avatar: "/avatars/team.jpg",
     role: "Content Team"
   },
@@ -66,7 +66,7 @@ Untuk meningkatkan keterlibatan siswa dalam pembelajaran online:
 
 ## Kesimpulan
 
-Memulai dengan Moodle mungkin terasa overwhelming pada awalnya, tetapi dengan panduan yang tepat, Anda dapat menguasai platform ini dengan cepat. MoodleCloud menyediakan semua tools yang Anda butuhkan untuk sukses dalam pembelajaran online.
+Memulai dengan Moodle mungkin terasa overwhelming pada awalnya, tetapi dengan panduan yang tepat, Anda dapat menguasai platform ini dengan cepat. Moodlepilot menyediakan semua tools yang Anda butuhkan untuk sukses dalam pembelajaran online.
 
 Jika Anda membutuhkan bantuan lebih lanjut, tim support kami siap membantu 24/7.
   `,

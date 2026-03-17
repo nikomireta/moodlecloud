@@ -1,4 +1,4 @@
-module moodlecloud/backend
+module moodlepilot/backend
 
 go 1.26.0
 

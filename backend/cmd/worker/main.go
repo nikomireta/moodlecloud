@@ -6,10 +6,10 @@ import (
 
 	"github.com/hibiken/asynq"
 
-	"moodlecloud/backend/internal/config"
-	"moodlecloud/backend/internal/mail"
-	"moodlecloud/backend/internal/provisioning"
-	"moodlecloud/backend/internal/store"
+	"moodlepilot/backend/internal/config"
+	"moodlepilot/backend/internal/mail"
+	"moodlepilot/backend/internal/provisioning"
+	"moodlepilot/backend/internal/store"
 )
 
 func main() {

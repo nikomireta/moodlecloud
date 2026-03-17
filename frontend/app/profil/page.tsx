@@ -215,6 +215,7 @@ export default function ProfilePage() {
     }
     if (newPassword !== confirmPassword) {
       toast.error("Konfirmasi kata sandi tidak cocok.")
+      setConfirmPassword("")
       return
     }
 

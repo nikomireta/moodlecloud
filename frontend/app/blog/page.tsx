@@ -24,7 +24,7 @@ const featuredPost = {
   title: "Panduan Lengkap Memulai Moodle untuk Pembelajaran Online",
   excerpt: "Pelajari cara mengatur Moodle dari awal, mulai dari membuat kursus pertama hingga mengundang siswa. Panduan step-by-step untuk pemula.",
   category: "Tutorial",
-  author: "Tim MoodleCloud",
+  author: "Tim Moodlepilot",
   date: "10 Mar 2026",
   readTime: "15 menit",
   image: "/blog/featured.jpg"
@@ -43,9 +43,9 @@ const posts = [
   {
     id: "3",
     title: "Update Fitur Baru: Integrasi Video Conference",
-    excerpt: "MoodleCloud kini mendukung integrasi langsung dengan Zoom, Google Meet, dan Microsoft Teams.",
+    excerpt: "Moodlepilot kini mendukung integrasi langsung dengan Zoom, Google Meet, dan Microsoft Teams.",
     category: "Update",
-    author: "Tim MoodleCloud",
+    author: "Tim Moodlepilot",
     date: "5 Mar 2026",
     readTime: "5 menit"
   },
@@ -81,7 +81,7 @@ const posts = [
     title: "Moodle 4.3: Fitur Baru yang Wajib Anda Ketahui",
     excerpt: "Rangkuman update terbaru Moodle 4.3 dan bagaimana memanfaatkannya secara maksimal.",
     category: "Berita",
-    author: "Tim MoodleCloud",
+    author: "Tim Moodlepilot",
     date: "20 Feb 2026",
     readTime: "6 menit"
   }

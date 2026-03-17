@@ -69,7 +69,7 @@ function ResetPasswordContent() {
               <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-foreground">
                 <Cloud className="h-6 w-6 text-background" />
               </div>
-              <span className="text-xl font-semibold">MoodleCloud</span>
+              <span className="text-xl font-semibold">Moodlepilot</span>
             </Link>
           </div>
 
@@ -108,7 +108,7 @@ function ResetPasswordContent() {
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-foreground">
               <Cloud className="h-6 w-6 text-background" />
             </div>
-            <span className="text-xl font-semibold">MoodleCloud</span>
+            <span className="text-xl font-semibold">Moodlepilot</span>
           </Link>
         </div>
 
@@ -116,7 +116,7 @@ function ResetPasswordContent() {
           <CardHeader className="space-y-1 pb-4">
             <CardTitle className="text-2xl text-center">Atur Ulang Kata Sandi</CardTitle>
             <CardDescription className="text-center">
-              Masukkan kata sandi baru untuk akun MoodleCloud Anda
+              Masukkan kata sandi baru untuk akun Moodlepilot Anda
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">

@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"moodlecloud/backend/internal/config"
-	"moodlecloud/backend/internal/store"
+	"moodlepilot/backend/internal/config"
+	"moodlepilot/backend/internal/store"
 )
 
 var (
@@ -111,7 +111,7 @@ func CustomDomainTXTName(domain string) string {
 	if domain == "" {
 		return ""
 	}
-	return fmt.Sprintf("_moodlecloud-verify.%s", domain)
+	return fmt.Sprintf("_moodlepilot-verify.%s", domain)
 }
 
 func customDomainActiveForRouting(customDomain *store.SiteCustomDomain) bool {

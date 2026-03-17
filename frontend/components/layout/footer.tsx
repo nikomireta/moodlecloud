@@ -10,7 +10,7 @@ export function Footer() {
               <span className="text-xs font-bold text-background">M</span>
             </div>
             <span className="text-sm text-muted-foreground">
-              MoodleCloud Indonesia
+              Moodlepilot Indonesia
             </span>
           </div>
           
@@ -30,7 +30,7 @@ export function Footer() {
           </nav>
           
           <p className="text-sm text-muted-foreground">
-            &copy; 2026 MoodleCloud ID
+            &copy; 2026 Moodlepilot ID
           </p>
         </div>
       </div>

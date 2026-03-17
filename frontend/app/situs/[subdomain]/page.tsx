@@ -176,31 +176,6 @@ const notificationPreferences = {
   allowUnsubscribe: true,
 }
 
-function siteStatusBadge(status: string) {
-  switch (status) {
-    case "active":
-      return {
-        label: "Aktif",
-        className: "text-green-600 border-green-600 text-xs",
-      }
-    case "provisioning":
-    case "pending":
-      return {
-        label: "Sedang Dibuat",
-        className: "text-orange-600 border-orange-600 text-xs",
-      }
-    case "failed":
-      return {
-        label: "Gagal",
-        className: "text-red-600 border-red-600 text-xs",
-      }
-    default:
-      return {
-        label: "Tidak Diketahui",
-        className: "text-muted-foreground border-border text-xs",
-      }
-  }
-}
 
 function runtimeStatusBadge(status: string) {
   switch (status) {
@@ -309,40 +284,7 @@ function formatSystemValue(value?: string | null) {
   return trimmed ? trimmed : "Belum tersedia"
 }
 
-function customerServiceStatus(status: string) {
-  switch (status) {
-    case "running":
-      return {
-        label: "Normal",
-        className: "text-green-600",
-      }
-    case "degraded":
-      return {
-        label: "Perlu Perhatian",
-        className: "text-amber-600",
-      }
-    case "stopped":
-      return {
-        label: "Berhenti",
-        className: "text-slate-600",
-      }
-    case "failed":
-      return {
-        label: "Gagal",
-        className: "text-red-600",
-      }
-    case "provisioning":
-      return {
-        label: "Sedang Disiapkan",
-        className: "text-orange-600",
-      }
-    default:
-      return {
-        label: "Belum tersedia",
-        className: "text-muted-foreground",
-      }
-  }
-}
+
 
 function isRuntimeControllable(runtimeStatus: SiteRuntimeStatus | null) {
   return Boolean(runtimeStatus?.controllable && runtimeStatus.runtime_mode === "docker_local")
@@ -499,8 +441,6 @@ export default function SiteDetailPage({ params }: { params: Promise<{ subdomain
   const adminUrl = siteData?.admin_url ?? buildAdminURL(subdomain)
   const siteHost = siteHostFromURL(siteUrl, subdomain)
   const siteName = siteData?.name ?? mockSite.name
-  const siteStatus = siteData?.status ?? "active"
-  const siteBadge = siteStatusBadge(siteStatus)
   const runtimeBadge = runtimeStatusBadge(runtimeStatus?.overall_status ?? "unknown")
   const webService = findRuntimeService(runtimeStatus, "web")
   const cronService = findRuntimeService(runtimeStatus, "cron")
@@ -509,7 +449,6 @@ export default function SiteDetailPage({ params }: { params: Promise<{ subdomain
   const customDomainState = customDomainBadge(customDomain?.status ?? "")
   const customDomainSupported = siteSettings?.custom_domain_enabled ?? false
   const currentDomainHost = customDomain?.status === "active" && customDomain.domain ? customDomain.domain : siteHost
-  const serviceSummary = customerServiceStatus(runtimeStatus?.overall_status ?? "unknown")
   const storageUsed = siteUsage?.storage_bytes_used ?? null
   const storageLimit = siteData?.storage_bytes_limit ?? null
   const storagePercent = typeof storageUsed === "number" && typeof storageLimit === "number" && storageLimit > 0
@@ -682,9 +621,6 @@ export default function SiteDetailPage({ params }: { params: Promise<{ subdomain
               <div>
                 <div className="flex items-center gap-3">
                   <h1 className="text-xl font-semibold">{siteName}</h1>
-                  <Badge variant="outline" className={siteBadge.className}>
-                    {siteBadge.label}
-                  </Badge>
                   <Badge variant="outline" className={runtimeBadge.className}>
                     {runtimeBadge.label}
                   </Badge>
@@ -749,62 +685,25 @@ export default function SiteDetailPage({ params }: { params: Promise<{ subdomain
           </div>
 
           {/* Tabs */}
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-            <TabsList className="w-full justify-start border-b border-border rounded-none h-auto p-0 bg-transparent">
-              <TabsTrigger 
-                value="ringkasan" 
-                className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 py-3 text-muted-foreground data-[state=active]:text-foreground"
-              >
-                Ringkasan
-              </TabsTrigger>
-              <TabsTrigger 
-                value="laporan" 
-                className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 py-3 text-muted-foreground data-[state=active]:text-foreground"
-              >
-                Laporan
-              </TabsTrigger>
-              <TabsTrigger 
-                value="backup" 
-                className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 py-3 text-muted-foreground data-[state=active]:text-foreground"
-              >
-                Backup
-              </TabsTrigger>
-              <TabsTrigger 
-                value="notifikasi" 
-                className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 py-3 text-muted-foreground data-[state=active]:text-foreground"
-              >
-                Notifikasi
-              </TabsTrigger>
-              <TabsTrigger 
-                value="pengaturan" 
-                className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 py-3 text-muted-foreground data-[state=active]:text-foreground"
-              >
-                Pengaturan
-              </TabsTrigger>
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full space-y-6">
+            <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 xl:w-auto xl:inline-grid">
+              <TabsTrigger value="ringkasan">Ringkasan</TabsTrigger>
+              <TabsTrigger value="laporan">Laporan</TabsTrigger>
+              <TabsTrigger value="backup">Backup</TabsTrigger>
+              <TabsTrigger value="pengaturan">Pengaturan</TabsTrigger>
             </TabsList>
 
             {/* Tab: Ringkasan */}
-            <TabsContent value="ringkasan" className="mt-6 space-y-6">
-              <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-                <Card className="p-4 border-border">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-500/10">
-                      <Globe className="h-5 w-5 text-blue-500" />
-                    </div>
-                    <div>
-                      <p className="text-lg font-semibold">{siteBadge.label}</p>
-                      <p className="text-xs text-muted-foreground">Status Situs</p>
-                    </div>
-                  </div>
-                </Card>
+            <TabsContent value="ringkasan" className="space-y-6">
+              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
                 <Card className="p-4 border-border">
                   <div className="flex items-center gap-3">
                     <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-green-500/10">
                       <Activity className="h-5 w-5 text-green-500" />
                     </div>
                     <div>
-                      <p className={`text-lg font-semibold ${serviceSummary.className}`}>{serviceSummary.label}</p>
-                      <p className="text-xs text-muted-foreground">Status Layanan</p>
+                      <p className={`text-lg font-semibold ${runtimeBadge.className.split(" ")[0]}`}>{runtimeBadge.label}</p>
+                      <p className="text-xs text-muted-foreground">Status Situs</p>
                     </div>
                   </div>
                 </Card>
@@ -921,7 +820,7 @@ export default function SiteDetailPage({ params }: { params: Promise<{ subdomain
             </TabsContent>
 
             {/* Tab: Laporan */}
-            <TabsContent value="laporan" className="mt-6 space-y-6">
+            <TabsContent value="laporan" className="space-y-6">
 
               {/* Period Picker */}
               <Card className="p-4 border-border">
@@ -1221,7 +1120,7 @@ export default function SiteDetailPage({ params }: { params: Promise<{ subdomain
             </TabsContent>
 
             {/* Tab: Backup */}
-            <TabsContent value="backup" className="mt-6 space-y-6">
+            <TabsContent value="backup" className="space-y-6">
               <div className="grid gap-6 lg:grid-cols-3">
                 <Card className="p-6 border-border lg:col-span-2">
                   <div className="flex items-center justify-between mb-6">
@@ -1300,7 +1199,7 @@ export default function SiteDetailPage({ params }: { params: Promise<{ subdomain
             </TabsContent>
 
             {/* Tab: Pengaturan */}
-            <TabsContent value="pengaturan" className="mt-6 space-y-6">
+            <TabsContent value="pengaturan" className="space-y-6">
               {/* Site Information */}
               <Card className="p-6 border-border">
                 <h3 className="font-semibold mb-4">Informasi Situs</h3>

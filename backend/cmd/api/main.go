@@ -9,14 +9,14 @@ import (
 
 	"github.com/hibiken/asynq"
 
-	"moodlecloud/backend/internal/ai"
-	"moodlecloud/backend/internal/auth"
-	"moodlecloud/backend/internal/config"
-	"moodlecloud/backend/internal/coursegen"
-	"moodlecloud/backend/internal/httpapi"
-	"moodlecloud/backend/internal/mail"
-	"moodlecloud/backend/internal/provisioning"
-	"moodlecloud/backend/internal/store"
+	"moodlepilot/backend/internal/ai"
+	"moodlepilot/backend/internal/auth"
+	"moodlepilot/backend/internal/config"
+	"moodlepilot/backend/internal/coursegen"
+	"moodlepilot/backend/internal/httpapi"
+	"moodlepilot/backend/internal/mail"
+	"moodlepilot/backend/internal/provisioning"
+	"moodlepilot/backend/internal/store"
 	"log/slog"
 )
 

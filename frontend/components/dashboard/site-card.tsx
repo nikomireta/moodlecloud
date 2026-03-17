@@ -22,10 +22,46 @@ interface SiteCardProps {
   siteUrl?: string
   siteHost?: string
   users?: number
+  runtimeHealth?: string
   lastActivity?: string
 }
 
-export function SiteCard({ id, name, subdomain, status, siteUrl, siteHost, users, lastActivity }: SiteCardProps) {
+function runtimeStatusBadge(status: string) {
+  switch (status) {
+    case "running":
+      return {
+        label: "Running",
+        className: "text-green-600 border-green-600/50 bg-green-500/10 text-[10px]",
+      }
+    case "degraded":
+      return {
+        label: "Degraded",
+        className: "text-amber-600 border-amber-600/50 bg-amber-500/10 text-[10px]",
+      }
+    case "stopped":
+      return {
+        label: "Stopped",
+        className: "text-slate-600 border-slate-600/50 bg-slate-500/10 text-[10px]",
+      }
+    case "failed":
+      return {
+        label: "Failed",
+        className: "text-red-600 border-red-600/50 bg-red-500/10 text-[10px]",
+      }
+    case "provisioning":
+      return {
+        label: "Provisioning",
+        className: "text-orange-600 border-orange-600/50 bg-orange-500/10 text-[10px]",
+      }
+    default:
+      return {
+        label: "Unknown",
+        className: "text-muted-foreground border-border bg-muted/30 text-[10px]",
+      }
+  }
+}
+
+export function SiteCard({ id, name, subdomain, status, siteUrl, siteHost, users, runtimeHealth, lastActivity }: SiteCardProps) {
   const router = useRouter()
   const statusConfig = {
     aktif: {
@@ -69,7 +105,14 @@ export function SiteCard({ id, name, subdomain, status, siteUrl, siteHost, users
             <Globe className="h-5 w-5 text-muted-foreground" />
           </div>
           <div className="space-y-1">
-            <h3 className="font-medium leading-none">{name}</h3>
+            <div className="flex items-center gap-2">
+              <h3 className="font-medium leading-none">{name}</h3>
+              {status === "aktif" && runtimeHealth && (
+                <div className={`rounded border px-1.5 py-0.5 text-[10px] font-medium ${runtimeStatusBadge(runtimeHealth).className}`}>
+                  {runtimeStatusBadge(runtimeHealth).label}
+                </div>
+              )}
+            </div>
             <p className="text-sm text-muted-foreground">
               {resolvedSiteHost}
             </p>

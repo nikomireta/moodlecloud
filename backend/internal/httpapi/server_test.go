@@ -7,7 +7,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"moodlecloud/backend/internal/store"
+	"moodlepilot/backend/internal/store"
 )
 
 func TestNormalizeSubdomain(t *testing.T) {

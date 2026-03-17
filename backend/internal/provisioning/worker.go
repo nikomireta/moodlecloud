@@ -9,8 +9,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/hibiken/asynq"
 
-	"moodlecloud/backend/internal/mail"
-	"moodlecloud/backend/internal/store"
+	"moodlepilot/backend/internal/mail"
+	"moodlepilot/backend/internal/store"
 )
 
 type Handler struct {

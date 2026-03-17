@@ -17,13 +17,13 @@ import (
 	"github.com/google/uuid"
 	"github.com/hibiken/asynq"
 
-	"moodlecloud/backend/internal/ai"
-	"moodlecloud/backend/internal/auth"
-	"moodlecloud/backend/internal/config"
-	"moodlecloud/backend/internal/coursegen"
-	"moodlecloud/backend/internal/mail"
-	"moodlecloud/backend/internal/provisioning"
-	"moodlecloud/backend/internal/store"
+	"moodlepilot/backend/internal/ai"
+	"moodlepilot/backend/internal/auth"
+	"moodlepilot/backend/internal/config"
+	"moodlepilot/backend/internal/coursegen"
+	"moodlepilot/backend/internal/mail"
+	"moodlepilot/backend/internal/provisioning"
+	"moodlepilot/backend/internal/store"
 )
 
 type Server struct {
@@ -239,7 +239,7 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 		Type:      "info",
 		Category:  "update",
 		Title:     "Akun berhasil dibuat",
-		Message:   "Silakan verifikasi email Anda untuk mulai menggunakan MoodleCloud.",
+		Message:   "Silakan verifikasi email Anda untuk mulai menggunakan Moodlepilot.",
 		ActionURL: "/verifikasi-email",
 	})
 

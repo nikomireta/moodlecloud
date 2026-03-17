@@ -3,7 +3,7 @@ package httpapi
 import (
 	"fmt"
 	"net/http"
-	"moodlecloud/backend/internal/ai"
+	"moodlepilot/backend/internal/ai"
 )
 
 type generateCourseRequest struct {

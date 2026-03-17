@@ -56,7 +56,7 @@ export default function ForgotPasswordPage() {
               <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-foreground">
                 <Cloud className="h-6 w-6 text-background" />
               </div>
-              <span className="text-xl font-semibold">MoodleCloud</span>
+              <span className="text-xl font-semibold">Moodlepilot</span>
             </Link>
           </div>
 
@@ -121,7 +121,7 @@ export default function ForgotPasswordPage() {
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-foreground">
               <Cloud className="h-6 w-6 text-background" />
             </div>
-            <span className="text-xl font-semibold">MoodleCloud</span>
+            <span className="text-xl font-semibold">Moodlepilot</span>
           </Link>
         </div>
 

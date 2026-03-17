@@ -12,6 +12,13 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet"
+import {
   Menu, User, LogOut, Settings, LayoutDashboard, HelpCircle, Bell, Sparkles,
   Check, AlertTriangle, XCircle, Info, Database, Server, Shield, AlertCircle, Clock
 } from "lucide-react"
@@ -55,12 +62,17 @@ export function Header() {
   const pathname = usePathname()
   const { status, user, logout } = useAuth()
   const [notifications, setNotifications] = useState<NotificationItem[]>([])
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const isLoggedIn = status === "authenticated"
   const unreadNotificationCount = useMemo(() => notifications.filter(isUnread).length, [notifications])
 
   const handleLogout = async () => {
-    await logout()
-    router.push("/masuk")
+    try {
+      await logout()
+      router.push("/masuk")
+    } catch (error) {
+      console.error("Logout error:", error)
+    }
   }
 
   useEffect(() => {
@@ -103,46 +115,63 @@ export function Header() {
             <div className="flex h-7 w-7 items-center justify-center rounded-md bg-foreground">
               <span className="text-sm font-bold text-background">M</span>
             </div>
-            <span className="text-sm font-semibold tracking-tight">MoodleCloud</span>
+            <span className="text-sm font-semibold tracking-tight">Moodlepilot</span>
           </Link>
           
           <nav className="hidden items-center gap-1 md:flex">
-            <Link href="/dashboard">
-              <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              className={pathname === "/dashboard" ? "text-foreground font-semibold bg-accent/50" : "text-muted-foreground hover:text-foreground"} 
+              asChild
+            >
+              <Link href="/dashboard">
                 Dashboard
-              </Button>
-            </Link>
-            <Link href="/ai-course-generator">
-              <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
+              </Link>
+            </Button>
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              className={pathname === "/ai-course-generator" ? "text-foreground font-semibold bg-accent/50" : "text-muted-foreground hover:text-foreground"} 
+              asChild
+            >
+              <Link href="/ai-course-generator">
                 <Sparkles className="mr-1 h-3 w-3" />
                 AI Generator
                 <Badge variant="secondary" className="ml-1.5 px-1 py-0 text-[10px] uppercase tracking-wider">Segera</Badge>
-              </Button>
-            </Link>
-            <Link href="/harga">
-              <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
+              </Link>
+            </Button>
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              className={pathname === "/harga" ? "text-foreground font-semibold bg-accent/50" : "text-muted-foreground hover:text-foreground"} 
+              asChild
+            >
+              <Link href="/harga">
                 Harga
-              </Button>
-            </Link>
-            <Link href="/dokumentasi">
-              <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
+              </Link>
+            </Button>
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              className={pathname === "/dokumentasi" ? "text-foreground font-semibold bg-accent/50" : "text-muted-foreground hover:text-foreground"} 
+              asChild
+            >
+              <Link href="/dokumentasi">
                 Bantuan
-              </Button>
-            </Link>
+              </Link>
+            </Button>
           </nav>
         </div>
 
         <div className="flex items-center gap-3">
           {isLoggedIn ? (
             <>
-              <Link href="/buat-situs" className="hidden sm:block">
-                <Button size="sm" className="h-8">
+              <Button size="sm" className="h-8 hidden sm:flex" asChild>
+                <Link href="/buat-situs">
                   Buat Situs Baru
-                </Button>
-              </Link>
-              
-              {/* Theme Toggle */}
-              <ThemeToggle />
+                </Link>
+              </Button>
               
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -155,28 +184,33 @@ export function Header() {
                     )}
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-80">
-                  <div className="flex items-center justify-between px-4 py-2">
-                    <p className="text-sm font-medium">Notifikasi</p>
+                <DropdownMenuContent align="end" className="w-[320px] sm:w-[360px] p-0 overflow-hidden border-border/50 shadow-lg">
+                  <div className="flex items-center justify-between px-4 py-3 bg-muted/30 border-b border-border/50">
+                    <p className="text-sm font-semibold tracking-tight">Notifikasi</p>
                     {unreadNotificationCount > 0 && (
-                      <Badge variant="secondary" className="text-xs">
-                        {unreadNotificationCount} baru
+                      <Badge variant="secondary" className="text-[10px] uppercase font-semibold px-2">
+                        {unreadNotificationCount} Baru
                       </Badge>
                     )}
                   </div>
-                  <DropdownMenuSeparator />
-                  <div className="max-h-[300px] overflow-y-auto">
+                  <div className="max-h-[350px] overflow-y-auto w-full">
                     {notifications.length === 0 ? (
-                      <div className="p-4 text-center text-sm text-muted-foreground">
-                        Tidak ada notifikasi
+                      <div className="flex flex-col items-center justify-center py-8 px-4 text-center">
+                        <div className="h-10 w-10 rounded-full bg-muted/50 flex items-center justify-center mb-3">
+                          <Bell className="h-5 w-5 text-muted-foreground/50" />
+                        </div>
+                        <p className="text-sm font-medium text-muted-foreground">Tidak ada notifikasi</p>
+                        <p className="text-xs text-muted-foreground/70 mt-1">Anda sudah melihat semuanya.</p>
                       </div>
                     ) : (
                       <div className="flex flex-col">
                         {notifications.slice(0, 5).map((notification) => (
                           <DropdownMenuItem
                             key={notification.id}
-                            className={`flex flex-col items-start gap-1 p-3 cursor-pointer ${
-                              isUnread(notification) ? "bg-muted/50" : ""
+                            className={`flex flex-col items-start p-3 m-1 cursor-pointer rounded-md transition-all ${
+                              isUnread(notification) 
+                                ? "bg-primary/5 hover:bg-primary/10 border-l-2 border-primary" 
+                                : "hover:bg-muted border-l-2 border-transparent"
                             }`}
                             onSelect={() => {
                               router.push("/notifikasi")
@@ -210,14 +244,15 @@ export function Header() {
                       </div>
                     )}
                   </div>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem className="p-0 text-center">
-                    <Link href="/notifikasi" className="w-full block py-2 text-sm text-primary hover:underline">
-                      Lihat Semua Notifikasi
-                    </Link>
-                  </DropdownMenuItem>
+                  <div className="p-2 border-t border-border/50 bg-muted/10">
+                    <Button variant="ghost" size="sm" className="w-full text-xs font-semibold hover:bg-muted text-primary hover:text-primary transition-colors h-8" asChild>
+                      <Link href="/notifikasi">Lihat Semua Notifikasi</Link>
+                    </Button>
+                  </div>
                 </DropdownMenuContent>
               </DropdownMenu>
+
+              <ThemeToggle />
               
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -268,20 +303,141 @@ export function Header() {
           ) : (
             <>
               <ThemeToggle />
-              <Link href="/masuk">
-                <Button variant="ghost" size="sm">
+              <Button variant="ghost" size="sm" asChild>
+                <Link href="/masuk">
                   Masuk
-                </Button>
-              </Link>
-              <Link href="/daftar">
-                <Button size="sm">Daftar</Button>
-              </Link>
+                </Link>
+              </Button>
+              <Button size="sm" asChild>
+                <Link href="/daftar">
+                  Daftar
+                </Link>
+              </Button>
             </>
           )}
 
-          <Button variant="ghost" size="icon" className="h-8 w-8 md:hidden">
-            <Menu className="h-4 w-4" />
-          </Button>
+          <Sheet open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
+            <SheetTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-8 w-8 md:hidden">
+                <Menu className="h-4 w-4" />
+                <span className="sr-only">Toggle Menu</span>
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="left" className="w-[300px] flex flex-col sm:w-[350px] p-0">
+              <div className="flex flex-col h-full bg-background">
+                <SheetHeader className="p-6 border-b border-border/50 text-left">
+                  <SheetTitle>
+                    <Link href="/" className="flex items-center gap-2 w-fit transition-opacity hover:opacity-80" onClick={() => setIsMobileMenuOpen(false)}>
+                      <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-foreground shadow-sm">
+                        <span className="text-sm font-bold text-background">M</span>
+                      </div>
+                      <span className="text-base font-semibold tracking-tight">Moodlepilot</span>
+                    </Link>
+                  </SheetTitle>
+                </SheetHeader>
+                
+                <div className="flex-1 overflow-y-auto py-6 px-4">
+                  <nav className="flex flex-col gap-1.5">
+                    <p className="px-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+                      Menu Utama
+                    </p>
+                    <Link
+                      href="/dashboard"
+                      onClick={() => setIsMobileMenuOpen(false)}
+                      className={`flex items-center px-3 py-2.5 text-sm font-medium rounded-md transition-all ${
+                        pathname === "/dashboard" 
+                          ? "bg-primary/10 text-primary" 
+                          : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                      }`}
+                    >
+                      <LayoutDashboard className="mr-3 h-4 w-4" />
+                      Dashboard
+                    </Link>
+                    <Link
+                      href="/ai-course-generator"
+                      onClick={() => setIsMobileMenuOpen(false)}
+                      className={`flex items-center px-3 py-2.5 text-sm font-medium rounded-md transition-all ${
+                        pathname === "/ai-course-generator"
+                          ? "bg-primary/10 text-primary"
+                          : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                      }`}
+                    >
+                      <Sparkles className="mr-3 h-4 w-4" />
+                      AI Generator
+                      <Badge variant="secondary" className="ml-auto px-1.5 py-0 text-[10px] uppercase tracking-wider font-semibold">
+                        Segera
+                      </Badge>
+                    </Link>
+                    
+                    <div className="my-2 border-t border-border/50"></div>
+                    
+                    <p className="px-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2 mt-2">
+                      Lainnya
+                    </p>
+                    <Link
+                      href="/harga"
+                      onClick={() => setIsMobileMenuOpen(false)}
+                      className={`flex items-center px-3 py-2.5 text-sm font-medium rounded-md transition-all ${
+                        pathname === "/harga"
+                          ? "bg-primary/10 text-primary"
+                          : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                      }`}
+                    >
+                      Harga
+                    </Link>
+                    <Link
+                      href="/dokumentasi"
+                      onClick={() => setIsMobileMenuOpen(false)}
+                      className={`flex items-center px-3 py-2.5 text-sm font-medium rounded-md transition-all ${
+                        pathname === "/dokumentasi"
+                          ? "bg-primary/10 text-primary"
+                          : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                      }`}
+                    >
+                      <HelpCircle className="mr-3 h-4 w-4" />
+                      Bantuan
+                    </Link>
+                  </nav>
+                </div>
+
+                <div className="p-4 border-t border-border/50 bg-muted/20">
+                  {!isLoggedIn ? (
+                    <div className="flex flex-col gap-3">
+                      <Button variant="outline" className="w-full justify-center shadow-sm" asChild onClick={() => setIsMobileMenuOpen(false)}>
+                        <Link href="/masuk">Masuk</Link>
+                      </Button>
+                      <Button className="w-full justify-center shadow-sm" asChild onClick={() => setIsMobileMenuOpen(false)}>
+                        <Link href="/daftar">Daftar</Link>
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col gap-3">
+                      <div className="flex items-center gap-3 px-2 mb-2">
+                        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-muted border border-border">
+                          <User className="h-4 w-4 text-muted-foreground" />
+                        </div>
+                        <div className="flex flex-col min-w-0">
+                          <span className="text-sm font-medium truncate">{user?.name ?? "Pengguna"}</span>
+                          <span className="text-xs text-muted-foreground truncate">{user?.email ?? "pengguna@example.com"}</span>
+                        </div>
+                      </div>
+                      <Button className="w-full justify-center shadow-sm" asChild onClick={() => setIsMobileMenuOpen(false)}>
+                        <Link href="/buat-situs">Buat Situs Baru</Link>
+                      </Button>
+                      <Button variant="ghost" className="w-full justify-start text-destructive hover:text-destructive hover:bg-destructive/10" onClick={(e) => {
+                        e.preventDefault()
+                        setIsMobileMenuOpen(false)
+                        void handleLogout()
+                      }}>
+                        <LogOut className="mr-3 h-4 w-4" />
+                        Keluar
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </SheetContent>
+          </Sheet>
         </div>
       </div>
     </header>

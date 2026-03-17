@@ -20,6 +20,7 @@ type DashboardSite = {
   status: "aktif" | "sedang_dibuat" | "nonaktif"
   siteUrl: string
   siteHost: string
+  runtimeHealth?: string
   lastActivity?: string
 }
 
@@ -61,6 +62,7 @@ function toDashboardSite(site: SiteSummary): DashboardSite {
     status: mapSiteStatus(site.status),
     siteUrl: site.site_url,
     siteHost: siteHostFromURL(site.site_url, site.subdomain),
+    runtimeHealth: site.runtime_health,
     lastActivity: site.status === "active" ? formatRelativeTime(site.updated_at) : undefined,
   }
 }
@@ -213,6 +215,7 @@ export default function DashboardPage() {
                   status={site.status}
                   siteUrl={site.siteUrl}
                   siteHost={site.siteHost}
+                  runtimeHealth={site.runtimeHealth}
                   lastActivity={site.lastActivity}
                 />
               ))}

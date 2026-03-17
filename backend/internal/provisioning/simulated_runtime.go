@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	"moodlecloud/backend/internal/config"
-	"moodlecloud/backend/internal/store"
+	"moodlepilot/backend/internal/config"
+	"moodlepilot/backend/internal/store"
 )
 
 type SimulatedRuntime struct {

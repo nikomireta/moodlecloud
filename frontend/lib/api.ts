@@ -97,6 +97,7 @@ export type SiteSummary = {
   moodle_username: string
   provisioning_step: string
   last_error: string
+  runtime_health?: string
   users_active_limit: number
   storage_bytes_limit: number
   activated_at?: string | null

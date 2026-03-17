@@ -669,13 +669,15 @@ func (s *Store) ListUserSessions(ctx context.Context, userID uuid.UUID) ([]Sessi
 func (s *Store) ListSitesByOwner(ctx context.Context, ownerUserID uuid.UUID) ([]Site, error) {
 	rows, err := s.pool.Query(ctx, `
 		SELECT
-			id, owner_user_id, name, subdomain, plan_code, region, status, site_url, admin_url,
-			admin_name, admin_email, moodle_username, provisioning_step, last_error,
-			users_active_limit, storage_bytes_limit, web_cpu_millicores, web_memory_mib,
-			cron_cpu_millicores, cron_memory_mib, activated_at, created_at, updated_at
-		FROM sites
-		WHERE owner_user_id = $1
-		ORDER BY created_at DESC
+			s.id, s.owner_user_id, s.name, s.subdomain, s.plan_code, s.region, s.status, s.site_url, s.admin_url,
+			s.admin_name, s.admin_email, s.moodle_username, s.provisioning_step, s.last_error,
+			s.users_active_limit, s.storage_bytes_limit, s.web_cpu_millicores, s.web_memory_mib,
+			s.cron_cpu_millicores, s.cron_memory_mib, s.activated_at, s.created_at, s.updated_at,
+			COALESCE(m.health_status, '') as runtime_health
+		FROM sites s
+		LEFT JOIN site_runtime_metadata m ON m.site_id = s.id
+		WHERE s.owner_user_id = $1
+		ORDER BY s.created_at DESC
 	`, ownerUserID)
 	if err != nil {
 		return nil, fmt.Errorf("list sites by owner: %w", err)
@@ -741,7 +743,7 @@ func (s *Store) CreateSite(ctx context.Context, params CreateSiteParams, runtime
 		UpdatedAt:         now,
 	}
 	if site.SiteURL == "" {
-		site.SiteURL = fmt.Sprintf("https://%s.moodlecloud.id", site.Subdomain)
+		site.SiteURL = fmt.Sprintf("https://%s.moodlepilot.id", site.Subdomain)
 	}
 	if site.AdminURL == "" {
 		site.AdminURL = fmt.Sprintf("%s/admin", strings.TrimRight(site.SiteURL, "/"))
@@ -926,15 +928,18 @@ func (s *Store) GetSiteBySubdomainForOwner(ctx context.Context, ownerUserID uuid
 	var site Site
 	err := s.pool.QueryRow(ctx, `
 		SELECT
-			id, owner_user_id, name, subdomain, plan_code, region, status, site_url, admin_url,
-			admin_name, admin_email, moodle_username, provisioning_step, last_error,
-			users_active_limit, storage_bytes_limit, web_cpu_millicores, web_memory_mib,
-			cron_cpu_millicores, cron_memory_mib, activated_at, created_at, updated_at
-		FROM sites
-		WHERE owner_user_id = $1 AND subdomain = $2
+			s.id, s.owner_user_id, s.name, s.subdomain, s.plan_code, s.region, s.status, s.site_url, s.admin_url,
+			s.admin_name, s.admin_email, s.moodle_username, s.provisioning_step, s.last_error,
+			s.users_active_limit, s.storage_bytes_limit, s.web_cpu_millicores, s.web_memory_mib,
+			s.cron_cpu_millicores, s.cron_memory_mib, s.activated_at, s.created_at, s.updated_at,
+			COALESCE(m.health_status, '') as runtime_health
+		FROM sites s
+		LEFT JOIN site_runtime_metadata m ON m.site_id = s.id
+		WHERE s.owner_user_id = $1 AND s.subdomain = $2
 	`, ownerUserID, strings.ToLower(strings.TrimSpace(subdomain))).Scan(
 		&site.ID, &site.OwnerUserID, &site.Name, &site.Subdomain, &site.PlanCode, &site.Region, &site.Status, &site.SiteURL, &site.AdminURL, &site.AdminName, &site.AdminEmail, &site.MoodleUsername, &site.ProvisioningStep, &site.LastError,
 		&site.UsersActiveLimit, &site.StorageBytesLimit, &site.WebCPUMillicores, &site.WebMemoryMiB, &site.CronCPUMillicores, &site.CronMemoryMiB, &site.ActivatedAt, &site.CreatedAt, &site.UpdatedAt,
+		&site.RuntimeHealth,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -949,15 +954,18 @@ func (s *Store) GetSiteByIDForOwner(ctx context.Context, ownerUserID, siteID uui
 	var site Site
 	err := s.pool.QueryRow(ctx, `
 		SELECT
-			id, owner_user_id, name, subdomain, plan_code, region, status, site_url, admin_url,
-			admin_name, admin_email, moodle_username, provisioning_step, last_error,
-			users_active_limit, storage_bytes_limit, web_cpu_millicores, web_memory_mib,
-			cron_cpu_millicores, cron_memory_mib, activated_at, created_at, updated_at
-		FROM sites
-		WHERE owner_user_id = $1 AND id = $2
+			s.id, s.owner_user_id, s.name, s.subdomain, s.plan_code, s.region, s.status, s.site_url, s.admin_url,
+			s.admin_name, s.admin_email, s.moodle_username, s.provisioning_step, s.last_error,
+			s.users_active_limit, s.storage_bytes_limit, s.web_cpu_millicores, s.web_memory_mib,
+			s.cron_cpu_millicores, s.cron_memory_mib, s.activated_at, s.created_at, s.updated_at,
+			COALESCE(m.health_status, '') as runtime_health
+		FROM sites s
+		LEFT JOIN site_runtime_metadata m ON m.site_id = s.id
+		WHERE s.owner_user_id = $1 AND s.id = $2
 	`, ownerUserID, siteID).Scan(
 		&site.ID, &site.OwnerUserID, &site.Name, &site.Subdomain, &site.PlanCode, &site.Region, &site.Status, &site.SiteURL, &site.AdminURL, &site.AdminName, &site.AdminEmail, &site.MoodleUsername, &site.ProvisioningStep, &site.LastError,
 		&site.UsersActiveLimit, &site.StorageBytesLimit, &site.WebCPUMillicores, &site.WebMemoryMiB, &site.CronCPUMillicores, &site.CronMemoryMiB, &site.ActivatedAt, &site.CreatedAt, &site.UpdatedAt,
+		&site.RuntimeHealth,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -1482,6 +1490,7 @@ func scanSite(row interface {
 		&site.ID, &site.OwnerUserID, &site.Name, &site.Subdomain, &site.PlanCode, &site.Region, &site.Status, &site.SiteURL, &site.AdminURL, &site.AdminName, &site.AdminEmail, &site.MoodleUsername, &site.ProvisioningStep, &site.LastError,
 		&site.UsersActiveLimit, &site.StorageBytesLimit, &site.WebCPUMillicores, &site.WebMemoryMiB, &site.CronCPUMillicores, &site.CronMemoryMiB,
 		&site.ActivatedAt, &site.CreatedAt, &site.UpdatedAt,
+		&site.RuntimeHealth,
 	); err != nil {
 		return fmt.Errorf("scan site: %w", err)
 	}

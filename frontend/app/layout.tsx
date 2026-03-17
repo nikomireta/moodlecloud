@@ -12,9 +12,9 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: 'MoodleCloud Indonesia - Kelola Moodle Anda dengan Mudah',
-  description: 'Platform manajemen Moodle Cloud terpercaya di Indonesia. Buat, kelola, dan kembangkan situs Moodle Anda dalam hitungan menit.',
-  generator: 'MoodleCloud Indonesia',
+  title: 'Moodlepilot Indonesia - Kelola Moodle Anda dengan Mudah',
+  description: 'Platform manajemen Moodlepilot terpercaya di Indonesia. Buat, kelola, dan kembangkan situs Moodle Anda dalam hitungan menit.',
+  generator: 'Moodlepilot Indonesia',
   icons: {
     icon: [
       {
