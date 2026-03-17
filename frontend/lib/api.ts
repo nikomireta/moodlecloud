@@ -97,6 +97,8 @@ export type SiteSummary = {
   moodle_username: string
   provisioning_step: string
   last_error: string
+  users_active_limit: number
+  storage_bytes_limit: number
   activated_at?: string | null
   created_at: string
   updated_at: string
@@ -156,6 +158,26 @@ export type SiteRuntimeMetadata = {
   updated_at: string
 }
 
+export type SiteUsageSnapshot = {
+  site_id: string
+  users_active_count: number
+  files_bytes_used: number
+  database_bytes_used: number
+  storage_bytes_used: number
+  warning_level: string
+  over_limit: boolean
+  last_error: string
+  measured_at?: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type SiteSystemSummary = {
+  moodle_version: string
+  php_version: string
+  database_label: string
+}
+
 export type CreateSiteResponse = MessageResponse & {
   site: SiteSummary
   job: ProvisioningJob
@@ -190,6 +212,7 @@ export type SiteRuntimeStatus = {
   last_error: string
   services: SiteRuntimeService[]
   runtime?: SiteRuntimeMetadata | null
+  system?: SiteSystemSummary | null
 }
 
 export type SiteCustomDomainStatus = {
@@ -234,6 +257,10 @@ type NotificationsResponse = {
 
 type SitesResponse = {
   sites: SiteSummary[]
+}
+
+type SiteUsageResponse = {
+  usage: SiteUsageSnapshot
 }
 
 type SiteMutationResponse = MessageResponse & {
@@ -438,6 +465,10 @@ export const api = {
 
   getSiteByID(siteID: string) {
     return apiFetch<SiteResponse>(`/sites/${encodeURIComponent(siteID)}`)
+  },
+
+  getSiteUsage(siteID: string) {
+    return apiFetch<SiteUsageResponse>(`/sites/${encodeURIComponent(siteID)}/usage`)
   },
 
   getSiteSettings(siteID: string) {

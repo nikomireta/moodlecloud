@@ -29,6 +29,12 @@ type SiteRuntimeService struct {
 	StatusText    string     `json:"status_text"`
 }
 
+type SiteSystemSummary struct {
+	MoodleVersion string `json:"moodle_version"`
+	PHPVersion    string `json:"php_version"`
+	DatabaseLabel string `json:"database_label"`
+}
+
 type SiteRuntimeStatus struct {
 	Site          store.Site                 `json:"site"`
 	RuntimeMode   string                     `json:"runtime_mode"`
@@ -37,6 +43,7 @@ type SiteRuntimeStatus struct {
 	LastError     string                     `json:"last_error"`
 	Services      []SiteRuntimeService       `json:"services"`
 	Runtime       *store.SiteRuntimeMetadata `json:"runtime,omitempty"`
+	System        *SiteSystemSummary         `json:"system,omitempty"`
 }
 
 type Runtime interface {

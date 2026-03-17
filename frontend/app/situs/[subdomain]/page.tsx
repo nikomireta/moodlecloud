@@ -20,11 +20,9 @@ import {
   ExternalLink, 
   Settings, 
   Users, 
-  BookOpen, 
   HardDrive, 
   Activity,
   Globe,
-  TrendingUp,
   Download,
   RefreshCw,
   ArrowLeft,
@@ -74,7 +72,7 @@ import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { ProtectedRoute } from "@/components/auth/protected-route"
 import { buildAdminURL, buildSiteURL, siteHostFromURL, SITE_BASE_DOMAIN } from "@/lib/site-url"
-import { api, isAPIError, type SiteRuntimeStatus, type SiteSettingsResponse, type SiteSummary } from "@/lib/api"
+import { api, isAPIError, type SiteRuntimeStatus, type SiteSettingsResponse, type SiteSummary, type SiteUsageSnapshot } from "@/lib/api"
 
 // Mockup data
 const getSiteData = (subdomain: string) => ({
@@ -273,11 +271,77 @@ function findRuntimeService(runtimeStatus: SiteRuntimeStatus | null, name: strin
   return runtimeStatus?.services.find((service) => service.name === name) ?? null
 }
 
-function formatRuntimeValue(value?: string | null) {
-  if (!value) {
-    return "-"
+function formatBytes(value?: number | null) {
+  if (typeof value !== "number" || Number.isNaN(value) || value < 0) {
+    return "Belum tersedia"
   }
-  return value
+
+  const units = ["B", "KB", "MB", "GB", "TB"]
+  let size = value
+  let unitIndex = 0
+
+  while (size >= 1024 && unitIndex < units.length - 1) {
+    size /= 1024
+    unitIndex += 1
+  }
+
+  const digits = size >= 10 || unitIndex === 0 ? 0 : 1
+  return `${size.toFixed(digits)} ${units[unitIndex]}`
+}
+
+function formatCount(value?: number | null) {
+  if (typeof value !== "number" || Number.isNaN(value) || value < 0) {
+    return "Belum tersedia"
+  }
+  return value.toLocaleString("id-ID")
+}
+
+function formatPercentage(value?: number | null) {
+  if (typeof value !== "number" || Number.isNaN(value)) {
+    return "0%"
+  }
+  const percent = Math.max(0, Math.min(100, value))
+  return `${Math.round(percent)}%`
+}
+
+function formatSystemValue(value?: string | null) {
+  const trimmed = value?.trim()
+  return trimmed ? trimmed : "Belum tersedia"
+}
+
+function customerServiceStatus(status: string) {
+  switch (status) {
+    case "running":
+      return {
+        label: "Normal",
+        className: "text-green-600",
+      }
+    case "degraded":
+      return {
+        label: "Perlu Perhatian",
+        className: "text-amber-600",
+      }
+    case "stopped":
+      return {
+        label: "Berhenti",
+        className: "text-slate-600",
+      }
+    case "failed":
+      return {
+        label: "Gagal",
+        className: "text-red-600",
+      }
+    case "provisioning":
+      return {
+        label: "Sedang Disiapkan",
+        className: "text-orange-600",
+      }
+    default:
+      return {
+        label: "Belum tersedia",
+        className: "text-muted-foreground",
+      }
+  }
 }
 
 function isRuntimeControllable(runtimeStatus: SiteRuntimeStatus | null) {
@@ -288,10 +352,10 @@ export default function SiteDetailPage({ params }: { params: Promise<{ subdomain
   const router = useRouter()
   const { subdomain } = use(params)
   const mockSite = getSiteData(subdomain)
-  const site = mockSite
   const [siteData, setSiteData] = useState<SiteSummary | null>(null)
   const [siteSettings, setSiteSettings] = useState<SiteSettingsResponse | null>(null)
   const [runtimeStatus, setRuntimeStatus] = useState<SiteRuntimeStatus | null>(null)
+  const [siteUsage, setSiteUsage] = useState<SiteUsageSnapshot | null>(null)
   const [runtimeError, setRuntimeError] = useState("")
   const [runtimeAction, setRuntimeAction] = useState<"start" | "restart" | "stop" | null>(null)
   const [activeTab, setActiveTab] = useState("ringkasan")
@@ -372,12 +436,13 @@ export default function SiteDetailPage({ params }: { params: Promise<{ subdomain
   const loadSiteContext = async (siteSubdomain: string) => {
     const siteResponse = await api.getSiteBySubdomain(siteSubdomain)
 
-    const [runtimeResult, settingsResult] = await Promise.allSettled([
+    const [runtimeResult, settingsResult, usageResult] = await Promise.allSettled([
       api.getSiteRuntime(siteResponse.site.id),
       api.getSiteSettings(siteResponse.site.id),
+      api.getSiteUsage(siteResponse.site.id),
     ])
 
-    return { site: siteResponse.site, runtimeResult, settingsResult }
+    return { site: siteResponse.site, runtimeResult, settingsResult, usageResult }
   }
 
   const applySiteContext = (context: Awaited<ReturnType<typeof loadSiteContext>>) => {
@@ -398,6 +463,10 @@ export default function SiteDetailPage({ params }: { params: Promise<{ subdomain
     } else {
       const error = context.settingsResult.reason
       setRuntimeError((current) => current || (isAPIError(error) ? error.message : "Gagal memuat pengaturan situs"))
+    }
+
+    if (context.usageResult.status === "fulfilled") {
+      setSiteUsage(context.usageResult.value.usage)
     }
   }
 
@@ -440,6 +509,16 @@ export default function SiteDetailPage({ params }: { params: Promise<{ subdomain
   const customDomainState = customDomainBadge(customDomain?.status ?? "")
   const customDomainSupported = siteSettings?.custom_domain_enabled ?? false
   const currentDomainHost = customDomain?.status === "active" && customDomain.domain ? customDomain.domain : siteHost
+  const serviceSummary = customerServiceStatus(runtimeStatus?.overall_status ?? "unknown")
+  const storageUsed = siteUsage?.storage_bytes_used ?? null
+  const storageLimit = siteData?.storage_bytes_limit ?? null
+  const storagePercent = typeof storageUsed === "number" && typeof storageLimit === "number" && storageLimit > 0
+    ? (storageUsed / storageLimit) * 100
+    : 0
+  const activeUsers = siteUsage?.users_active_count ?? null
+  const activeUsersLimit = siteData?.users_active_limit ?? null
+  const systemSummary = runtimeStatus?.system ?? null
+  const serviceError = runtimeError || runtimeStatus?.last_error || siteUsage?.last_error || ""
   const deleteConfirmationMatches = deleteConfirmation.trim() === subdomain
   const canControlRuntime = isRuntimeControllable(runtimeStatus)
   const canStart =
@@ -617,8 +696,6 @@ export default function SiteDetailPage({ params }: { params: Promise<{ subdomain
                   </button>
                 </div>
                 <div className="flex flex-wrap items-center gap-2 mt-2 text-xs text-muted-foreground">
-                  <span>Runtime: {runtimeStatus?.runtime_mode ?? "-"}</span>
-                  <span>•</span>
                   <span>Web: {webService?.status_text ?? "-"}</span>
                   <span>•</span>
                   <span>Cron: {cronService?.status_text ?? "-"}</span>
@@ -708,27 +785,26 @@ export default function SiteDetailPage({ params }: { params: Promise<{ subdomain
 
             {/* Tab: Ringkasan */}
             <TabsContent value="ringkasan" className="mt-6 space-y-6">
-              {/* Quick Stats */}
               <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
                 <Card className="p-4 border-border">
                   <div className="flex items-center gap-3">
                     <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-500/10">
-                      <Users className="h-5 w-5 text-blue-500" />
+                      <Globe className="h-5 w-5 text-blue-500" />
                     </div>
                     <div>
-                      <p className="text-2xl font-semibold">{site.stats.users.toLocaleString()}</p>
-                      <p className="text-xs text-muted-foreground">Pengguna</p>
+                      <p className="text-lg font-semibold">{siteBadge.label}</p>
+                      <p className="text-xs text-muted-foreground">Status Situs</p>
                     </div>
                   </div>
                 </Card>
                 <Card className="p-4 border-border">
                   <div className="flex items-center gap-3">
                     <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-green-500/10">
-                      <BookOpen className="h-5 w-5 text-green-500" />
+                      <Activity className="h-5 w-5 text-green-500" />
                     </div>
                     <div>
-                      <p className="text-2xl font-semibold">{site.stats.courses}</p>
-                      <p className="text-xs text-muted-foreground">Kursus</p>
+                      <p className={`text-lg font-semibold ${serviceSummary.className}`}>{serviceSummary.label}</p>
+                      <p className="text-xs text-muted-foreground">Status Layanan</p>
                     </div>
                   </div>
                 </Card>
@@ -738,187 +814,110 @@ export default function SiteDetailPage({ params }: { params: Promise<{ subdomain
                       <HardDrive className="h-5 w-5 text-purple-500" />
                     </div>
                     <div>
-                      <p className="text-2xl font-semibold">{site.stats.storage}</p>
-                      <p className="text-xs text-muted-foreground">Storage</p>
+                      <p className="text-lg font-semibold">{formatBytes(storageUsed)}</p>
+                      <p className="text-xs text-muted-foreground">
+                        Storage Terpakai{typeof storageLimit === "number" ? ` / ${formatBytes(storageLimit)}` : ""}
+                      </p>
                     </div>
                   </div>
                 </Card>
                 <Card className="p-4 border-border">
                   <div className="flex items-center gap-3">
                     <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-orange-500/10">
-                      <Activity className="h-5 w-5 text-orange-500" />
+                      <Users className="h-5 w-5 text-orange-500" />
                     </div>
                     <div>
-                      <p className="text-2xl font-semibold">{site.activity.today}</p>
-                      <p className="text-xs text-muted-foreground">Aktif Hari Ini</p>
+                      <p className="text-lg font-semibold">{formatCount(activeUsers)}</p>
+                      <p className="text-xs text-muted-foreground">
+                        Pengguna Aktif{typeof activeUsersLimit === "number" ? ` / ${formatCount(activeUsersLimit)}` : ""}
+                      </p>
                     </div>
                   </div>
                 </Card>
               </div>
 
-              {/* Metrics Section */}
               <div className="grid gap-6 lg:grid-cols-2">
-                {/* Storage Usage */}
                 <Card className="p-6 border-border">
-                  <h3 className="font-semibold mb-4">Penggunaan Storage</h3>
-                  <div className="space-y-4">
-                    <div>
+                  <h3 className="font-semibold mb-4">Status Layanan</h3>
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between py-2 border-b border-border">
+                      <span className="text-sm text-muted-foreground">Web</span>
+                      <Badge variant="outline" className={webService?.health_status === "healthy" ? "text-green-600 border-green-600/50 bg-green-500/10 text-xs" : "text-amber-600 border-amber-600/50 bg-amber-500/10 text-xs"}>
+                        {webService?.status_text ?? "Belum tersedia"}
+                      </Badge>
+                    </div>
+                    <div className="flex items-center justify-between py-2 border-b border-border">
+                      <span className="text-sm text-muted-foreground">Cron</span>
+                      <Badge variant="outline" className={cronService?.health_status === "healthy" ? "text-green-600 border-green-600/50 bg-green-500/10 text-xs" : "text-amber-600 border-amber-600/50 bg-amber-500/10 text-xs"}>
+                        {cronService?.status_text ?? "Belum tersedia"}
+                      </Badge>
+                    </div>
+                    {customDomain?.domain ? (
+                      <div className="flex items-center justify-between py-2 border-b border-border">
+                        <span className="text-sm text-muted-foreground">Custom Domain</span>
+                        <Badge variant="outline" className={`${customDomainState.className} text-xs`}>
+                          {customDomainState.label}
+                        </Badge>
+                      </div>
+                    ) : null}
+                    <div className="py-2 border-b border-border">
+                      <p className="text-xs text-muted-foreground">Kondisi Terakhir</p>
+                      <div className="flex items-start gap-2 mt-2">
+                        <AlertTriangle className="h-4 w-4 text-muted-foreground mt-0.5" />
+                        <p className="text-sm font-medium break-words">
+                          {serviceError ? serviceError : "Semua layanan berjalan normal."}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="pt-1">
                       <div className="flex justify-between text-sm mb-2">
-                        <span className="text-muted-foreground">Terpakai</span>
-                        <span className="font-medium">{site.stats.storage} / 100 GB</span>
+                        <span className="text-muted-foreground">Storage</span>
+                        <span className="font-medium">
+                          {formatBytes(storageUsed)} / {typeof storageLimit === "number" ? formatBytes(storageLimit) : "Belum tersedia"}
+                        </span>
                       </div>
                       <div className="h-2 bg-muted rounded-full overflow-hidden">
-                        <div className="h-full bg-primary rounded-full transition-all" style={{ width: '45%' }} />
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4 pt-4 border-t border-border">
-                      <div>
-                        <p className="text-xs text-muted-foreground">File Kursus</p>
-                        <p className="text-lg font-semibold">28.5 GB</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-muted-foreground">Database</p>
-                        <p className="text-lg font-semibold">8.2 GB</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-muted-foreground">Backup</p>
-                        <p className="text-lg font-semibold">6.8 GB</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-muted-foreground">Cache</p>
-                        <p className="text-lg font-semibold">1.7 GB</p>
+                        <div className="h-full bg-primary rounded-full transition-all" style={{ width: formatPercentage(storagePercent) }} />
                       </div>
                     </div>
                   </div>
                 </Card>
 
-                {/* Activity Stats */}
-                <Card className="p-6 border-border">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="font-semibold">Aktivitas Pengguna</h3>
-                    <Select defaultValue="7d">
-                      <SelectTrigger className="w-28 h-8 text-xs">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="7d">7 Hari</SelectItem>
-                        <SelectItem value="30d">30 Hari</SelectItem>
-                        <SelectItem value="90d">90 Hari</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4 mb-4">
-                    <div className="p-3 rounded-lg bg-muted/50">
-                      <p className="text-xs text-muted-foreground">Hari Ini</p>
-                      <p className="text-xl font-semibold">{site.activity.today}</p>
-                    </div>
-                    <div className="p-3 rounded-lg bg-muted/50">
-                      <p className="text-xs text-muted-foreground">Minggu Ini</p>
-                      <p className="text-xl font-semibold">{site.activity.weekly.toLocaleString()}</p>
-                    </div>
-                  </div>
-                  <div className="h-24 flex items-center justify-center border border-dashed border-border rounded-lg bg-muted/20">
-                    <div className="text-center">
-                      <TrendingUp className="h-6 w-6 mx-auto text-muted-foreground mb-1" />
-                      <p className="text-xs text-muted-foreground">Grafik Aktivitas</p>
-                    </div>
-                  </div>
-                </Card>
-              </div>
-
-              {/* Course Stats & System Info */}
-              <div className="grid gap-6 lg:grid-cols-2">
-                {/* Course Statistics */}
-                <Card className="p-6 border-border">
-                  <h3 className="font-semibold mb-4">Statistik Kursus</h3>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="p-4 rounded-lg bg-muted/50 text-center">
-                      <p className="text-2xl font-bold">{site.stats.courses}</p>
-                      <p className="text-xs text-muted-foreground">Total Kursus</p>
-                    </div>
-                    <div className="p-4 rounded-lg bg-muted/50 text-center">
-                      <p className="text-2xl font-bold text-green-600">18</p>
-                      <p className="text-xs text-muted-foreground">Kursus Aktif</p>
-                    </div>
-                    <div className="p-4 rounded-lg bg-muted/50 text-center">
-                      <p className="text-2xl font-bold text-blue-600">256</p>
-                      <p className="text-xs text-muted-foreground">Enrollment</p>
-                    </div>
-                    <div className="p-4 rounded-lg bg-muted/50 text-center">
-                      <p className="text-2xl font-bold text-orange-600">78%</p>
-                      <p className="text-xs text-muted-foreground">Completion</p>
-                    </div>
-                  </div>
-                </Card>
-
-                {/* System Info */}
                 <Card className="p-6 border-border">
                   <h3 className="font-semibold mb-4">Informasi Sistem</h3>
                   <div className="space-y-3">
                     <div className="flex items-center justify-between py-2 border-b border-border">
                       <div className="flex items-center gap-2">
-                        <Database className="h-4 w-4 text-muted-foreground" />
-                        <span className="text-sm text-muted-foreground">Runtime</span>
+                        <Settings className="h-4 w-4 text-muted-foreground" />
+                        <span className="text-sm text-muted-foreground">Moodle Version</span>
                       </div>
-                      <span className="text-sm font-medium">{runtimeStatus?.runtime_mode ?? "-"}</span>
+                      <span className="text-sm font-medium">{formatSystemValue(systemSummary?.moodle_version)}</span>
                     </div>
                     <div className="flex items-center justify-between py-2 border-b border-border">
                       <div className="flex items-center gap-2">
                         <Zap className="h-4 w-4 text-muted-foreground" />
-                        <span className="text-sm text-muted-foreground">Image</span>
+                        <span className="text-sm text-muted-foreground">PHP Version</span>
                       </div>
-                      <span className="text-sm font-medium">{runtimeStatus?.runtime ? `${runtimeStatus.runtime.image_repository}:${runtimeStatus.runtime.image_tag}` : "-"}</span>
+                      <span className="text-sm font-medium">{formatSystemValue(systemSummary?.php_version)}</span>
                     </div>
                     <div className="flex items-center justify-between py-2 border-b border-border">
                       <div className="flex items-center gap-2">
-                        <Globe className="h-4 w-4 text-muted-foreground" />
-                        <span className="text-sm text-muted-foreground">Web Service</span>
+                        <Database className="h-4 w-4 text-muted-foreground" />
+                        <span className="text-sm text-muted-foreground">Database</span>
                       </div>
-                      <span className="text-sm font-medium">{webService?.status_text ?? "-"}</span>
+                      <span className="text-sm font-medium">{formatSystemValue(systemSummary?.database_label)}</span>
                     </div>
-                    <div className="flex items-center justify-between py-2">
-                      <div className="flex items-center gap-2">
-                        <Shield className="h-4 w-4 text-muted-foreground" />
-                        <span className="text-sm text-muted-foreground">Cron Service</span>
-                      </div>
-                      <Badge variant="outline" className={cronService?.health_status === "healthy" ? "text-green-600 border-green-600/50 bg-green-500/10 text-xs" : "text-amber-600 border-amber-600/50 bg-amber-500/10 text-xs"}>
-                        {cronService?.status_text ?? "-"}
-                      </Badge>
+                    <div className="py-2 border-b border-border">
+                      <p className="text-sm text-muted-foreground mb-1">URL Situs</p>
+                      <p className="text-sm font-medium break-all">{siteUrl}</p>
+                    </div>
+                    <div className="py-2">
+                      <p className="text-sm text-muted-foreground mb-1">Admin URL</p>
+                      <p className="text-sm font-medium break-all">{adminUrl}</p>
                     </div>
                   </div>
                 </Card>
               </div>
-
-              {/* Runtime Info */}
-              <Card className="p-6 border-border">
-                <h3 className="font-semibold mb-4">Runtime Situs</h3>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  <div className="rounded-lg border border-border p-4">
-                    <p className="text-xs text-muted-foreground">Image</p>
-                    <p className="text-sm font-medium mt-2 break-all">{runtimeStatus?.runtime ? `${runtimeStatus.runtime.image_repository}:${runtimeStatus.runtime.image_tag}` : "-"}</p>
-                  </div>
-                  <div className="rounded-lg border border-border p-4">
-                    <p className="text-xs text-muted-foreground">Volume</p>
-                    <p className="text-sm font-medium mt-2 break-all">{formatRuntimeValue(runtimeStatus?.runtime?.volume_name)}</p>
-                  </div>
-                  <div className="rounded-lg border border-border p-4">
-                    <p className="text-xs text-muted-foreground">Database</p>
-                    <p className="text-sm font-medium mt-2 break-all">{formatRuntimeValue(runtimeStatus?.runtime?.database_name)}</p>
-                  </div>
-                  <div className="rounded-lg border border-border p-4">
-                    <p className="text-xs text-muted-foreground">Health</p>
-                    <p className="text-sm font-medium mt-2 break-all">{formatRuntimeValue(runtimeStatus?.runtime?.health_status ?? runtimeStatus?.overall_status)}</p>
-                  </div>
-                  <div className="rounded-lg border border-border p-4 sm:col-span-2">
-                    <p className="text-xs text-muted-foreground">Web Container</p>
-                    <p className="text-sm font-medium mt-2 break-all">{formatRuntimeValue(runtimeStatus?.runtime?.web_container_name)}</p>
-                  </div>
-                  <div className="rounded-lg border border-border p-4 sm:col-span-2">
-                    <p className="text-xs text-muted-foreground">Cron Container</p>
-                    <p className="text-sm font-medium mt-2 break-all">{formatRuntimeValue(runtimeStatus?.runtime?.cron_container_name)}</p>
-                  </div>
-                </div>
-              </Card>
             </TabsContent>
 
             {/* Tab: Laporan */}

@@ -1,10 +1,12 @@
 package provisioning
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"net/http"
@@ -17,6 +19,7 @@ import (
 	volumetypes "github.com/docker/docker/api/types/volume"
 	"github.com/docker/docker/client"
 	"github.com/docker/docker/errdefs"
+	"github.com/docker/docker/pkg/stdcopy"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"moodlecloud/backend/internal/config"
@@ -220,6 +223,8 @@ func (r *DockerLocalRuntime) GetRuntimeStatus(ctx context.Context, site store.Si
 		lastError = strings.TrimSpace(metadata.LastHealthError)
 	}
 
+	systemSummary := r.inspectSystemSummary(ctx, *metadata, services)
+
 	return SiteRuntimeStatus{
 		Site:          site,
 		RuntimeMode:   job.RuntimeMode,
@@ -228,6 +233,7 @@ func (r *DockerLocalRuntime) GetRuntimeStatus(ctx context.Context, site store.Si
 		LastError:     lastError,
 		Services:      services,
 		Runtime:       metadata,
+		System:        systemSummary,
 	}, nil
 }
 
@@ -569,6 +575,42 @@ func (r *DockerLocalRuntime) execInContainer(ctx context.Context, containerName,
 	return r.waitForExecExit(ctx, containerName, execID, cmd)
 }
 
+func (r *DockerLocalRuntime) execOutputInContainer(ctx context.Context, containerName, user string, cmd []string) (string, error) {
+	log.Printf("provisioning: exec capture start container=%s user=%s cmd=%s", containerName, user, strings.Join(cmd, " "))
+
+	execResp, err := r.docker.ContainerExecCreate(ctx, containerName, container.ExecOptions{
+		User:         user,
+		Cmd:          cmd,
+		AttachStdout: true,
+		AttachStderr: true,
+	})
+	if err != nil {
+		return "", fmt.Errorf("create exec in %s: %w", containerName, err)
+	}
+
+	hijacked, err := r.docker.ContainerExecAttach(ctx, execResp.ID, container.ExecAttachOptions{})
+	if err != nil {
+		return "", fmt.Errorf("attach exec in %s: %w", containerName, err)
+	}
+	defer hijacked.Close()
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	if _, err := stdcopy.StdCopy(&stdout, &stderr, hijacked.Reader); err != nil && !errors.Is(err, io.EOF) {
+		return "", fmt.Errorf("read exec output in %s: %w", containerName, err)
+	}
+
+	if err := r.waitForExecExit(ctx, containerName, execResp.ID, cmd); err != nil {
+		stderrText := strings.TrimSpace(stderr.String())
+		if stderrText != "" {
+			return "", fmt.Errorf("%w: %s", err, stderrText)
+		}
+		return "", err
+	}
+
+	return strings.TrimSpace(stdout.String()), nil
+}
+
 func (r *DockerLocalRuntime) startExecInContainer(ctx context.Context, containerName, user string, cmd []string) (string, error) {
 	log.Printf("provisioning: exec start container=%s user=%s cmd=%s", containerName, user, strings.Join(cmd, " "))
 	execResp, err := r.docker.ContainerExecCreate(ctx, containerName, container.ExecOptions{
@@ -782,6 +824,76 @@ func (r *DockerLocalRuntime) inspectRuntimeService(ctx context.Context, target r
 	service.StatusText = describeRuntimeService(service.State, service.HealthStatus)
 
 	return service, nil
+}
+
+func (r *DockerLocalRuntime) inspectSystemSummary(ctx context.Context, metadata store.SiteRuntimeMetadata, services []SiteRuntimeService) *SiteSystemSummary {
+	summary := &SiteSystemSummary{
+		DatabaseLabel: r.inspectDatabaseLabel(ctx),
+	}
+
+	webService := findRuntimeService(services, "web")
+	if webService != nil && webService.State == "running" {
+		summary.PHPVersion = r.inspectPHPVersion(ctx, metadata.WebContainerName)
+		summary.MoodleVersion = r.inspectMoodleVersion(ctx, metadata.WebContainerName)
+	}
+
+	if strings.TrimSpace(summary.DatabaseLabel) == "" &&
+		strings.TrimSpace(summary.PHPVersion) == "" &&
+		strings.TrimSpace(summary.MoodleVersion) == "" {
+		return nil
+	}
+
+	return summary
+}
+
+func (r *DockerLocalRuntime) inspectDatabaseLabel(ctx context.Context) string {
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+
+	var version string
+	if err := r.dbAdmin.QueryRow(ctx, "SHOW server_version").Scan(&version); err != nil {
+		return ""
+	}
+
+	return formatDatabaseLabel(version)
+}
+
+func formatDatabaseLabel(version string) string {
+	version = strings.TrimSpace(version)
+	if version == "" {
+		return "PostgreSQL"
+	}
+
+	parts := strings.Fields(version)
+	if len(parts) == 0 {
+		return "PostgreSQL"
+	}
+
+	return "PostgreSQL " + parts[0]
+}
+
+func (r *DockerLocalRuntime) inspectPHPVersion(ctx context.Context, containerName string) string {
+	output, err := r.execOutputInContainer(ctx, containerName, "www-data", []string{
+		"php",
+		"-r",
+		"echo PHP_VERSION;",
+	})
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(output)
+}
+
+func (r *DockerLocalRuntime) inspectMoodleVersion(ctx context.Context, containerName string) string {
+	output, err := r.execOutputInContainer(ctx, containerName, "www-data", []string{
+		"php",
+		"-r",
+		"if (!defined('MATURITY_ALPHA')) define('MATURITY_ALPHA', 100); if (!defined('MATURITY_BETA')) define('MATURITY_BETA', 200); if (!defined('MATURITY_RC')) define('MATURITY_RC', 300); if (!defined('MATURITY_STABLE')) define('MATURITY_STABLE', 400); $paths = ['/var/www/html/public/version.php', '/var/www/html/version.php']; foreach ($paths as $path) { if (is_file($path)) { define('MOODLE_INTERNAL', true); require $path; break; } } if (isset($release)) { echo $release; } elseif (isset($version)) { echo $version; }",
+	})
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(output)
 }
 
 func (r *DockerLocalRuntime) startContainerIfNeeded(ctx context.Context, containerName string) error {

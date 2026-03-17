@@ -241,6 +241,15 @@ func TestBuildMinimalRuntimeStatus(t *testing.T) {
 	}
 }
 
+func TestFormatDatabaseLabel(t *testing.T) {
+	if got := formatDatabaseLabel("17.4 (Debian 17.4-1)"); got != "PostgreSQL 17.4" {
+		t.Fatalf("formatDatabaseLabel() = %q, want %q", got, "PostgreSQL 17.4")
+	}
+	if got := formatDatabaseLabel(""); got != "PostgreSQL" {
+		t.Fatalf("formatDatabaseLabel() = %q, want %q", got, "PostgreSQL")
+	}
+}
+
 func TestDeriveOverallRuntimeStatus(t *testing.T) {
 	runningServices := []SiteRuntimeService{
 		{Name: "web", State: "running", HealthStatus: "healthy"},
