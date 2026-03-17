@@ -318,6 +318,37 @@ export function isAPIError(error: unknown): error is APIError {
   return error instanceof APIError
 }
 
+async function apiFetchBlob(path: string, init?: RequestInit): Promise<Blob> {
+  const headers = new Headers(init?.headers)
+  const hasBody = init?.body !== undefined
+
+  headers.set("Accept", "application/gzip, application/json, */*")
+  if (hasBody && !headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json")
+  }
+
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    ...init,
+    headers,
+    credentials: "include",
+    cache: "no-store",
+  })
+
+  if (!response.ok) {
+    let message = `Request failed with status ${response.status}`
+    const contentType = response.headers.get("content-type") ?? ""
+    if (contentType.includes("application/json")) {
+      const payload = await response.json()
+      if (payload && typeof payload === "object" && "error" in payload && typeof payload.error === "string") {
+        message = payload.error
+      }
+    }
+    throw new APIError(message, response.status)
+  }
+
+  return await response.blob()
+}
+
 export const api = {
   register(input: RegisterRequest) {
     return apiFetch<UserResponse>("/auth/register", {
@@ -547,6 +578,20 @@ export const api = {
   deleteNotification(notificationID: string) {
     return apiFetch<MessageResponse>(`/notifications/${notificationID}`, {
       method: "DELETE",
+    })
+  },
+
+  generateCourseOutline(prompt: string) {
+    return apiFetch<{ course: any }>("/courses/generate-outline", {
+      method: "POST",
+      body: JSON.stringify({ prompt }),
+    })
+  },
+
+  exportCourseMBZ(course: any) {
+    return apiFetchBlob("/courses/export-mbz", {
+      method: "POST",
+      body: JSON.stringify(course),
     })
   },
 }

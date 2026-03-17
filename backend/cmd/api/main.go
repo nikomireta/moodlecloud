@@ -9,12 +9,15 @@ import (
 
 	"github.com/hibiken/asynq"
 
+	"moodlecloud/backend/internal/ai"
 	"moodlecloud/backend/internal/auth"
 	"moodlecloud/backend/internal/config"
+	"moodlecloud/backend/internal/coursegen"
 	"moodlecloud/backend/internal/httpapi"
 	"moodlecloud/backend/internal/mail"
 	"moodlecloud/backend/internal/provisioning"
 	"moodlecloud/backend/internal/store"
+	"log/slog"
 )
 
 func main() {
@@ -68,7 +71,12 @@ func main() {
 	}
 
 	mailer := mail.NewSMTPMailer(cfg.SMTPHost, cfg.SMTPPort, cfg.SMTPFrom, cfg.FrontendOrigin)
-	server := httpapi.New(cfg, st, mailer, asynqClient, runtime)
+
+	aiLogger := slog.Default()
+	aiClient := ai.NewClient(aiLogger, cfg.AiApiKey, cfg.AiBaseURL, cfg.AiModel)
+	courseGen := coursegen.NewGenerator("assets/template.mbz")
+
+	server := httpapi.New(cfg, st, mailer, asynqClient, runtime, aiClient, courseGen)
 
 	httpServer := &http.Server{
 		Addr:    cfg.HTTPAddr,

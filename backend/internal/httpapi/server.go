@@ -17,8 +17,10 @@ import (
 	"github.com/google/uuid"
 	"github.com/hibiken/asynq"
 
+	"moodlecloud/backend/internal/ai"
 	"moodlecloud/backend/internal/auth"
 	"moodlecloud/backend/internal/config"
+	"moodlecloud/backend/internal/coursegen"
 	"moodlecloud/backend/internal/mail"
 	"moodlecloud/backend/internal/provisioning"
 	"moodlecloud/backend/internal/store"
@@ -30,6 +32,8 @@ type Server struct {
 	mailer      mail.Mailer
 	asynqClient *asynq.Client
 	runtime     provisioning.Runtime
+	aiClient    *ai.Client
+	courseGen   *coursegen.Generator
 }
 
 type listSessionsResponse struct {
@@ -44,13 +48,15 @@ const (
 	sessionContextKey contextKey = "session"
 )
 
-func New(cfg config.Config, st *store.Store, mailer mail.Mailer, client *asynq.Client, runtime provisioning.Runtime) *Server {
+func New(cfg config.Config, st *store.Store, mailer mail.Mailer, client *asynq.Client, runtime provisioning.Runtime, aiClient *ai.Client, courseGen *coursegen.Generator) *Server {
 	return &Server{
 		cfg:         cfg,
 		store:       st,
 		mailer:      mailer,
 		asynqClient: client,
 		runtime:     runtime,
+		aiClient:    aiClient,
+		courseGen:   courseGen,
 	}
 }
 
@@ -83,6 +89,9 @@ func (s *Server) Router() http.Handler {
 			r.Post("/forgot-password", s.handleForgotPassword)
 			r.Post("/reset-password", s.handleResetPassword)
 		})
+
+		r.Post("/courses/generate-outline", s.handleGenerateOutline)
+		r.Post("/courses/export-mbz", s.handleExportMBZ)
 
 		r.Group(func(r chi.Router) {
 			r.Use(s.requireAuth)

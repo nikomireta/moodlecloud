@@ -6,8 +6,12 @@ import { Footer } from "@/components/layout/footer"
 import { Button } from "@/components/ui/button"
 import { ArrowRight, CloudUpload, BarChart3, Lock, Users, Zap, CheckCircle2 } from "lucide-react"
 import Link from "next/link"
+import { useAuth } from "@/components/providers/auth-provider"
 
 export default function HomePage() {
+  const { status } = useAuth()
+  const isLoggedIn = status === "authenticated"
+
   return (
     <div className="flex min-h-screen flex-col bg-background">
       <Header />
@@ -25,7 +29,7 @@ export default function HomePage() {
                   Buat, kelola, dan skalakan situs Moodle Anda dengan mudah. Infrastruktur cloud yang andal, performa tinggi, dan dukungan penuh dalam bahasa Indonesia.
                 </p>
                 <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-                  <Link href="/daftar">
+                  <Link href={isLoggedIn ? "/dashboard" : "/daftar"}>
                     <Button size="lg" className="w-full sm:w-auto">
                       Mulai Gratis
                       <ArrowRight className="ml-2 h-4 w-4" />
@@ -248,7 +252,7 @@ export default function HomePage() {
               Bergabunglah dengan ribuan institusi pendidikan yang telah mempercayai MoodleCloud untuk mengelola pembelajaran mereka
             </p>
             <div className="flex flex-col gap-3 sm:flex-row justify-center">
-              <Link href="/daftar">
+              <Link href={isLoggedIn ? "/dashboard" : "/daftar"}>
                 <Button size="lg">
                   Mulai Sekarang - Gratis
                   <ArrowRight className="ml-2 h-4 w-4" />

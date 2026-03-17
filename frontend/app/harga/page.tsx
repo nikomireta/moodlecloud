@@ -8,6 +8,7 @@ import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
 import { CheckCircle2, X, HelpCircle, ArrowRight } from "lucide-react"
 import Link from "next/link"
+import { useAuth } from "@/components/providers/auth-provider"
 import {
   Accordion,
   AccordionContent,
@@ -133,6 +134,8 @@ function formatPrice(price: number) {
 
 export default function PricingPage() {
   const [isYearly, setIsYearly] = useState(false)
+  const { status } = useAuth()
+  const isLoggedIn = status === "authenticated"
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
@@ -250,7 +253,7 @@ export default function PricingPage() {
                     )}
                   </ul>
 
-                  <Link href={plan.monthlyPrice !== null ? "/daftar" : "/kontak"}>
+                  <Link href={plan.monthlyPrice !== null ? (isLoggedIn ? "/dashboard" : "/daftar") : "/kontak"}>
                     <Button
                       className="w-full"
                       variant={plan.popular ? "default" : "outline"}
@@ -358,7 +361,7 @@ export default function PricingPage() {
               Daftar sekarang dan dapatkan akses ke paket Starter gratis selamanya. Tidak perlu kartu kredit.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Link href="/daftar">
+              <Link href={isLoggedIn ? "/dashboard" : "/daftar"}>
                 <Button size="lg">
                   Mulai Gratis Sekarang
                   <ArrowRight className="ml-2 h-4 w-4" />

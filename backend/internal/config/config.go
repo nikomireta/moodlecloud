@@ -50,6 +50,9 @@ type Config struct {
 	PlaywrightSeedPassword   string
 	PlaywrightSeedCompany    string
 	PlaywrightSeedOrg        string
+	AiApiKey                 string
+	AiBaseURL                string
+	AiModel                  string
 }
 
 func Load() (Config, error) {
@@ -85,6 +88,9 @@ func Load() (Config, error) {
 		PlaywrightSeedPassword:   getEnv("PLAYWRIGHT_SEED_PASSWORD", "Playwright123!"),
 		PlaywrightSeedCompany:    getEnv("PLAYWRIGHT_SEED_COMPANY", "Playwright QA"),
 		PlaywrightSeedOrg:        getEnv("PLAYWRIGHT_SEED_ORGANIZATION", "Playwright Testing"),
+		AiApiKey:                 os.Getenv("AI_API_KEY"),
+		AiBaseURL:                getEnv("AI_BASE_URL", "https://api.openai.com/v1"),
+		AiModel:                  getEnv("AI_MODEL", "qwen-max"),
 	}
 	cfg.SeedPlaywrightUser = getEnv("SEED_PLAYWRIGHT_USER", cfg.AppEnv) == "development"
 	if value := os.Getenv("SEED_PLAYWRIGHT_USER"); value != "" {

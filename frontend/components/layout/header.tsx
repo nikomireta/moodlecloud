@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useMemo } from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
@@ -11,18 +11,52 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Menu, User, LogOut, Settings, LayoutDashboard, HelpCircle, Bell, Sparkles } from "lucide-react"
+import {
+  Menu, User, LogOut, Settings, LayoutDashboard, HelpCircle, Bell, Sparkles,
+  Check, AlertTriangle, XCircle, Info, Database, Server, Shield, AlertCircle, Clock
+} from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { ThemeToggle } from "@/components/ui/theme-toggle"
 import { useAuth } from "@/components/providers/auth-provider"
-import { api } from "@/lib/api"
+import { api, type NotificationItem } from "@/lib/api"
+
+function isUnread(notification: NotificationItem) {
+  return !notification.read_at
+}
+
+function getNotificationIcon(type: string) {
+  switch (type) {
+    case "success": return <Check className="h-4 w-4 text-green-500" />
+    case "warning": return <AlertTriangle className="h-4 w-4 text-yellow-500" />
+    case "error": return <XCircle className="h-4 w-4 text-red-500" />
+    default: return <Info className="h-4 w-4 text-blue-500" />
+  }
+}
+
+function formatTimestamp(value: string) {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return "Baru saja"
+
+  const now = new Date()
+  const diffMs = now.getTime() - date.getTime()
+  const diffMins = Math.floor(diffMs / (1000 * 60))
+  const diffHours = Math.floor(diffMs / (1000 * 60 * 60))
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
+
+  if (diffMins < 1) return "Baru saja"
+  if (diffMins < 60) return `${diffMins} m`
+  if (diffHours < 24) return `${diffHours} j`
+  if (diffDays < 7) return `${diffDays} h`
+  return date.toLocaleDateString("id-ID", { day: "numeric", month: "short" })
+}
 
 export function Header() {
   const router = useRouter()
   const pathname = usePathname()
   const { status, user, logout } = useAuth()
-  const [unreadNotificationCount, setUnreadNotificationCount] = useState(0)
+  const [notifications, setNotifications] = useState<NotificationItem[]>([])
   const isLoggedIn = status === "authenticated"
+  const unreadNotificationCount = useMemo(() => notifications.filter(isUnread).length, [notifications])
 
   const handleLogout = async () => {
     await logout()
@@ -31,7 +65,7 @@ export function Header() {
 
   useEffect(() => {
     if (!isLoggedIn) {
-      setUnreadNotificationCount(0)
+      setNotifications([])
       return
     }
 
@@ -41,7 +75,7 @@ export function Header() {
       try {
         const response = await api.listNotifications()
         if (!active) return
-        setUnreadNotificationCount(response.notifications.filter((notification) => !notification.read_at).length)
+        setNotifications(response.notifications)
       } catch (error) {
         if (!active) return
         console.error("failed to load notification count", error)
@@ -109,17 +143,80 @@ export function Header() {
               {/* Theme Toggle */}
               <ThemeToggle />
               
-              {/* Notification Bell */}
-              <Link href="/notifikasi">
-                <Button variant="ghost" size="icon" className="h-8 w-8 relative">
-                  <Bell className="h-4 w-4" />
-                  {unreadNotificationCount > 0 && (
-                    <Badge className="absolute -top-1 -right-1 h-4 min-w-4 px-1 flex items-center justify-center text-[10px]">
-                      {unreadNotificationCount > 99 ? "99+" : unreadNotificationCount}
-                    </Badge>
-                  )}
-                </Button>
-              </Link>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-8 w-8 relative">
+                    <Bell className="h-4 w-4" />
+                    {unreadNotificationCount > 0 && (
+                      <Badge className="absolute -top-1 -right-1 h-4 min-w-4 px-1 flex items-center justify-center text-[10px]">
+                        {unreadNotificationCount > 99 ? "99+" : unreadNotificationCount}
+                      </Badge>
+                    )}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-80">
+                  <div className="flex items-center justify-between px-4 py-2">
+                    <p className="text-sm font-medium">Notifikasi</p>
+                    {unreadNotificationCount > 0 && (
+                      <Badge variant="secondary" className="text-xs">
+                        {unreadNotificationCount} baru
+                      </Badge>
+                    )}
+                  </div>
+                  <DropdownMenuSeparator />
+                  <div className="max-h-[300px] overflow-y-auto">
+                    {notifications.length === 0 ? (
+                      <div className="p-4 text-center text-sm text-muted-foreground">
+                        Tidak ada notifikasi
+                      </div>
+                    ) : (
+                      <div className="flex flex-col">
+                        {notifications.slice(0, 5).map((notification) => (
+                          <DropdownMenuItem
+                            key={notification.id}
+                            className={`flex flex-col items-start gap-1 p-3 cursor-pointer ${
+                              isUnread(notification) ? "bg-muted/50" : ""
+                            }`}
+                            onSelect={() => {
+                              router.push("/notifikasi")
+                            }}
+                          >
+                            <div className="flex w-full items-start gap-3">
+                              <div className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full ${
+                                notification.type === "success" ? "bg-green-500/10" :
+                                notification.type === "warning" ? "bg-yellow-500/10" :
+                                notification.type === "error" ? "bg-red-500/10" :
+                                "bg-blue-500/10"
+                              }`}>
+                                {getNotificationIcon(notification.type)}
+                              </div>
+                              <div className="flex-1 space-y-1 overflow-hidden">
+                                <div className="flex items-center justify-between gap-1">
+                                  <p className={`text-sm font-medium truncate ${isUnread(notification) ? "text-foreground" : "text-muted-foreground"}`}>
+                                    {notification.title}
+                                  </p>
+                                  <span className="text-xs text-muted-foreground whitespace-nowrap">
+                                    {formatTimestamp(notification.created_at)}
+                                  </span>
+                                </div>
+                                <p className="text-xs text-muted-foreground line-clamp-2">
+                                  {notification.message}
+                                </p>
+                              </div>
+                            </div>
+                          </DropdownMenuItem>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem className="p-0 text-center">
+                    <Link href="/notifikasi" className="w-full block py-2 text-sm text-primary hover:underline">
+                      Lihat Semua Notifikasi
+                    </Link>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
               
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -135,18 +232,6 @@ export function Header() {
                     <p className="text-xs text-muted-foreground">{user?.email ?? "pengguna@example.com"}</p>
                   </div>
                   <DropdownMenuSeparator />
-                  <Link href="/dashboard">
-                    <DropdownMenuItem>
-                      <LayoutDashboard className="mr-2 h-4 w-4" />
-                      Dashboard
-                    </DropdownMenuItem>
-                  </Link>
-                  <Link href="/ai-course-generator">
-                    <DropdownMenuItem>
-                      <Sparkles className="mr-2 h-4 w-4" />
-                      AI Course Generator
-                    </DropdownMenuItem>
-                  </Link>
                   <Link href="/profil">
                     <DropdownMenuItem>
                       <User className="mr-2 h-4 w-4" />
@@ -157,12 +242,6 @@ export function Header() {
                     <DropdownMenuItem>
                       <Settings className="mr-2 h-4 w-4" />
                       Tagihan
-                    </DropdownMenuItem>
-                  </Link>
-                  <Link href="/pengaturan">
-                    <DropdownMenuItem>
-                      <Settings className="mr-2 h-4 w-4" />
-                      Pengaturan
                     </DropdownMenuItem>
                   </Link>
                   <Link href="/dokumentasi">

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { api } from "@/lib/api"
 import { Header } from "@/components/layout/header"
 import { Footer } from "@/components/layout/footer"
 import { Button } from "@/components/ui/button"
@@ -86,6 +87,8 @@ export default function AICourseGeneratorPage() {
   const [expandedModules, setExpandedModules] = useState<number[]>([0])
   const [streamingText, setStreamingText] = useState('')
 
+  const [exporting, setExporting] = useState(false)
+
   const handleGenerate = async () => {
     if (!topic.trim()) return
     
@@ -94,33 +97,41 @@ export default function AICourseGeneratorPage() {
     setStreamingText('')
 
     try {
-      const response = await fetch('/api/generate-course', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          topic,
-          level,
-          duration,
-          additionalNotes,
-          language: 'Indonesia'
-        }),
-      })
-
-      const data = await response.json()
+      // The backend expects a simple text prompt
+      const prompt = `Create a course about "${topic}". Level: ${level}, Duration: ${duration}. ${additionalNotes ? `Additional notes: ${additionalNotes}` : ''}`
       
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to generate course')
-      }
+      const data = await api.generateCourseOutline(prompt)
 
       if (data.course) {
         setGeneratedCourse(data.course)
         setStreamingText(JSON.stringify(data.course, null, 2))
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error generating course:', error)
-      setStreamingText('Gagal menghasilkan kursus. Pastikan API key sudah dikonfigurasi.')
+      setStreamingText(error.message || 'Gagal menghasilkan kursus. Pastikan API key sudah dikonfigurasi.')
     } finally {
       setIsGenerating(false)
+    }
+  }
+
+  const handleExport = async () => {
+    if (!generatedCourse) return
+
+    setExporting(true)
+    try {
+      const blob = await api.exportCourseMBZ(generatedCourse)
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `moodle-target-course.mbz`
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+    } catch (error) {
+      console.error("Failed to export MBZ", error)
+    } finally {
+      setExporting(false)
     }
   }
 
@@ -310,8 +321,8 @@ export default function AICourseGeneratorPage() {
                         <Button variant="outline" size="icon" onClick={copyToClipboard}>
                           <Copy className="h-4 w-4" />
                         </Button>
-                        <Button variant="outline" size="icon">
-                          <Download className="h-4 w-4" />
+                        <Button variant="outline" size="icon" onClick={handleExport} disabled={exporting}>
+                          {exporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
                         </Button>
                         <Button variant="outline" size="icon" onClick={handleGenerate}>
                           <RefreshCw className="h-4 w-4" />
@@ -418,13 +429,13 @@ export default function AICourseGeneratorPage() {
 
                   {/* Action Buttons */}
                   <div className="flex gap-3">
-                    <Button className="flex-1">
-                      <BookOpen className="mr-2 h-4 w-4" />
-                      Buat Kursus di Moodle
-                    </Button>
-                    <Button variant="outline" className="flex-1">
-                      <Download className="mr-2 h-4 w-4" />
-                      Export sebagai Template
+                    <Button variant="outline" className="flex-1" onClick={handleExport} disabled={exporting}>
+                      {exporting ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : (
+                        <Download className="mr-2 h-4 w-4" />
+                      )}
+                      Export MBZ (Download)
                     </Button>
                   </div>
                 </div>
