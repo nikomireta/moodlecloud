@@ -116,6 +116,7 @@ export function Header() {
               <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
                 <Sparkles className="mr-1 h-3 w-3" />
                 AI Generator
+                <Badge variant="secondary" className="ml-1.5 px-1 py-0 text-[10px] uppercase tracking-wider">Segera</Badge>
               </Button>
             </Link>
             <Link href="/harga">
