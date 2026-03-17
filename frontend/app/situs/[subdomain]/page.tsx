@@ -50,6 +50,7 @@ import {
   Filter,
   Search,
   AlertTriangle,
+  Loader2,
   Info,
   ClipboardList,
   Target,
@@ -58,11 +59,22 @@ import {
 } from "lucide-react"
 import { Textarea } from "@/components/ui/textarea"
 import { Checkbox } from "@/components/ui/checkbox"
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import Link from "next/link"
 import { use, useEffect, useState } from "react"
+import { useRouter } from "next/navigation"
+import { toast } from "sonner"
 import { ProtectedRoute } from "@/components/auth/protected-route"
 import { buildAdminURL, buildSiteURL, siteHostFromURL, SITE_BASE_DOMAIN } from "@/lib/site-url"
-import { api, isAPIError, type SiteRuntimeStatus, type SiteSummary } from "@/lib/api"
+import { api, isAPIError, type SiteRuntimeStatus, type SiteSettingsResponse, type SiteSummary } from "@/lib/api"
 
 // Mockup data
 const getSiteData = (subdomain: string) => ({
@@ -227,6 +239,36 @@ function runtimeStatusBadge(status: string) {
   }
 }
 
+function customDomainBadge(status: string) {
+  switch (status) {
+    case "active":
+      return {
+        label: "Aktif",
+        className: "text-green-600 border-green-600/50 bg-green-500/10 whitespace-nowrap",
+      }
+    case "pending_dns":
+      return {
+        label: "Menunggu DNS",
+        className: "text-amber-600 border-amber-600/50 bg-amber-500/10 whitespace-nowrap",
+      }
+    case "pending_tls":
+      return {
+        label: "Menunggu SSL",
+        className: "text-orange-600 border-orange-600/50 bg-orange-500/10 whitespace-nowrap",
+      }
+    case "failed":
+      return {
+        label: "Gagal",
+        className: "text-red-600 border-red-600/50 bg-red-500/10 whitespace-nowrap",
+      }
+    default:
+      return {
+        label: "Belum Diaktifkan",
+        className: "text-muted-foreground border-border bg-background whitespace-nowrap",
+      }
+  }
+}
+
 function findRuntimeService(runtimeStatus: SiteRuntimeStatus | null, name: string) {
   return runtimeStatus?.services.find((service) => service.name === name) ?? null
 }
@@ -243,14 +285,24 @@ function isRuntimeControllable(runtimeStatus: SiteRuntimeStatus | null) {
 }
 
 export default function SiteDetailPage({ params }: { params: Promise<{ subdomain: string }> }) {
+  const router = useRouter()
   const { subdomain } = use(params)
   const mockSite = getSiteData(subdomain)
   const site = mockSite
   const [siteData, setSiteData] = useState<SiteSummary | null>(null)
+  const [siteSettings, setSiteSettings] = useState<SiteSettingsResponse | null>(null)
   const [runtimeStatus, setRuntimeStatus] = useState<SiteRuntimeStatus | null>(null)
   const [runtimeError, setRuntimeError] = useState("")
   const [runtimeAction, setRuntimeAction] = useState<"start" | "restart" | "stop" | null>(null)
   const [activeTab, setActiveTab] = useState("ringkasan")
+  const [siteNameInput, setSiteNameInput] = useState("")
+  const [savingSiteName, setSavingSiteName] = useState(false)
+  const [customDomainInput, setCustomDomainInput] = useState("")
+  const [submittingCustomDomain, setSubmittingCustomDomain] = useState(false)
+  const [removingCustomDomain, setRemovingCustomDomain] = useState(false)
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [deleteConfirmation, setDeleteConfirmation] = useState("")
+  const [deletingSite, setDeletingSite] = useState(false)
 
   // Laporan period state — max 7 days
   const today = new Date()
@@ -317,30 +369,48 @@ export default function SiteDetailPage({ params }: { params: Promise<{ subdomain
     { name: "Nina Putri",    role: "Siswa", sessions:  7 + seed % 2, timeOnline: `${1 + seed % 2}j 20m`, submissions: 1, lastAction: "Bahasa Inggris" },
   ]
 
+  const loadSiteContext = async (siteSubdomain: string) => {
+    const siteResponse = await api.getSiteBySubdomain(siteSubdomain)
+
+    const [runtimeResult, settingsResult] = await Promise.allSettled([
+      api.getSiteRuntime(siteResponse.site.id),
+      api.getSiteSettings(siteResponse.site.id),
+    ])
+
+    return { site: siteResponse.site, runtimeResult, settingsResult }
+  }
+
+  const applySiteContext = (context: Awaited<ReturnType<typeof loadSiteContext>>) => {
+    setSiteData(context.site)
+    setSiteNameInput(context.site.name)
+
+    if (context.runtimeResult.status === "fulfilled") {
+      setRuntimeStatus(context.runtimeResult.value)
+      setRuntimeError(context.runtimeResult.value.last_error ?? "")
+    } else {
+      const error = context.runtimeResult.reason
+      setRuntimeError(isAPIError(error) ? error.message : "Gagal memuat status runtime")
+    }
+
+    if (context.settingsResult.status === "fulfilled") {
+      setSiteSettings(context.settingsResult.value)
+      setCustomDomainInput(context.settingsResult.value.custom_domain.domain ?? "")
+    } else {
+      const error = context.settingsResult.reason
+      setRuntimeError((current) => current || (isAPIError(error) ? error.message : "Gagal memuat pengaturan situs"))
+    }
+  }
+
   useEffect(() => {
     let cancelled = false
 
     const load = async () => {
       try {
-        const siteResponse = await api.getSiteBySubdomain(subdomain)
+        const context = await loadSiteContext(subdomain)
         if (cancelled) {
           return
         }
-        setSiteData(siteResponse.site)
-
-        try {
-          const runtimeResponse = await api.getSiteRuntime(siteResponse.site.id)
-          if (cancelled) {
-            return
-          }
-          setRuntimeStatus(runtimeResponse)
-          setRuntimeError(runtimeResponse.last_error ?? "")
-        } catch (error) {
-          if (cancelled) {
-            return
-          }
-          setRuntimeError(isAPIError(error) ? error.message : "Gagal memuat status runtime")
-        }
+        applySiteContext(context)
       } catch (error) {
         if (cancelled) {
           return
@@ -365,6 +435,12 @@ export default function SiteDetailPage({ params }: { params: Promise<{ subdomain
   const runtimeBadge = runtimeStatusBadge(runtimeStatus?.overall_status ?? "unknown")
   const webService = findRuntimeService(runtimeStatus, "web")
   const cronService = findRuntimeService(runtimeStatus, "cron")
+  const runtimeMetadata = siteSettings?.runtime ?? runtimeStatus?.runtime ?? null
+  const customDomain = siteSettings?.custom_domain ?? null
+  const customDomainState = customDomainBadge(customDomain?.status ?? "")
+  const customDomainSupported = siteSettings?.custom_domain_enabled ?? false
+  const currentDomainHost = customDomain?.status === "active" && customDomain.domain ? customDomain.domain : siteHost
+  const deleteConfirmationMatches = deleteConfirmation.trim() === subdomain
   const canControlRuntime = isRuntimeControllable(runtimeStatus)
   const canStart =
     canControlRuntime &&
@@ -409,6 +485,97 @@ export default function SiteDetailPage({ params }: { params: Promise<{ subdomain
 
   const handleCopyUrl = () => {
     navigator.clipboard.writeText(siteUrl)
+  }
+
+  const handleSaveSiteName = async () => {
+    if (!siteData || !siteNameInput.trim()) {
+      return
+    }
+
+    setSavingSiteName(true)
+    try {
+      const response = await api.updateSite(siteData.id, { name: siteNameInput.trim() })
+      setSiteData(response.site)
+      setSiteSettings((current) => current ? { ...current, site: response.site } : current)
+      toast.success(response.message)
+    } catch (error) {
+      toast.error(isAPIError(error) ? error.message : "Gagal menyimpan nama situs")
+    } finally {
+      setSavingSiteName(false)
+    }
+  }
+
+  const handleSubmitCustomDomain = async () => {
+    if (!siteData || !customDomainInput.trim()) {
+      return
+    }
+
+    setSubmittingCustomDomain(true)
+    try {
+      const response = await api.upsertSiteCustomDomain(siteData.id, customDomainInput.trim())
+      const nextSite = response.site ?? siteData
+      setSiteData(nextSite)
+      setSiteSettings((current) => {
+        if (!current) {
+          return current
+        }
+        return {
+          ...current,
+          site: nextSite,
+          custom_domain: response.custom_domain,
+        }
+      })
+      if (response.custom_domain?.status === "active") {
+        const runtime = await api.getSiteRuntime(siteData.id)
+        setRuntimeStatus(runtime)
+        setRuntimeError(runtime.last_error ?? "")
+      }
+      toast.success(response.message)
+    } catch (error) {
+      toast.error(isAPIError(error) ? error.message : "Gagal menyimpan custom domain")
+    } finally {
+      setSubmittingCustomDomain(false)
+    }
+  }
+
+  const handleDeleteCustomDomain = async () => {
+    if (!siteData) {
+      return
+    }
+
+    setRemovingCustomDomain(true)
+    try {
+      const response = await api.deleteSiteCustomDomain(siteData.id)
+      const runtime = await api.getSiteRuntime(siteData.id)
+      const settings = await api.getSiteSettings(siteData.id)
+      setSiteData(response.site)
+      setRuntimeStatus(runtime)
+      setRuntimeError(runtime.last_error ?? "")
+      setSiteSettings(settings)
+      setCustomDomainInput("")
+      toast.success(response.message)
+    } catch (error) {
+      toast.error(isAPIError(error) ? error.message : "Gagal melepas custom domain")
+    } finally {
+      setRemovingCustomDomain(false)
+    }
+  }
+
+  const handleDeleteSite = async () => {
+    if (!siteData) {
+      return
+    }
+
+    setDeletingSite(true)
+    try {
+      const response = await api.deleteSite(siteData.id, deleteConfirmation)
+      toast.success(response.message)
+      router.push("/dashboard")
+    } catch (error) {
+      toast.error(isAPIError(error) ? error.message : "Gagal menghapus situs")
+    } finally {
+      setDeletingSite(false)
+    }
   }
 
   return (
@@ -1141,39 +1308,23 @@ export default function SiteDetailPage({ params }: { params: Promise<{ subdomain
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div>
                     <Label className="text-muted-foreground">Nama Situs</Label>
-                    <Input key={siteName} defaultValue={siteName} className="mt-2 border-border" />
+                    <Input value={siteNameInput} onChange={(event) => setSiteNameInput(event.target.value)} className="mt-2 border-border" />
                   </div>
                   <div>
                     <Label className="text-muted-foreground">Subdomain</Label>
                     <Input defaultValue={subdomain} disabled className="mt-2 border-border bg-muted/50" />
                   </div>
-                  <div>
-                    <Label className="text-muted-foreground">Timezone</Label>
-                    <Select defaultValue="asia-jakarta">
-                      <SelectTrigger className="mt-2 border-border">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="asia-jakarta">Asia/Jakarta (WIB)</SelectItem>
-                        <SelectItem value="asia-makassar">Asia/Makassar (WITA)</SelectItem>
-                        <SelectItem value="asia-jayapura">Asia/Jayapura (WIT)</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label className="text-muted-foreground">Bahasa Default</Label>
-                    <Select defaultValue="id">
-                      <SelectTrigger className="mt-2 border-border">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="id">Bahasa Indonesia</SelectItem>
-                        <SelectItem value="en">English</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
                 </div>
-                <Button className="mt-6">Simpan Perubahan</Button>
+                <Button className="mt-6" onClick={handleSaveSiteName} disabled={savingSiteName || !siteNameInput.trim() || siteNameInput.trim() === siteName}>
+                  {savingSiteName ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Menyimpan...
+                    </>
+                  ) : (
+                    "Simpan Perubahan"
+                  )}
+                </Button>
               </Card>
 
               {/* Custom Domain */}
@@ -1186,17 +1337,54 @@ export default function SiteDetailPage({ params }: { params: Promise<{ subdomain
                   <div>
                     <Label className="text-muted-foreground">Domain Saat Ini</Label>
                     <div className="flex items-center gap-2 mt-2">
-                      <Input defaultValue={siteHost} disabled className="border-border bg-muted/50" />
-                      <Badge variant="outline" className="text-green-600 border-green-600/50 bg-green-500/10 whitespace-nowrap">Aktif</Badge>
+                      <Input value={currentDomainHost} disabled className="border-border bg-muted/50" />
+                      <Badge variant="outline" className={customDomainState.className}>{customDomainState.label}</Badge>
                     </div>
                   </div>
                   <div>
                     <Label className="text-muted-foreground">Custom Domain</Label>
                     <div className="flex items-center gap-2 mt-2">
-                      <Input placeholder="contoh: lms.sekolah.sch.id" className="border-border" />
-                      <Button variant="outline" className="border-border whitespace-nowrap">Tambah Domain</Button>
+                      <Input
+                        placeholder="contoh: lms.sekolah.sch.id"
+                        className="border-border"
+                        value={customDomainInput}
+                        onChange={(event) => setCustomDomainInput(event.target.value)}
+                        disabled={!customDomainSupported || submittingCustomDomain || removingCustomDomain}
+                      />
+                      <Button
+                        variant="outline"
+                        className="border-border whitespace-nowrap"
+                        onClick={handleSubmitCustomDomain}
+                        disabled={!customDomainSupported || !customDomainInput.trim() || submittingCustomDomain || removingCustomDomain}
+                      >
+                        {submittingCustomDomain ? "Menyimpan..." : "Tambah Domain"}
+                      </Button>
+                      {customDomain?.domain ? (
+                        <Button
+                          variant="outline"
+                          className="border-border whitespace-nowrap"
+                          onClick={handleDeleteCustomDomain}
+                          disabled={submittingCustomDomain || removingCustomDomain}
+                        >
+                          {removingCustomDomain ? "Memproses..." : "Lepas Domain"}
+                        </Button>
+                      ) : null}
                     </div>
                   </div>
+                  {!customDomainSupported ? (
+                    <div className="p-4 rounded-lg bg-muted/30 border border-border">
+                      <p className="text-sm font-medium mb-1">Custom domain belum tersedia</p>
+                      <p className="text-xs text-muted-foreground">
+                        Fitur ini baru aktif di environment yang sudah memiliki DNS publik dan Traefik ACME.
+                      </p>
+                    </div>
+                  ) : null}
+                  {customDomain?.last_error ? (
+                    <div className="p-4 rounded-lg bg-destructive/5 border border-destructive/30">
+                      <p className="text-sm font-medium text-destructive mb-1">Status Verifikasi</p>
+                      <p className="text-xs text-muted-foreground">{customDomain.last_error}</p>
+                    </div>
+                  ) : null}
                   <div className="p-4 rounded-lg bg-muted/30 border border-border">
                     <p className="text-sm font-medium mb-2">Konfigurasi DNS</p>
                     <p className="text-xs text-muted-foreground mb-3">
@@ -1205,11 +1393,11 @@ export default function SiteDetailPage({ params }: { params: Promise<{ subdomain
                     <div className="space-y-2 font-mono text-xs">
                       <div className="flex items-center justify-between p-2 bg-background rounded border border-border">
                         <span className="text-muted-foreground">CNAME</span>
-                        <span>cname.{SITE_BASE_DOMAIN}</span>
+                        <span>{customDomain?.cname_target || `cname.${SITE_BASE_DOMAIN}`}</span>
                       </div>
                       <div className="flex items-center justify-between p-2 bg-background rounded border border-border">
                         <span className="text-muted-foreground">TXT</span>
-                        <span>moodlecloud-verify={subdomain}</span>
+                        <span>{customDomain?.txt_name && customDomain?.txt_value ? `${customDomain.txt_name} = ${customDomain.txt_value}` : "-"}</span>
                       </div>
                     </div>
                   </div>
@@ -1220,33 +1408,42 @@ export default function SiteDetailPage({ params }: { params: Promise<{ subdomain
               <Card className="p-6 border-border">
                 <h3 className="font-semibold mb-4">Konfigurasi Server</h3>
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="flex items-center justify-between p-3 rounded-lg bg-muted/30">
-                    <div>
-                      <p className="text-sm font-medium">Mode Maintenance</p>
-                      <p className="text-xs text-muted-foreground">Nonaktifkan akses sementara</p>
-                    </div>
-                    <Switch />
+                  <div className="p-3 rounded-lg bg-muted/30">
+                    <p className="text-sm font-medium">Runtime Mode</p>
+                    <p className="text-xs text-muted-foreground mt-1 break-all">{runtimeStatus?.runtime_mode ?? "-"}</p>
                   </div>
-                  <div className="flex items-center justify-between p-3 rounded-lg bg-muted/30">
-                    <div>
-                      <p className="text-sm font-medium">Debug Mode</p>
-                      <p className="text-xs text-muted-foreground">Tampilkan error detail</p>
-                    </div>
-                    <Switch />
+                  <div className="p-3 rounded-lg bg-muted/30">
+                    <p className="text-sm font-medium">Image</p>
+                    <p className="text-xs text-muted-foreground mt-1 break-all">
+                      {runtimeMetadata ? `${runtimeMetadata.image_repository}:${runtimeMetadata.image_tag}` : "-"}
+                    </p>
                   </div>
-                  <div className="flex items-center justify-between p-3 rounded-lg bg-muted/30">
-                    <div>
-                      <p className="text-sm font-medium">Caching</p>
-                      <p className="text-xs text-muted-foreground">Aktifkan cache sistem</p>
-                    </div>
-                    <Switch defaultChecked />
+                  <div className="p-3 rounded-lg bg-muted/30">
+                    <p className="text-sm font-medium">Database</p>
+                    <p className="text-xs text-muted-foreground mt-1 break-all">{runtimeMetadata?.database_name ?? "-"}</p>
                   </div>
-                  <div className="flex items-center justify-between p-3 rounded-lg bg-muted/30">
-                    <div>
-                      <p className="text-sm font-medium">SSL Strict</p>
-                      <p className="text-xs text-muted-foreground">Force HTTPS</p>
-                    </div>
-                    <Switch defaultChecked />
+                  <div className="p-3 rounded-lg bg-muted/30">
+                    <p className="text-sm font-medium">Volume</p>
+                    <p className="text-xs text-muted-foreground mt-1 break-all">{runtimeMetadata?.volume_name ?? "-"}</p>
+                  </div>
+                  <div className="p-3 rounded-lg bg-muted/30">
+                    <p className="text-sm font-medium">Web Container</p>
+                    <p className="text-xs text-muted-foreground mt-1 break-all">{runtimeMetadata?.web_container_name ?? "-"}</p>
+                  </div>
+                  <div className="p-3 rounded-lg bg-muted/30">
+                    <p className="text-sm font-medium">Cron Container</p>
+                    <p className="text-xs text-muted-foreground mt-1 break-all">{runtimeMetadata?.cron_container_name ?? "-"}</p>
+                  </div>
+                  <div className="p-3 rounded-lg bg-muted/30 sm:col-span-2">
+                    <p className="text-sm font-medium">Health</p>
+                    <p className="text-xs text-muted-foreground mt-1 break-all">
+                      {runtimeMetadata?.health_status ?? runtimeStatus?.overall_status ?? "-"}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-2 break-all">
+                      {runtimeMetadata?.last_health_checked_at
+                        ? `Pemeriksaan terakhir: ${new Date(runtimeMetadata.last_health_checked_at).toLocaleString("id-ID")}`
+                        : "Belum ada pemeriksaan health yang tersimpan"}
+                    </p>
                   </div>
                 </div>
               </Card>
@@ -1255,19 +1452,12 @@ export default function SiteDetailPage({ params }: { params: Promise<{ subdomain
               <Card className="p-6 border-destructive/50">
                 <h3 className="font-semibold text-destructive mb-4">Zona Berbahaya</h3>
                 <div className="space-y-4">
-                  <div className="flex items-center justify-between p-3 rounded-lg border border-border">
-                    <div>
-                      <p className="text-sm font-medium">Reset Situs</p>
-                      <p className="text-xs text-muted-foreground">Hapus semua data dan mulai dari awal</p>
-                    </div>
-                    <Button variant="outline" size="sm" className="border-border">Reset</Button>
-                  </div>
                   <div className="flex items-center justify-between p-3 rounded-lg border border-destructive/30 bg-destructive/5">
                     <div>
                       <p className="text-sm font-medium">Hapus Situs</p>
-                      <p className="text-xs text-muted-foreground">Hapus situs secara permanen</p>
+                      <p className="text-xs text-muted-foreground">Hapus situs secara permanen beserta container, volume, dan database</p>
                     </div>
-                    <Button variant="destructive" size="sm">
+                    <Button variant="destructive" size="sm" onClick={() => setDeleteDialogOpen(true)}>
                       <Trash2 className="mr-2 h-4 w-4" />
                       Hapus
                     </Button>
@@ -1276,6 +1466,48 @@ export default function SiteDetailPage({ params }: { params: Promise<{ subdomain
               </Card>
             </TabsContent>
           </Tabs>
+
+          <AlertDialog
+            open={deleteDialogOpen}
+            onOpenChange={(open) => {
+              setDeleteDialogOpen(open)
+              if (!open) {
+                setDeleteConfirmation("")
+              }
+            }}
+          >
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Hapus situs ini?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Tindakan ini akan menghapus situs, runtime Docker, volume, dan database secara permanen. Untuk melanjutkan, ketik subdomain <span className="font-medium text-foreground">{subdomain}</span>.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <div className="space-y-2 py-2">
+                <Label htmlFor="delete-site-confirmation">Konfirmasi subdomain</Label>
+                <Input
+                  id="delete-site-confirmation"
+                  value={deleteConfirmation}
+                  onChange={(event) => setDeleteConfirmation(event.target.value)}
+                  placeholder={subdomain}
+                  className="border-border"
+                />
+              </div>
+              <AlertDialogFooter>
+                <AlertDialogCancel disabled={deletingSite}>Batal</AlertDialogCancel>
+                <Button variant="destructive" onClick={handleDeleteSite} disabled={!deleteConfirmationMatches || deletingSite}>
+                  {deletingSite ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Menghapus...
+                    </>
+                  ) : (
+                    "Hapus Situs"
+                  )}
+                </Button>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
       </main>
 

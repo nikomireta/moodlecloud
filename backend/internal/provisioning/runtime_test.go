@@ -28,6 +28,19 @@ func TestBuildSiteURLs(t *testing.T) {
 	}
 }
 
+func TestBuildCustomDomainURLs(t *testing.T) {
+	cfg := config.Config{SiteURLScheme: "https"}
+
+	siteURL, adminURL := BuildCustomDomainURLs(cfg, "lms.sekolah.sch.id")
+
+	if siteURL != "https://lms.sekolah.sch.id" {
+		t.Fatalf("siteURL = %q, want %q", siteURL, "https://lms.sekolah.sch.id")
+	}
+	if adminURL != "https://lms.sekolah.sch.id/admin" {
+		t.Fatalf("adminURL = %q, want %q", adminURL, "https://lms.sekolah.sch.id/admin")
+	}
+}
+
 func TestBuildRuntimeMetadata(t *testing.T) {
 	cfg := config.Config{
 		MoodleImageRepository: "local/moodle-app",
@@ -123,6 +136,19 @@ func TestRouteProbeTargetUsesLoopbackAndHostHeader(t *testing.T) {
 	}
 }
 
+func TestCustomDomainHelpers(t *testing.T) {
+	cfg := config.Config{
+		CustomDomainEnabled: true,
+		TraefikACMEResolver: "letsencrypt",
+	}
+	if !CustomDomainSupported(cfg) {
+		t.Fatal("expected custom domain to be supported when feature and resolver are configured")
+	}
+	if got := CustomDomainTXTName("lms.sekolah.sch.id"); got != "_moodlecloud-verify.lms.sekolah.sch.id" {
+		t.Fatalf("CustomDomainTXTName() = %q", got)
+	}
+}
+
 func TestTraefikRouteReadyReturnsReadyWhenRouterAndServiceAreUp(t *testing.T) {
 	rawData := traefikRawData{
 		Routers: map[string]traefikRawRouter{
@@ -189,6 +215,14 @@ func TestCronContainerHealthcheck(t *testing.T) {
 	}
 	if healthcheck.StartPeriod != 120*time.Second {
 		t.Fatalf("healthcheck.StartPeriod = %s, want %s", healthcheck.StartPeriod, 120*time.Second)
+	}
+}
+
+func TestBuildHostRule(t *testing.T) {
+	got := buildHostRule([]string{"demo.lvh.me", "lms.sekolah.sch.id"})
+	want := "Host(`demo.lvh.me`,`lms.sekolah.sch.id`)"
+	if got != want {
+		t.Fatalf("buildHostRule() = %q, want %q", got, want)
 	}
 }
 

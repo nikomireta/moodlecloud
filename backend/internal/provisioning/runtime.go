@@ -50,6 +50,8 @@ type Runtime interface {
 	StartSite(ctx context.Context, site store.Site, job store.ProvisioningJob, metadata *store.SiteRuntimeMetadata) (SiteRuntimeStatus, error)
 	RestartSite(ctx context.Context, site store.Site, job store.ProvisioningJob, metadata *store.SiteRuntimeMetadata) (SiteRuntimeStatus, error)
 	StopSite(ctx context.Context, site store.Site, job store.ProvisioningJob, metadata *store.SiteRuntimeMetadata) (SiteRuntimeStatus, error)
+	ReconcileSite(ctx context.Context, site store.Site, job store.ProvisioningJob, metadata *store.SiteRuntimeMetadata, customDomain *store.SiteCustomDomain) (SiteRuntimeStatus, error)
+	DestroySite(ctx context.Context, site store.Site, job store.ProvisioningJob, metadata *store.SiteRuntimeMetadata) error
 }
 
 func NewRuntime(cfg config.Config) (Runtime, error) {
@@ -64,17 +66,57 @@ func NewRuntime(cfg config.Config) (Runtime, error) {
 }
 
 func BuildSiteURLs(cfg config.Config, subdomain string) (string, string) {
+	return BuildHostURLs(cfg, fmt.Sprintf("%s.%s", strings.TrimSpace(subdomain), siteBaseDomain(cfg)))
+}
+
+func BuildHostURLs(cfg config.Config, host string) (string, string) {
 	scheme := strings.TrimSpace(cfg.SiteURLScheme)
 	if scheme == "" {
 		scheme = "http"
 	}
+	host = strings.TrimSpace(host)
+	siteURL := fmt.Sprintf("%s://%s", scheme, host)
+	return siteURL, siteURL + "/admin"
+}
+
+func siteBaseDomain(cfg config.Config) string {
 	baseDomain := strings.TrimSpace(cfg.SiteBaseDomain)
 	if baseDomain == "" {
 		baseDomain = "lvh.me"
 	}
-	host := fmt.Sprintf("%s.%s", strings.TrimSpace(subdomain), baseDomain)
-	siteURL := fmt.Sprintf("%s://%s", scheme, host)
-	return siteURL, siteURL + "/admin"
+	return baseDomain
+}
+
+func CanonicalSiteHost(cfg config.Config, subdomain string) string {
+	return fmt.Sprintf("%s.%s", strings.TrimSpace(subdomain), siteBaseDomain(cfg))
+}
+
+func BuildCustomDomainURLs(cfg config.Config, domain string) (string, string) {
+	return BuildHostURLs(cfg, strings.TrimSpace(domain))
+}
+
+func CustomDomainSupported(cfg config.Config) bool {
+	return cfg.CustomDomainEnabled && strings.TrimSpace(cfg.TraefikACMEResolver) != ""
+}
+
+func CustomDomainTXTName(domain string) string {
+	domain = strings.Trim(strings.TrimSpace(domain), ".")
+	if domain == "" {
+		return ""
+	}
+	return fmt.Sprintf("_moodlecloud-verify.%s", domain)
+}
+
+func customDomainActiveForRouting(customDomain *store.SiteCustomDomain) bool {
+	if customDomain == nil {
+		return false
+	}
+	switch strings.TrimSpace(customDomain.Status) {
+	case "pending_tls", "active":
+		return strings.TrimSpace(customDomain.Domain) != ""
+	default:
+		return false
+	}
 }
 
 func BuildRuntimeMetadata(cfg config.Config, site store.Site) store.SiteRuntimeMetadata {

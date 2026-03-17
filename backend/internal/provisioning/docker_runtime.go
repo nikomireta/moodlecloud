@@ -90,7 +90,7 @@ func (r *DockerLocalRuntime) CreateDatabase(ctx context.Context, site store.Site
 }
 
 func (r *DockerLocalRuntime) Install(ctx context.Context, site store.Site, metadata store.SiteRuntimeMetadata) error {
-	if err := r.ensureWebContainer(ctx, site, metadata); err != nil {
+	if err := r.ensureWebContainer(ctx, site, metadata, nil); err != nil {
 		return err
 	}
 	if err := r.waitForConfigFile(ctx, metadata.WebContainerName); err != nil {
@@ -243,6 +243,51 @@ func (r *DockerLocalRuntime) StopSite(ctx context.Context, site store.Site, job 
 	return r.changeSiteRuntime(ctx, site, job, metadata, runtimeActionStop)
 }
 
+func (r *DockerLocalRuntime) ReconcileSite(ctx context.Context, site store.Site, job store.ProvisioningJob, metadata *store.SiteRuntimeMetadata, customDomain *store.SiteCustomDomain) (SiteRuntimeStatus, error) {
+	if strings.TrimSpace(job.RuntimeMode) != "docker_local" {
+		return BuildMinimalRuntimeStatus(site, job, metadata), ErrRuntimeControlUnsupported
+	}
+	if metadata == nil {
+		return BuildMinimalRuntimeStatus(site, job, metadata), ErrRuntimeMetadataMissing
+	}
+	if err := r.recreateWebContainer(ctx, site, *metadata, customDomain); err != nil {
+		return SiteRuntimeStatus{}, err
+	}
+	if site.Status == "active" {
+		if err := r.ValidateRoute(ctx, site, *metadata); err != nil {
+			return SiteRuntimeStatus{}, err
+		}
+	}
+	return r.GetRuntimeStatus(ctx, site, job, metadata)
+}
+
+func (r *DockerLocalRuntime) DestroySite(ctx context.Context, _ store.Site, _ store.ProvisioningJob, metadata *store.SiteRuntimeMetadata) error {
+	if metadata == nil {
+		return nil
+	}
+
+	var errs []string
+	if err := r.removeContainerIfExists(ctx, metadata.CronContainerName); err != nil {
+		errs = append(errs, err.Error())
+	}
+	if err := r.removeContainerIfExists(ctx, metadata.WebContainerName); err != nil {
+		errs = append(errs, err.Error())
+	}
+	if err := r.removeVolumeIfExists(ctx, metadata.VolumeName); err != nil {
+		errs = append(errs, err.Error())
+	}
+	if err := r.dropDatabaseIfExists(ctx, metadata.DatabaseName); err != nil {
+		errs = append(errs, err.Error())
+	}
+	if err := r.dropDatabaseUserIfExists(ctx, metadata.DatabaseUser); err != nil {
+		errs = append(errs, err.Error())
+	}
+	if len(errs) > 0 {
+		return errors.New(strings.Join(errs, "; "))
+	}
+	return nil
+}
+
 func (r *DockerLocalRuntime) changeSiteRuntime(ctx context.Context, site store.Site, job store.ProvisioningJob, metadata *store.SiteRuntimeMetadata, action runtimeAction) (SiteRuntimeStatus, error) {
 	if strings.TrimSpace(job.RuntimeMode) != "docker_local" {
 		return BuildMinimalRuntimeStatus(site, job, metadata), ErrRuntimeControlUnsupported
@@ -351,19 +396,39 @@ func (r *DockerLocalRuntime) ensureDatabase(ctx context.Context, databaseName, o
 	return nil
 }
 
-func (r *DockerLocalRuntime) ensureWebContainer(ctx context.Context, site store.Site, metadata store.SiteRuntimeMetadata) error {
+func (r *DockerLocalRuntime) ensureWebContainer(ctx context.Context, site store.Site, metadata store.SiteRuntimeMetadata, customDomain *store.SiteCustomDomain) error {
+	labels := r.webContainerLabels(site, customDomain)
+	env := r.runtimeEnv(site, metadata)
+	return r.ensureContainer(ctx, metadata.WebContainerName, imageRef(metadata), env, labels, nil, nil, metadata, false, r.containerResourcesForService(site, "web"))
+}
+
+func (r *DockerLocalRuntime) recreateWebContainer(ctx context.Context, site store.Site, metadata store.SiteRuntimeMetadata, customDomain *store.SiteCustomDomain) error {
+	if err := r.removeContainerIfExists(ctx, metadata.WebContainerName); err != nil {
+		return err
+	}
+	return r.ensureWebContainer(ctx, site, metadata, customDomain)
+}
+
+func (r *DockerLocalRuntime) webContainerLabels(site store.Site, customDomain *store.SiteCustomDomain) map[string]string {
+	router := routerName(site)
 	labels := map[string]string{
 		"moodlecloud.managed":    "true",
 		"moodlecloud.site-id":    site.ID.String(),
 		"traefik.enable":         "true",
 		"traefik.docker.network": r.cfg.DockerProxyNetwork,
-		fmt.Sprintf("traefik.http.routers.%s.rule", routerName(site)):                      fmt.Sprintf("Host(`%s`)", siteHost(site.SiteURL)),
-		fmt.Sprintf("traefik.http.routers.%s.entrypoints", routerName(site)):               "web",
-		fmt.Sprintf("traefik.http.routers.%s.service", routerName(site)):                   routerName(site),
-		fmt.Sprintf("traefik.http.services.%s.loadbalancer.server.port", routerName(site)): "80",
+		fmt.Sprintf("traefik.http.routers.%s.rule", router):                      buildHostRule(r.routeHosts(site, customDomain)),
+		fmt.Sprintf("traefik.http.routers.%s.entrypoints", router):               strings.TrimSpace(r.cfg.TraefikRouterEntrypoints),
+		fmt.Sprintf("traefik.http.routers.%s.service", router):                   router,
+		fmt.Sprintf("traefik.http.services.%s.loadbalancer.server.port", router): "80",
 	}
-	env := r.runtimeEnv(site, metadata)
-	return r.ensureContainer(ctx, metadata.WebContainerName, imageRef(metadata), env, labels, nil, nil, metadata, false, r.containerResourcesForService(site, "web"))
+	if labels[fmt.Sprintf("traefik.http.routers.%s.entrypoints", router)] == "" {
+		labels[fmt.Sprintf("traefik.http.routers.%s.entrypoints", router)] = "web"
+	}
+	if CustomDomainSupported(r.cfg) && customDomainActiveForRouting(customDomain) {
+		labels[fmt.Sprintf("traefik.http.routers.%s.tls", router)] = "true"
+		labels[fmt.Sprintf("traefik.http.routers.%s.tls.certresolver", router)] = strings.TrimSpace(r.cfg.TraefikACMEResolver)
+	}
+	return labels
 }
 
 func (r *DockerLocalRuntime) ensureCronContainer(ctx context.Context, site store.Site, metadata store.SiteRuntimeMetadata) error {
@@ -601,6 +666,62 @@ func (r *DockerLocalRuntime) removeContainerIfExists(ctx context.Context, name s
 		return fmt.Errorf("remove container %s: %w", name, err)
 	}
 	return nil
+}
+
+func (r *DockerLocalRuntime) removeVolumeIfExists(ctx context.Context, name string) error {
+	if strings.TrimSpace(name) == "" {
+		return nil
+	}
+	if err := r.docker.VolumeRemove(ctx, name, true); err != nil && !errdefs.IsNotFound(err) {
+		return fmt.Errorf("remove volume %s: %w", name, err)
+	}
+	return nil
+}
+
+func (r *DockerLocalRuntime) dropDatabaseIfExists(ctx context.Context, databaseName string) error {
+	if strings.TrimSpace(databaseName) == "" {
+		return nil
+	}
+	if _, err := r.dbAdmin.Exec(ctx, `SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = $1 AND pid <> pg_backend_pid()`, databaseName); err != nil {
+		return fmt.Errorf("terminate database connections %s: %w", databaseName, err)
+	}
+	if _, err := r.dbAdmin.Exec(ctx, fmt.Sprintf("DROP DATABASE IF EXISTS %s", quoteIdentifier(databaseName))); err != nil {
+		return fmt.Errorf("drop database %s: %w", databaseName, err)
+	}
+	return nil
+}
+
+func (r *DockerLocalRuntime) dropDatabaseUserIfExists(ctx context.Context, username string) error {
+	if strings.TrimSpace(username) == "" {
+		return nil
+	}
+	if _, err := r.dbAdmin.Exec(ctx, fmt.Sprintf("DROP ROLE IF EXISTS %s", quoteIdentifier(username))); err != nil {
+		return fmt.Errorf("drop database user %s: %w", username, err)
+	}
+	return nil
+}
+
+func (r *DockerLocalRuntime) routeHosts(site store.Site, customDomain *store.SiteCustomDomain) []string {
+	hosts := []string{CanonicalSiteHost(r.cfg, site.Subdomain)}
+	if customDomainActiveForRouting(customDomain) {
+		hosts = append(hosts, strings.TrimSpace(customDomain.Domain))
+	}
+	return hosts
+}
+
+func buildHostRule(hosts []string) string {
+	parts := make([]string, 0, len(hosts))
+	for _, host := range hosts {
+		host = strings.TrimSpace(host)
+		if host == "" {
+			continue
+		}
+		parts = append(parts, fmt.Sprintf("`%s`", host))
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return fmt.Sprintf("Host(%s)", strings.Join(parts, ","))
 }
 
 func (r *DockerLocalRuntime) inspectRuntimeServices(ctx context.Context, metadata store.SiteRuntimeMetadata) ([]SiteRuntimeService, string, error) {

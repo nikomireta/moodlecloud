@@ -99,6 +99,18 @@ type SiteRuntimeMetadata struct {
 	UpdatedAt           time.Time  `json:"updated_at"`
 }
 
+type SiteCustomDomain struct {
+	SiteID            uuid.UUID  `json:"site_id"`
+	Domain            string     `json:"domain"`
+	Status            string     `json:"status"`
+	VerificationToken string     `json:"-"`
+	LastError         string     `json:"last_error"`
+	VerifiedAt        *time.Time `json:"verified_at,omitempty"`
+	ActivatedAt       *time.Time `json:"activated_at,omitempty"`
+	CreatedAt         time.Time  `json:"created_at"`
+	UpdatedAt         time.Time  `json:"updated_at"`
+}
+
 type ProvisioningJob struct {
 	ID          uuid.UUID `json:"job_id"`
 	SiteID      uuid.UUID `json:"site_id"`
@@ -205,6 +217,19 @@ type CreateSiteParams struct {
 	AdminURL    string
 }
 
+type UpdateSiteParams struct {
+	OwnerUserID uuid.UUID
+	SiteID      uuid.UUID
+	Name        string
+}
+
+type UpdateSiteURLsParams struct {
+	OwnerUserID uuid.UUID
+	SiteID      uuid.UUID
+	SiteURL     string
+	AdminURL    string
+}
+
 type HostCapacityPolicy struct {
 	StorageBytesLimit  int64
 	CPUMillicoresLimit int
@@ -222,6 +247,16 @@ type UpsertSiteRuntimeMetadataParams struct {
 	DatabaseUser      string
 	HealthStatus      string
 	LastHealthError   string
+}
+
+type UpsertSiteCustomDomainParams struct {
+	SiteID            uuid.UUID
+	Domain            string
+	Status            string
+	VerificationToken string
+	LastError         string
+	VerifiedAt        *time.Time
+	ActivatedAt       *time.Time
 }
 
 type CreateNotificationParams struct {

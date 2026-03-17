@@ -19,6 +19,7 @@ type Store struct {
 
 var (
 	ErrNotFound         = errors.New("not found")
+	ErrConflict         = errors.New("conflict")
 	ErrCapacityExceeded = errors.New("host capacity exceeded")
 )
 

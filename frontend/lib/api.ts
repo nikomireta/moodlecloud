@@ -192,6 +192,25 @@ export type SiteRuntimeStatus = {
   runtime?: SiteRuntimeMetadata | null
 }
 
+export type SiteCustomDomainStatus = {
+  supported: boolean
+  domain: string
+  status: string
+  cname_target: string
+  txt_name: string
+  txt_value: string
+  last_error: string
+  verified_at?: string | null
+  activated_at?: string | null
+}
+
+export type SiteSettingsResponse = {
+  site: SiteSummary
+  runtime?: SiteRuntimeMetadata | null
+  custom_domain: SiteCustomDomainStatus
+  custom_domain_enabled: boolean
+}
+
 type MessageResponse = {
   message: string
 }
@@ -215,6 +234,15 @@ type NotificationsResponse = {
 
 type SitesResponse = {
   sites: SiteSummary[]
+}
+
+type SiteMutationResponse = MessageResponse & {
+  site: SiteSummary
+}
+
+type SiteCustomDomainMutationResponse = MessageResponse & {
+  site: SiteSummary
+  custom_domain: SiteCustomDomainStatus
 }
 
 export class APIError extends Error {
@@ -412,6 +440,19 @@ export const api = {
     return apiFetch<SiteResponse>(`/sites/${encodeURIComponent(siteID)}`)
   },
 
+  getSiteSettings(siteID: string) {
+    return apiFetch<SiteSettingsResponse>(`/sites/${encodeURIComponent(siteID)}/settings`)
+  },
+
+  updateSite(siteID: string, input: { name: string }) {
+    return apiFetch<SiteMutationResponse>(`/sites/${encodeURIComponent(siteID)}`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        name: input.name,
+      }),
+    })
+  },
+
   getProvisioningStatus(siteID: string) {
     return apiFetch<ProvisioningStatusResponse>(`/sites/${encodeURIComponent(siteID)}/provisioning`)
   },
@@ -435,6 +476,28 @@ export const api = {
   stopSiteRuntime(siteID: string) {
     return apiFetch<SiteRuntimeStatus>(`/sites/${encodeURIComponent(siteID)}/runtime/stop`, {
       method: "POST",
+    })
+  },
+
+  upsertSiteCustomDomain(siteID: string, domain: string) {
+    return apiFetch<SiteCustomDomainMutationResponse>(`/sites/${encodeURIComponent(siteID)}/custom-domain`, {
+      method: "POST",
+      body: JSON.stringify({ domain }),
+    })
+  },
+
+  deleteSiteCustomDomain(siteID: string) {
+    return apiFetch<SiteMutationResponse>(`/sites/${encodeURIComponent(siteID)}/custom-domain`, {
+      method: "DELETE",
+    })
+  },
+
+  deleteSite(siteID: string, confirmSubdomain: string) {
+    return apiFetch<MessageResponse>(`/sites/${encodeURIComponent(siteID)}`, {
+      method: "DELETE",
+      body: JSON.stringify({
+        confirm_subdomain: confirmSubdomain,
+      }),
     })
   },
 

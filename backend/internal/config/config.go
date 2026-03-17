@@ -11,42 +11,45 @@ import (
 )
 
 type Config struct {
-	AppEnv                  string
-	HTTPAddr                string
-	FrontendOrigin          string
-	DatabaseURL             string
-	SiteDBAdminURL          string
-	RedisAddr               string
-	RedisPassword           string
-	SMTPHost                string
-	SMTPPort                int
-	SMTPFrom                string
-	SessionCookieName       string
-	SessionTTL              time.Duration
-	RememberMeTTL           time.Duration
-	PasswordResetTTL        time.Duration
-	VerifyEmailTTL          time.Duration
-	ProvisioningRuntimeMode string
-	SiteBaseDomain          string
-	SiteURLScheme           string
-	DockerProxyNetwork      string
-	TraefikAPIURL           string
-	MoodleImageRepository   string
-	MoodleImageTag          string
-	SiteRuntimeSecret       string
-	UsageMeterSchedule      string
-	HostStorageBudgetBytes  int64
-	HostCPUMillicoresBudget int
-	HostMemoryMiBBudget     int
-	DockerWebPidsLimit      int64
-	DockerCronPidsLimit     int64
-	RunMigrations           bool
-	SeedPlaywrightUser      bool
-	PlaywrightSeedName      string
-	PlaywrightSeedEmail     string
-	PlaywrightSeedPassword  string
-	PlaywrightSeedCompany   string
-	PlaywrightSeedOrg       string
+	AppEnv                   string
+	HTTPAddr                 string
+	FrontendOrigin           string
+	DatabaseURL              string
+	SiteDBAdminURL           string
+	RedisAddr                string
+	RedisPassword            string
+	SMTPHost                 string
+	SMTPPort                 int
+	SMTPFrom                 string
+	SessionCookieName        string
+	SessionTTL               time.Duration
+	RememberMeTTL            time.Duration
+	PasswordResetTTL         time.Duration
+	VerifyEmailTTL           time.Duration
+	ProvisioningRuntimeMode  string
+	SiteBaseDomain           string
+	SiteURLScheme            string
+	DockerProxyNetwork       string
+	TraefikAPIURL            string
+	TraefikRouterEntrypoints string
+	TraefikACMEResolver      string
+	CustomDomainEnabled      bool
+	MoodleImageRepository    string
+	MoodleImageTag           string
+	SiteRuntimeSecret        string
+	UsageMeterSchedule       string
+	HostStorageBudgetBytes   int64
+	HostCPUMillicoresBudget  int
+	HostMemoryMiBBudget      int
+	DockerWebPidsLimit       int64
+	DockerCronPidsLimit      int64
+	RunMigrations            bool
+	SeedPlaywrightUser       bool
+	PlaywrightSeedName       string
+	PlaywrightSeedEmail      string
+	PlaywrightSeedPassword   string
+	PlaywrightSeedCompany    string
+	PlaywrightSeedOrg        string
 }
 
 func Load() (Config, error) {
@@ -55,36 +58,39 @@ func Load() (Config, error) {
 	}
 
 	cfg := Config{
-		AppEnv:                  getEnv("APP_ENV", "development"),
-		HTTPAddr:                getEnv("HTTP_ADDR", ":8080"),
-		FrontendOrigin:          getEnv("FRONTEND_ORIGIN", "http://localhost:3000"),
-		DatabaseURL:             getEnv("DATABASE_URL", "postgres://postgres:postgres@localhost:5432/moodlecloud?sslmode=disable"),
-		SiteDBAdminURL:          getEnv("SITE_DB_ADMIN_URL", "postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable"),
-		RedisAddr:               getEnv("REDIS_ADDR", "localhost:6379"),
-		RedisPassword:           os.Getenv("REDIS_PASSWORD"),
-		SMTPHost:                getEnv("SMTP_HOST", "localhost"),
-		SMTPFrom:                getEnv("SMTP_FROM", "no-reply@moodlecloud.local"),
-		SessionCookieName:       getEnv("SESSION_COOKIE_NAME", "moodlecloud_session"),
-		ProvisioningRuntimeMode: getEnv("PROVISIONING_RUNTIME_MODE", "docker_local"),
-		SiteBaseDomain:          getEnv("SITE_BASE_DOMAIN", "lvh.me"),
-		SiteURLScheme:           getEnv("SITE_URL_SCHEME", "http"),
-		DockerProxyNetwork:      getEnv("DOCKER_PROXY_NETWORK", "moodlecloud-proxy"),
-		TraefikAPIURL:           getEnv("TRAEFIK_API_URL", "http://127.0.0.1:8088"),
-		MoodleImageRepository:   getEnv("MOODLE_IMAGE_REPOSITORY", "local/moodle-app"),
-		MoodleImageTag:          getEnv("MOODLE_IMAGE_TAG", "5.1-local"),
-		SiteRuntimeSecret:       getEnv("SITE_RUNTIME_SECRET", "local-runtime-secret"),
-		UsageMeterSchedule:      getEnv("USAGE_METER_SCHEDULE", "@every 5m"),
-		RunMigrations:           getEnv("RUN_MIGRATIONS", "true") != "false",
-		PlaywrightSeedName:      getEnv("PLAYWRIGHT_SEED_NAME", "Playwright Test"),
-		PlaywrightSeedEmail:     getEnv("PLAYWRIGHT_SEED_EMAIL", "playwright@example.com"),
-		PlaywrightSeedPassword:  getEnv("PLAYWRIGHT_SEED_PASSWORD", "Playwright123!"),
-		PlaywrightSeedCompany:   getEnv("PLAYWRIGHT_SEED_COMPANY", "Playwright QA"),
-		PlaywrightSeedOrg:       getEnv("PLAYWRIGHT_SEED_ORGANIZATION", "Playwright Testing"),
+		AppEnv:                   getEnv("APP_ENV", "development"),
+		HTTPAddr:                 getEnv("HTTP_ADDR", ":8080"),
+		FrontendOrigin:           getEnv("FRONTEND_ORIGIN", "http://localhost:3000"),
+		DatabaseURL:              getEnv("DATABASE_URL", "postgres://postgres:postgres@localhost:5432/moodlecloud?sslmode=disable"),
+		SiteDBAdminURL:           getEnv("SITE_DB_ADMIN_URL", "postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable"),
+		RedisAddr:                getEnv("REDIS_ADDR", "localhost:6379"),
+		RedisPassword:            os.Getenv("REDIS_PASSWORD"),
+		SMTPHost:                 getEnv("SMTP_HOST", "localhost"),
+		SMTPFrom:                 getEnv("SMTP_FROM", "no-reply@moodlecloud.local"),
+		SessionCookieName:        getEnv("SESSION_COOKIE_NAME", "moodlecloud_session"),
+		ProvisioningRuntimeMode:  getEnv("PROVISIONING_RUNTIME_MODE", "docker_local"),
+		SiteBaseDomain:           getEnv("SITE_BASE_DOMAIN", "lvh.me"),
+		SiteURLScheme:            getEnv("SITE_URL_SCHEME", "http"),
+		DockerProxyNetwork:       getEnv("DOCKER_PROXY_NETWORK", "moodlecloud-proxy"),
+		TraefikAPIURL:            getEnv("TRAEFIK_API_URL", "http://127.0.0.1:8088"),
+		TraefikRouterEntrypoints: getEnv("TRAEFIK_ROUTER_ENTRYPOINTS", "web"),
+		TraefikACMEResolver:      getEnv("TRAEFIK_ACME_RESOLVER", ""),
+		MoodleImageRepository:    getEnv("MOODLE_IMAGE_REPOSITORY", "local/moodle-app"),
+		MoodleImageTag:           getEnv("MOODLE_IMAGE_TAG", "5.1-local"),
+		SiteRuntimeSecret:        getEnv("SITE_RUNTIME_SECRET", "local-runtime-secret"),
+		UsageMeterSchedule:       getEnv("USAGE_METER_SCHEDULE", "@every 5m"),
+		RunMigrations:            getEnv("RUN_MIGRATIONS", "true") != "false",
+		PlaywrightSeedName:       getEnv("PLAYWRIGHT_SEED_NAME", "Playwright Test"),
+		PlaywrightSeedEmail:      getEnv("PLAYWRIGHT_SEED_EMAIL", "playwright@example.com"),
+		PlaywrightSeedPassword:   getEnv("PLAYWRIGHT_SEED_PASSWORD", "Playwright123!"),
+		PlaywrightSeedCompany:    getEnv("PLAYWRIGHT_SEED_COMPANY", "Playwright QA"),
+		PlaywrightSeedOrg:        getEnv("PLAYWRIGHT_SEED_ORGANIZATION", "Playwright Testing"),
 	}
 	cfg.SeedPlaywrightUser = getEnv("SEED_PLAYWRIGHT_USER", cfg.AppEnv) == "development"
 	if value := os.Getenv("SEED_PLAYWRIGHT_USER"); value != "" {
 		cfg.SeedPlaywrightUser = value != "false"
 	}
+	cfg.CustomDomainEnabled = getEnv("CUSTOM_DOMAIN_ENABLED", "false") == "true"
 
 	smtpPort, err := strconv.Atoi(getEnv("SMTP_PORT", "1025"))
 	if err != nil {

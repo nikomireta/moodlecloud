@@ -58,3 +58,11 @@ func (SimulatedRuntime) RestartSite(_ context.Context, site store.Site, job stor
 func (SimulatedRuntime) StopSite(_ context.Context, site store.Site, job store.ProvisioningJob, metadata *store.SiteRuntimeMetadata) (SiteRuntimeStatus, error) {
 	return BuildMinimalRuntimeStatus(site, job, metadata), ErrRuntimeControlUnsupported
 }
+
+func (SimulatedRuntime) ReconcileSite(_ context.Context, site store.Site, job store.ProvisioningJob, metadata *store.SiteRuntimeMetadata, _ *store.SiteCustomDomain) (SiteRuntimeStatus, error) {
+	return BuildMinimalRuntimeStatus(site, job, metadata), ErrRuntimeControlUnsupported
+}
+
+func (SimulatedRuntime) DestroySite(_ context.Context, _ store.Site, _ store.ProvisioningJob, _ *store.SiteRuntimeMetadata) error {
+	return nil
+}
