@@ -22,6 +22,9 @@ $CFG->wwwroot = '${MOODLE_WWWROOT}';
 $CFG->dataroot = '${MOODLE_DATAROOT}';
 $CFG->admin = '${MOODLE_ADMIN_PATH}';
 $CFG->directorypermissions = 02777;
+$CFG->moodlepilot_site_id = getenv('MOODLEPILOT_SITE_ID') ?: '';
+$CFG->moodlepilot_report_auto_authorize = getenv('MOODLEPILOT_REPORT_AUTO_AUTHORIZE') ?: '1';
+$CFG->moodlepilot_api_base_url = getenv('MOODLEPILOT_API_BASE_URL') ?: '';
+$CFG->moodlepilot_report_bootstrap_token = getenv('MOODLEPILOT_REPORT_BOOTSTRAP_TOKEN') ?: '';
 
 require_once(__DIR__ . '/lib/setup.php');
-

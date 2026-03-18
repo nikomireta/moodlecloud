@@ -3,6 +3,7 @@ package provisioning
 import (
 	"context"
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/base64"
 	"errors"
 	"fmt"
@@ -152,6 +153,16 @@ func InitialAdminPassword(secret string, siteID string) string {
 
 func DatabasePassword(secret string, siteID string) string {
 	return derivedPassword(secret, "database", siteID, "Db!")
+}
+
+func ReportBootstrapToken(secret string, siteID string) string {
+	sum := sha256.Sum256([]byte(strings.TrimSpace(secret) + ":report-bootstrap:" + strings.TrimSpace(siteID)))
+	return base64.RawURLEncoding.EncodeToString(sum[:])
+}
+
+func ValidateReportBootstrapToken(secret, siteID, provided string) bool {
+	expected := ReportBootstrapToken(secret, siteID)
+	return subtle.ConstantTimeCompare([]byte(strings.TrimSpace(expected)), []byte(strings.TrimSpace(provided))) == 1
 }
 
 func derivedPassword(secret, scope, siteID, prefix string) string {

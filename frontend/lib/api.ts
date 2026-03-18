@@ -206,6 +206,76 @@ export type SiteBackupsResponse = {
   backups: SiteBackupItem[]
 }
 
+export type SiteReportSummaryMetrics = {
+  login_count: number
+  active_users: number
+  submissions: number
+  avg_online_seconds: number
+  avg_online_label: string
+}
+
+export type SiteReportRecentActivityItem = {
+  user_name: string
+  action: string
+  occurred_at: string
+  ip_address: string
+}
+
+export type SiteReportCourseCompletionItem = {
+  course_id: number
+  course_name: string
+  enrolled: number
+  completed: number
+  in_progress: number
+  not_started: number
+  completion_rate: number
+}
+
+export type SiteReportGradeRecapItem = {
+  course_id: number
+  course_name: string
+  average_grade: number
+  highest_grade: number
+  lowest_grade: number
+  passed: number
+  failed: number
+}
+
+export type SiteReportUserActivityItem = {
+  user_id: number
+  user_name: string
+  role_label: string
+  sessions: number
+  total_online_seconds: number
+  total_online_label: string
+  submissions: number
+  last_action_at: string
+}
+
+export type SiteReportSnapshotPayload = {
+  summary_metrics: SiteReportSummaryMetrics
+  recent_activity: SiteReportRecentActivityItem[]
+  course_completion_summary: SiteReportCourseCompletionItem[]
+  grade_recap_per_course: SiteReportGradeRecapItem[]
+  user_activity_summary: SiteReportUserActivityItem[]
+}
+
+export type SiteReportSnapshot = {
+  id: string
+  site_id: string
+  snapshot_key: string
+  period_key: string
+  period_start: string
+  period_end: string
+  payload: SiteReportSnapshotPayload
+  plugin_version: string
+  moodle_version: string
+  generated_at: string
+  received_at: string
+  created_at: string
+  updated_at: string
+}
+
 export type SiteSystemSummary = {
   moodle_version: string
   php_version: string
@@ -312,6 +382,10 @@ type SiteBackupMutationResponse = MessageResponse & {
 
 type SiteBackupSettingsMutationResponse = MessageResponse & {
   settings: SiteBackupSettings
+}
+
+type SiteReportSnapshotResponse = {
+  snapshot: SiteReportSnapshot
 }
 
 export class APIError extends Error {
@@ -550,6 +624,18 @@ export const api = {
 
   getSiteBackups(siteID: string) {
     return apiFetch<SiteBackupsResponse>(`/sites/${encodeURIComponent(siteID)}/backups`)
+  },
+
+  getLatestSiteReportSnapshot(siteID: string, input?: { snapshotKey?: string; periodKey?: string }) {
+    const search = new URLSearchParams()
+    if (input?.snapshotKey) {
+      search.set("snapshot_key", input.snapshotKey)
+    }
+    if (input?.periodKey) {
+      search.set("period_key", input.periodKey)
+    }
+    const suffix = search.size > 0 ? `?${search.toString()}` : ""
+    return apiFetch<SiteReportSnapshotResponse>(`/sites/${encodeURIComponent(siteID)}/reports/latest${suffix}`)
   },
 
   createSiteBackup(siteID: string) {

@@ -77,6 +77,7 @@ import {
   isAPIError,
   type SiteBackupItem,
   type SiteBackupSettings,
+  type SiteReportSnapshot,
   type SiteRuntimeStatus,
   type SiteSettingsResponse,
   type SiteSummary,
@@ -359,6 +360,57 @@ function formatBackupTimestamp(value?: string | null) {
   })
 }
 
+function formatReportClock(value?: string | null) {
+  const trimmed = value?.trim()
+  if (!trimmed) {
+    return "-"
+  }
+
+  const date = new Date(trimmed)
+  if (Number.isNaN(date.getTime())) {
+    return "-"
+  }
+
+  return date.toLocaleTimeString("id-ID", {
+    hour: "2-digit",
+    minute: "2-digit",
+  })
+}
+
+function formatReportDateInput(value?: string | null) {
+  const trimmed = value?.trim()
+  if (!trimmed) {
+    return ""
+  }
+
+  const date = new Date(trimmed)
+  if (Number.isNaN(date.getTime())) {
+    return ""
+  }
+
+  return date.toISOString().split("T")[0]
+}
+
+function formatReportLastAction(value?: string | null) {
+  const trimmed = value?.trim()
+  if (!trimmed) {
+    return "Belum tersedia"
+  }
+
+  const date = new Date(trimmed)
+  if (Number.isNaN(date.getTime())) {
+    return "Belum tersedia"
+  }
+
+  return date.toLocaleString("id-ID", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  })
+}
+
 function humanizeBackupTrigger(trigger: SiteBackupItem["trigger"] | string) {
   return trigger === "scheduled" ? "Otomatis" : "Manual"
 }
@@ -601,6 +653,9 @@ export default function SiteDetailPage({ params }: { params: Promise<{ subdomain
   const [periodeEnd, setPeriodeEnd] = useState(fmt(today))
   const [periodeError, setPeriodeError] = useState("")
   const [reportGenerated, setReportGenerated] = useState(true)
+  const [reportSnapshot, setReportSnapshot] = useState<SiteReportSnapshot | null>(null)
+  const [reportLoaded, setReportLoaded] = useState(false)
+  const [loadingReport, setLoadingReport] = useState(false)
 
   const handlePeriodeChange = (start: string, end: string) => {
     const s = new Date(start), e = new Date(end)
@@ -613,49 +668,48 @@ export default function SiteDetailPage({ params }: { params: Promise<{ subdomain
     setReportGenerated(false)
   }
 
-  // Dummy data varies slightly based on period start day
-  const seed = new Date(periodeStart).getDate()
-  const periodLogData = [
-    { user: "Budi Santoso",   action: "Mengakses kursus Matematika XI",     time: `${8 + (seed % 3)}:14`, date: periodeStart, ip: "180.244.x.x" },
-    { user: "Siti Rahayu",    action: "Mengumpulkan tugas Fisika",           time: `09:${20 + (seed % 10)}`, date: periodeStart, ip: "114.122.x.x" },
-    { user: "Ahmad Fauzi",    action: "Login ke sistem",                      time: "10:05", date: periodeStart, ip: "103.56.x.x" },
-    { user: "Dewi Kusuma",    action: "Membuat kuis baru - Kimia Bab 3",     time: "11:32", date: periodeStart, ip: "36.75.x.x" },
-    { user: "Rudi Hermawan",  action: "Menyelesaikan modul Biologi",         time: "13:45", date: periodeStart, ip: "180.244.x.x" },
-    { user: "Nina Putri",     action: "Mendaftar kursus Bahasa Inggris",     time: "14:10", date: periodeStart, ip: "202.43.x.x" },
-    { user: "Hendra Wijaya",  action: "Melihat nilai ujian",                 time: "15:22", date: periodeStart, ip: "125.162.x.x" },
-    { user: "Lestari S.",     action: "Membuka forum diskusi Fisika",        time: "16:08", date: periodeStart, ip: "103.56.x.x" },
-  ]
+  const reportPayload = reportSnapshot?.payload
+  const periodLogData = (reportPayload?.recent_activity ?? []).map((item) => ({
+    user: item.user_name,
+    action: item.action,
+    time: formatReportClock(item.occurred_at),
+    date: item.occurred_at,
+    ip: item.ip_address || "-",
+  }))
 
   const periodStats = {
-    loginCount:  220 + seed * 3,
-    activeUsers: 80  + seed * 2,
-    submissions: 45  + seed,
-    avgOnline:   `${18 + (seed % 10)}m`,
+    loginCount: reportPayload?.summary_metrics?.login_count ?? 0,
+    activeUsers: reportPayload?.summary_metrics?.active_users ?? 0,
+    submissions: reportPayload?.summary_metrics?.submissions ?? 0,
+    avgOnline: reportPayload?.summary_metrics?.avg_online_label ?? "0 m",
   }
 
-  const periodCompletion = [
-    { course: "Matematika XI",  enrolled: 38, completed: 22 + (seed % 5), inProgress: 10, notStarted: 6 },
-    { course: "Fisika Dasar",   enrolled: 32, completed: 18 + (seed % 4), inProgress:  8, notStarted: 6 },
-    { course: "Kimia Organik",  enrolled: 28, completed: 12 + (seed % 3), inProgress:  9, notStarted: 7 },
-    { course: "Biologi Sel",    enrolled: 35, completed: 28 + (seed % 4), inProgress:  5, notStarted: 2 },
-    { course: "Bahasa Inggris", enrolled: 40, completed: 35 + (seed % 3), inProgress:  4, notStarted: 1 },
-  ].map(r => ({ ...r, rate: Math.round(r.completed / r.enrolled * 100) }))
+  const periodCompletion = (reportPayload?.course_completion_summary ?? []).map((row) => ({
+    course: row.course_name,
+    enrolled: row.enrolled,
+    completed: row.completed,
+    inProgress: row.in_progress,
+    notStarted: row.not_started,
+    rate: row.completion_rate,
+  }))
 
-  const periodGrades = [
-    { course: "Matematika XI",  avg: 76 + (seed % 6), highest: 98, lowest: 40, passed: 30 + (seed % 4), failed: 8 - (seed % 3) },
-    { course: "Fisika Dasar",   avg: 80 + (seed % 5), highest: 100, lowest: 52, passed: 28 + (seed % 3), failed: 4 },
-    { course: "Kimia Organik",  avg: 70 + (seed % 7), highest: 95, lowest: 36, passed: 19 + (seed % 3), failed: 9 - (seed % 2) },
-    { course: "Biologi Sel",    avg: 84 + (seed % 4), highest: 100, lowest: 58, passed: 33 + (seed % 2), failed: 2 },
-    { course: "Bahasa Inggris", avg: 87 + (seed % 5), highest: 100, lowest: 68, passed: 39 + (seed % 1), failed: 1 },
-  ]
+  const periodGrades = (reportPayload?.grade_recap_per_course ?? []).map((row) => ({
+    course: row.course_name,
+    avg: row.average_grade,
+    highest: row.highest_grade,
+    lowest: row.lowest_grade,
+    passed: row.passed,
+    failed: row.failed,
+  }))
 
-  const periodUserActivity = [
-    { name: "Budi Santoso",  role: "Siswa", sessions: 12 + seed % 5, timeOnline: `${2 + seed % 3}j 14m`, submissions: 3, lastAction: "Matematika XI" },
-    { name: "Siti Rahayu",   role: "Siswa", sessions: 18 + seed % 4, timeOnline: `${3 + seed % 2}j 40m`, submissions: 5, lastAction: "Fisika Dasar" },
-    { name: "Ahmad Fauzi",   role: "Siswa", sessions:  9 + seed % 3, timeOnline: `${1 + seed % 2}j 55m`, submissions: 2, lastAction: "Kimia Organik" },
-    { name: "Dewi Kusuma",   role: "Guru",  sessions: 22 + seed % 6, timeOnline: `${4 + seed % 3}j 10m`, submissions: 0, lastAction: "Kelola Kuis" },
-    { name: "Nina Putri",    role: "Siswa", sessions:  7 + seed % 2, timeOnline: `${1 + seed % 2}j 20m`, submissions: 1, lastAction: "Bahasa Inggris" },
-  ]
+  const periodUserActivity = (reportPayload?.user_activity_summary ?? []).map((row) => ({
+    name: row.user_name,
+    role: row.role_label,
+    sessions: row.sessions,
+    timeOnline: row.total_online_label,
+    submissions: row.submissions,
+    lastAction: formatReportLastAction(row.last_action_at),
+  }))
 
   const loadSiteContext = async (siteSubdomain: string) => {
     const siteResponse = await api.getSiteBySubdomain(siteSubdomain)
@@ -710,6 +764,46 @@ export default function SiteDetailPage({ params }: { params: Promise<{ subdomain
     }
   }
 
+  const applyReportSnapshot = (snapshot: SiteReportSnapshot | null) => {
+    setReportSnapshot(snapshot)
+    setReportLoaded(true)
+    setReportGenerated(true)
+
+    if (!snapshot) {
+      return
+    }
+
+    const nextStart = formatReportDateInput(snapshot.period_start)
+    const nextEnd = formatReportDateInput(snapshot.period_end)
+
+    if (nextStart) {
+      setPeriodeStart(nextStart)
+    }
+    if (nextEnd) {
+      setPeriodeEnd(nextEnd)
+    }
+  }
+
+  const loadReportSnapshot = async (siteID: string, options?: { silent?: boolean }) => {
+    setLoadingReport(true)
+    try {
+      const response = await api.getLatestSiteReportSnapshot(siteID)
+      applyReportSnapshot(response.snapshot)
+    } catch (error) {
+      if (isAPIError(error) && error.status === 404) {
+        applyReportSnapshot(null)
+        return
+      }
+      setReportLoaded(false)
+      setReportGenerated(false)
+      if (!options?.silent) {
+        toast.error(isAPIError(error) ? error.message : "Gagal memuat laporan situs")
+      }
+    } finally {
+      setLoadingReport(false)
+    }
+  }
+
   useEffect(() => {
     const requestedTab = searchParams.get("tab")
     if (requestedTab === "ringkasan" || requestedTab === "laporan" || requestedTab === "backup" || requestedTab === "pengaturan") {
@@ -721,6 +815,10 @@ export default function SiteDetailPage({ params }: { params: Promise<{ subdomain
     let cancelled = false
 
     const load = async () => {
+      setReportSnapshot(null)
+      setReportLoaded(false)
+      setLoadingReport(false)
+      setReportGenerated(true)
       setBackupSettings(null)
       setSiteBackups([])
       setBackupLoaded(false)
@@ -745,6 +843,13 @@ export default function SiteDetailPage({ params }: { params: Promise<{ subdomain
       cancelled = true
     }
   }, [subdomain])
+
+  useEffect(() => {
+    if (activeTab !== "laporan" || !siteData || reportLoaded || loadingReport || !reportGenerated) {
+      return
+    }
+    void loadReportSnapshot(siteData.id, { silent: true })
+  }, [activeTab, loadingReport, reportGenerated, reportLoaded, siteData])
 
   useEffect(() => {
     if (activeTab !== "backup" || !siteData || backupLoaded || loadingBackups) {
@@ -858,6 +963,14 @@ export default function SiteDetailPage({ params }: { params: Promise<{ subdomain
 
   const handleCopyUrl = () => {
     navigator.clipboard.writeText(siteUrl)
+  }
+
+  const handleGenerateReport = async () => {
+    if (!siteData || periodeError) {
+      return
+    }
+
+    await loadReportSnapshot(siteData.id)
   }
 
   const handleCreateBackup = async () => {
@@ -1310,8 +1423,8 @@ export default function SiteDetailPage({ params }: { params: Promise<{ subdomain
                     </div>
                     <Button
                       size="sm"
-                      onClick={() => setReportGenerated(true)}
-                      disabled={!!periodeError}
+                      onClick={() => void handleGenerateReport()}
+                      disabled={!!periodeError || loadingReport}
                     >
                       Tampilkan Laporan
                     </Button>

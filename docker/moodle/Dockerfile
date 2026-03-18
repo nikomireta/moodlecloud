@@ -25,6 +25,8 @@ RUN mkdir -p /var/www/html /var/www/moodledata /run/php && \
     rm -f /tmp/moodle.tgz && \
     chown -R www-data:www-data /var/www/html /var/www/moodledata
 
+COPY --chown=www-data:www-data plugins/local/moodlepilot_report /var/www/html/public/local/moodlepilot_report
+
 COPY files/config.php.template /opt/moodle/config.php.template
 COPY files/php.ini /usr/local/etc/php/conf.d/moodle.ini
 COPY files/nginx.conf /etc/nginx/nginx.conf

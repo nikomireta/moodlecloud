@@ -14,6 +14,7 @@ type Config struct {
 	AppEnv                   string
 	HTTPAddr                 string
 	FrontendOrigin           string
+	SiteInternalAPIBaseURL   string
 	DatabaseURL              string
 	SiteDBAdminURL           string
 	BackupS3Endpoint         string
@@ -76,6 +77,7 @@ func Load() (Config, error) {
 		AppEnv:                   getEnv("APP_ENV", "development"),
 		HTTPAddr:                 getEnv("HTTP_ADDR", ":8080"),
 		FrontendOrigin:           getEnv("FRONTEND_ORIGIN", "http://localhost:3000"),
+		SiteInternalAPIBaseURL:   getEnv("SITE_INTERNAL_API_BASE_URL", "http://host.docker.internal:8080"),
 		DatabaseURL:              getEnv("DATABASE_URL", "postgres://postgres:postgres@localhost:5432/moodlepilot?sslmode=disable"),
 		SiteDBAdminURL:           getEnv("SITE_DB_ADMIN_URL", "postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable"),
 		BackupS3Endpoint:         getEnv("BACKUP_S3_ENDPOINT", "http://localhost:9000"),

@@ -499,6 +499,7 @@ func (r *DockerLocalRuntime) ensureContainer(ctx context.Context, name, image st
 	hostConfig := &container.HostConfig{
 		RestartPolicy: container.RestartPolicy{Name: "unless-stopped"},
 		Binds:         []string{fmt.Sprintf("%s:/var/www/moodledata", metadata.VolumeName)},
+		ExtraHosts:    []string{"host.docker.internal:host-gateway"},
 		Resources:     resources,
 	}
 	networkingConfig := &networktypes.NetworkingConfig{
@@ -987,6 +988,10 @@ func (r *DockerLocalRuntime) runtimeEnv(site store.Site, metadata store.SiteRunt
 		fmt.Sprintf("MOODLE_WWWROOT=%s", site.SiteURL),
 		"MOODLE_DATAROOT=/var/www/moodledata",
 		"MOODLE_ADMIN_PATH=admin",
+		fmt.Sprintf("MOODLEPILOT_SITE_ID=%s", site.ID.String()),
+		"MOODLEPILOT_REPORT_AUTO_AUTHORIZE=1",
+		fmt.Sprintf("MOODLEPILOT_API_BASE_URL=%s", strings.TrimRight(strings.TrimSpace(r.cfg.SiteInternalAPIBaseURL), "/")),
+		fmt.Sprintf("MOODLEPILOT_REPORT_BOOTSTRAP_TOKEN=%s", ReportBootstrapToken(r.cfg.SiteRuntimeSecret, site.ID.String())),
 	}
 }
 

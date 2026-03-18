@@ -1,6 +1,7 @@
 package store
 
 import (
+	"encoding/json"
 	"time"
 
 	"github.com/google/uuid"
@@ -191,6 +192,36 @@ type SiteBackup struct {
 	UpdatedAt     time.Time  `json:"updated_at"`
 }
 
+type SiteReportConnection struct {
+	SiteID          uuid.UUID `json:"site_id"`
+	IngestTokenHash string    `json:"-"`
+	SiteURLSnapshot string    `json:"site_url_snapshot"`
+	PluginVersion   string    `json:"plugin_version"`
+	MoodleVersion   string    `json:"moodle_version"`
+	Capabilities    []string  `json:"capabilities"`
+	LastError       string    `json:"last_error"`
+	RegisteredAt    time.Time `json:"registered_at"`
+	LastSeenAt      time.Time `json:"last_seen_at"`
+	CreatedAt       time.Time `json:"created_at"`
+	UpdatedAt       time.Time `json:"updated_at"`
+}
+
+type SiteReportSnapshot struct {
+	ID            uuid.UUID       `json:"id"`
+	SiteID        uuid.UUID       `json:"site_id"`
+	SnapshotKey   string          `json:"snapshot_key"`
+	PeriodKey     string          `json:"period_key"`
+	PeriodStart   time.Time       `json:"period_start"`
+	PeriodEnd     time.Time       `json:"period_end"`
+	Payload       json.RawMessage `json:"payload"`
+	PluginVersion string          `json:"plugin_version"`
+	MoodleVersion string          `json:"moodle_version"`
+	GeneratedAt   time.Time       `json:"generated_at"`
+	ReceivedAt    time.Time       `json:"received_at"`
+	CreatedAt     time.Time       `json:"created_at"`
+	UpdatedAt     time.Time       `json:"updated_at"`
+}
+
 type Notification struct {
 	ID        uuid.UUID  `json:"id"`
 	UserID    uuid.UUID  `json:"user_id"`
@@ -257,6 +288,37 @@ type UpdateSiteURLsParams struct {
 	SiteID      uuid.UUID
 	SiteURL     string
 	AdminURL    string
+}
+
+type UpsertSiteReportConnectionParams struct {
+	SiteID          uuid.UUID
+	IngestTokenHash string
+	SiteURLSnapshot string
+	PluginVersion   string
+	MoodleVersion   string
+	Capabilities    []string
+	LastError       string
+}
+
+type UpdateSiteReportConnectionHeartbeatParams struct {
+	SiteID        uuid.UUID
+	PluginVersion string
+	MoodleVersion string
+	LastError     string
+	LastSeenAt    time.Time
+}
+
+type UpsertSiteReportSnapshotParams struct {
+	SiteID        uuid.UUID
+	SnapshotKey   string
+	PeriodKey     string
+	PeriodStart   time.Time
+	PeriodEnd     time.Time
+	Payload       json.RawMessage
+	PluginVersion string
+	MoodleVersion string
+	GeneratedAt   time.Time
+	ReceivedAt    time.Time
 }
 
 type HostCapacityPolicy struct {
