@@ -43,8 +43,166 @@ func (s *Store) Ping(ctx context.Context) error {
 	return s.pool.Ping(ctx)
 }
 
+func gibibytes(value int64) int64 {
+	return value * 1024 * 1024 * 1024
+}
+
+func planFeatures(users, storage, deployment, backup, support, sla string) map[string]interface{} {
+	return map[string]interface{}{
+		"sites":        "1 situs",
+		"users":        users,
+		"storage":      storage,
+		"deployment":   deployment,
+		"backup":       backup,
+		"support":      support,
+		"ssl":          true,
+		"customDomain": true,
+		"sla":          sla,
+	}
+}
+
 func (s *Store) SeedPlans(ctx context.Context) error {
 	plans := []Plan{
+		{
+			Code:              "kelas-10",
+			Name:              "Kelas 10",
+			Description:       "Untuk kelas, pelatihan, dan sekolah kecil",
+			PriceMonthly:      int64Ptr(149000),
+			PriceYearly:       int64Ptr(1430000),
+			Features:          planFeatures("10 pengguna", "10 GB", "Managed single instance", "Harian", "Email", "99.5%"),
+			UsersActiveLimit:  10,
+			StorageBytesLimit: gibibytes(10),
+			WebCPUMillicores:  500,
+			WebMemoryMiB:      1024,
+			CronCPUMillicores: 250,
+			CronMemoryMiB:     512,
+		},
+		{
+			Code:              "kelas-50",
+			Name:              "Kelas 50",
+			Description:       "Untuk kelas, pelatihan, dan sekolah kecil",
+			PriceMonthly:      int64Ptr(299000),
+			PriceYearly:       int64Ptr(2870000),
+			Features:          planFeatures("50 pengguna", "25 GB", "Managed single instance", "Harian", "Email", "99.5%"),
+			UsersActiveLimit:  50,
+			StorageBytesLimit: gibibytes(25),
+			WebCPUMillicores:  750,
+			WebMemoryMiB:      1280,
+			CronCPUMillicores: 250,
+			CronMemoryMiB:     512,
+		},
+		{
+			Code:              "kelas-100",
+			Name:              "Kelas 100",
+			Description:       "Untuk kelas, pelatihan, dan sekolah kecil",
+			PriceMonthly:      int64Ptr(499000),
+			PriceYearly:       int64Ptr(4790000),
+			Features:          planFeatures("100 pengguna", "50 GB", "Managed single instance", "Harian", "Email", "99.5%"),
+			UsersActiveLimit:  100,
+			StorageBytesLimit: gibibytes(50),
+			WebCPUMillicores:  1000,
+			WebMemoryMiB:      1536,
+			CronCPUMillicores: 250,
+			CronMemoryMiB:     512,
+		},
+		{
+			Code:              "institusi-300",
+			Name:              "Institusi 300",
+			Description:       "Untuk kampus, lembaga, dan operasional harian yang stabil",
+			PriceMonthly:      int64Ptr(1499000),
+			PriceYearly:       int64Ptr(14390000),
+			Features:          planFeatures("300 pengguna", "200 GB", "Dedicated VPS", "Harian", "Prioritas", "99.9%"),
+			UsersActiveLimit:  300,
+			StorageBytesLimit: gibibytes(200),
+			WebCPUMillicores:  1500,
+			WebMemoryMiB:      2048,
+			CronCPUMillicores: 500,
+			CronMemoryMiB:     768,
+		},
+		{
+			Code:              "institusi-500",
+			Name:              "Institusi 500",
+			Description:       "Untuk kampus, lembaga, dan operasional harian yang stabil",
+			PriceMonthly:      int64Ptr(2499000),
+			PriceYearly:       int64Ptr(23990000),
+			Features:          planFeatures("500 pengguna", "350 GB", "Dedicated VPS", "Harian", "Prioritas", "99.9%"),
+			UsersActiveLimit:  500,
+			StorageBytesLimit: gibibytes(350),
+			WebCPUMillicores:  2000,
+			WebMemoryMiB:      3072,
+			CronCPUMillicores: 500,
+			CronMemoryMiB:     1024,
+		},
+		{
+			Code:              "institusi-700",
+			Name:              "Institusi 700",
+			Description:       "Untuk kampus, lembaga, dan operasional harian yang stabil",
+			PriceMonthly:      int64Ptr(3499000),
+			PriceYearly:       int64Ptr(33590000),
+			Features:          planFeatures("700 pengguna", "500 GB", "Dedicated VPS", "Harian", "Prioritas", "99.9%"),
+			UsersActiveLimit:  700,
+			StorageBytesLimit: gibibytes(500),
+			WebCPUMillicores:  2500,
+			WebMemoryMiB:      4096,
+			CronCPUMillicores: 750,
+			CronMemoryMiB:     1024,
+		},
+		{
+			Code:              "skala-1000",
+			Name:              "Skala 1000",
+			Description:       "Untuk deployment besar, multi-unit, dan trafik tinggi",
+			PriceMonthly:      int64Ptr(5999000),
+			PriceYearly:       int64Ptr(57590000),
+			Features:          planFeatures("1.000 pengguna", "750 GB", "HA cluster", "Prioritas", "Dedicated", "99.95%"),
+			UsersActiveLimit:  1000,
+			StorageBytesLimit: gibibytes(750),
+			WebCPUMillicores:  3000,
+			WebMemoryMiB:      6144,
+			CronCPUMillicores: 1000,
+			CronMemoryMiB:     1536,
+		},
+		{
+			Code:              "skala-3000",
+			Name:              "Skala 3000",
+			Description:       "Untuk deployment besar, multi-unit, dan trafik tinggi",
+			PriceMonthly:      int64Ptr(12999000),
+			PriceYearly:       int64Ptr(124790000),
+			Features:          planFeatures("3.000 pengguna", "1.5 TB", "HA cluster", "Prioritas", "Dedicated", "99.95%"),
+			UsersActiveLimit:  3000,
+			StorageBytesLimit: gibibytes(1536),
+			WebCPUMillicores:  5000,
+			WebMemoryMiB:      8192,
+			CronCPUMillicores: 1500,
+			CronMemoryMiB:     2048,
+		},
+		{
+			Code:              "skala-5000",
+			Name:              "Skala 5000",
+			Description:       "Untuk deployment besar, multi-unit, dan trafik tinggi",
+			PriceMonthly:      int64Ptr(19999000),
+			PriceYearly:       int64Ptr(191990000),
+			Features:          planFeatures("5.000 pengguna", "3 TB", "HA cluster", "Prioritas", "Dedicated", "99.95%"),
+			UsersActiveLimit:  5000,
+			StorageBytesLimit: gibibytes(3072),
+			WebCPUMillicores:  7000,
+			WebMemoryMiB:      12288,
+			CronCPUMillicores: 2000,
+			CronMemoryMiB:     3072,
+		},
+		{
+			Code:              "skala-10000",
+			Name:              "Skala 10000",
+			Description:       "Untuk deployment besar, multi-unit, dan trafik tinggi",
+			PriceMonthly:      int64Ptr(34999000),
+			PriceYearly:       int64Ptr(335990000),
+			Features:          planFeatures("10.000 pengguna", "6 TB", "HA cluster", "Prioritas", "Dedicated", "99.95%"),
+			UsersActiveLimit:  10000,
+			StorageBytesLimit: gibibytes(6144),
+			WebCPUMillicores:  10000,
+			WebMemoryMiB:      16384,
+			CronCPUMillicores: 3000,
+			CronMemoryMiB:     4096,
+		},
 		{
 			Code:         "starter",
 			Name:         "Starter",
@@ -220,9 +378,19 @@ func (s *Store) ListPlans(ctx context.Context) ([]Plan, error) {
 			cron_cpu_millicores, cron_memory_mib, created_at, updated_at
 		FROM plans
 		ORDER BY CASE code
-			WHEN 'starter' THEN 1
-			WHEN 'professional' THEN 2
-			WHEN 'enterprise' THEN 3
+			WHEN 'kelas-10' THEN 1
+			WHEN 'kelas-50' THEN 2
+			WHEN 'kelas-100' THEN 3
+			WHEN 'institusi-300' THEN 4
+			WHEN 'institusi-500' THEN 5
+			WHEN 'institusi-700' THEN 6
+			WHEN 'skala-1000' THEN 7
+			WHEN 'skala-3000' THEN 8
+			WHEN 'skala-5000' THEN 9
+			WHEN 'skala-10000' THEN 10
+			WHEN 'starter' THEN 101
+			WHEN 'professional' THEN 102
+			WHEN 'enterprise' THEN 103
 			ELSE 999 END
 	`)
 	if err != nil {
@@ -769,6 +937,13 @@ func (s *Store) CreateSite(ctx context.Context, params CreateSiteParams, runtime
 		VALUES ($1, 0, 0, 0, 0, 'normal', FALSE, '', NULL, $2, $2)
 	`, site.ID, now); err != nil {
 		return Site{}, ProvisioningJob{}, nil, fmt.Errorf("insert site usage snapshot: %w", err)
+	}
+
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO site_backup_settings (site_id, enabled, frequency, retention_days, created_at, updated_at)
+		VALUES ($1, TRUE, 'daily', 30, $2, $2)
+	`, site.ID, now); err != nil {
+		return Site{}, ProvisioningJob{}, nil, fmt.Errorf("insert site backup settings: %w", err)
 	}
 
 	job := ProvisioningJob{

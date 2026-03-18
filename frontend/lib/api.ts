@@ -173,6 +173,39 @@ export type SiteUsageSnapshot = {
   updated_at: string
 }
 
+export type SiteBackupItem = {
+  id: string
+  owner_user_id: string
+  site_id?: string | null
+  site_name: string
+  site_subdomain: string
+  trigger: "manual" | "scheduled"
+  status: "pending" | "running" | "completed" | "failed"
+  object_key: string
+  size_bytes: number
+  sha256: string
+  expires_at?: string | null
+  last_error: string
+  started_at?: string | null
+  completed_at?: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type SiteBackupSettings = {
+  site_id: string
+  enabled: boolean
+  frequency: "daily" | "weekly" | "monthly"
+  retention_days: number
+  created_at: string
+  updated_at: string
+}
+
+export type SiteBackupsResponse = {
+  settings: SiteBackupSettings
+  backups: SiteBackupItem[]
+}
+
 export type SiteSystemSummary = {
   moodle_version: string
   php_version: string
@@ -271,6 +304,14 @@ type SiteMutationResponse = MessageResponse & {
 type SiteCustomDomainMutationResponse = MessageResponse & {
   site: SiteSummary
   custom_domain: SiteCustomDomainStatus
+}
+
+type SiteBackupMutationResponse = MessageResponse & {
+  backup: SiteBackupItem
+}
+
+type SiteBackupSettingsMutationResponse = MessageResponse & {
+  settings: SiteBackupSettings
 }
 
 export class APIError extends Error {
@@ -505,6 +546,31 @@ export const api = {
 
   getSiteSettings(siteID: string) {
     return apiFetch<SiteSettingsResponse>(`/sites/${encodeURIComponent(siteID)}/settings`)
+  },
+
+  getSiteBackups(siteID: string) {
+    return apiFetch<SiteBackupsResponse>(`/sites/${encodeURIComponent(siteID)}/backups`)
+  },
+
+  createSiteBackup(siteID: string) {
+    return apiFetch<SiteBackupMutationResponse>(`/sites/${encodeURIComponent(siteID)}/backups`, {
+      method: "POST",
+    })
+  },
+
+  updateSiteBackupSettings(siteID: string, input: { enabled: boolean; frequency: "daily" | "weekly" | "monthly"; retentionDays: number }) {
+    return apiFetch<SiteBackupSettingsMutationResponse>(`/sites/${encodeURIComponent(siteID)}/backups/settings`, {
+      method: "PUT",
+      body: JSON.stringify({
+        enabled: input.enabled,
+        frequency: input.frequency,
+        retention_days: input.retentionDays,
+      }),
+    })
+  },
+
+  downloadSiteBackup(siteID: string, backupID: string) {
+    return apiFetchBlob(`/sites/${encodeURIComponent(siteID)}/backups/${encodeURIComponent(backupID)}/download`)
   },
 
   updateSite(siteID: string, input: { name: string }) {

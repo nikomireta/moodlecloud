@@ -68,11 +68,20 @@ import {
 } from "@/components/ui/alert-dialog"
 import Link from "next/link"
 import { use, useEffect, useState } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { toast } from "sonner"
 import { ProtectedRoute } from "@/components/auth/protected-route"
 import { buildAdminURL, buildSiteURL, siteHostFromURL, SITE_BASE_DOMAIN } from "@/lib/site-url"
-import { api, isAPIError, type SiteRuntimeStatus, type SiteSettingsResponse, type SiteSummary, type SiteUsageSnapshot } from "@/lib/api"
+import {
+  api,
+  isAPIError,
+  type SiteBackupItem,
+  type SiteBackupSettings,
+  type SiteRuntimeStatus,
+  type SiteSettingsResponse,
+  type SiteSummary,
+  type SiteUsageSnapshot,
+} from "@/lib/api"
 
 // Mockup data
 const getSiteData = (subdomain: string) => ({
@@ -97,13 +106,6 @@ const getSiteData = (subdomain: string) => ({
     weekly: subdomain === "ut-learning" ? 2845 : subdomain === "smkn1jakarta" ? 892 : 312,
   },
 })
-
-const mockBackups = [
-  { id: "1", date: "12 Mar 2024, 02:00", size: "2.4 GB", type: "Otomatis", status: "success" },
-  { id: "2", date: "11 Mar 2024, 02:00", size: "2.3 GB", type: "Otomatis", status: "success" },
-  { id: "3", date: "10 Mar 2024, 14:30", size: "2.3 GB", type: "Manual", status: "success" },
-  { id: "4", date: "10 Mar 2024, 02:00", size: "2.2 GB", type: "Otomatis", status: "failed" },
-]
 
 const mockReports = [
   { id: "1", name: "Laporan Aktivitas Bulanan - Maret 2024", date: "1 Mar 2024", type: "Aktivitas", size: "245 KB" },
@@ -284,6 +286,278 @@ function formatSystemValue(value?: string | null) {
   return trimmed ? trimmed : "Belum tersedia"
 }
 
+type CapacityState = "normal" | "warning" | "critical"
+
+function formatRelativeTimestamp(value?: string | null) {
+  const trimmed = value?.trim()
+  if (!trimmed) {
+    return "Belum dicek"
+  }
+
+  const date = new Date(trimmed)
+  if (Number.isNaN(date.getTime())) {
+    return "Belum dicek"
+  }
+
+  const now = new Date()
+  const diffMs = now.getTime() - date.getTime()
+  const diffMinutes = Math.floor(diffMs / 60000)
+
+  if (diffMinutes < 1) {
+    return "Dicek baru saja"
+  }
+  if (diffMinutes < 60) {
+    return `Dicek ${diffMinutes} menit lalu`
+  }
+
+  const diffHours = Math.floor(diffMinutes / 60)
+  if (diffHours < 24) {
+    return `Dicek ${diffHours} jam lalu`
+  }
+
+  return `Dicek ${date.toLocaleDateString("id-ID", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  })}, ${date.toLocaleTimeString("id-ID", {
+    hour: "2-digit",
+    minute: "2-digit",
+  })}`
+}
+
+function formatLabel(value?: string | null) {
+  const trimmed = value?.trim()
+  if (!trimmed) {
+    return "Belum tersedia"
+  }
+
+  return trimmed
+    .replace(/[_-]+/g, " ")
+    .split(" ")
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+    .join(" ")
+}
+
+function formatBackupTimestamp(value?: string | null) {
+  const trimmed = value?.trim()
+  if (!trimmed) {
+    return "Belum tersedia"
+  }
+
+  const date = new Date(trimmed)
+  if (Number.isNaN(date.getTime())) {
+    return "Belum tersedia"
+  }
+
+  return date.toLocaleString("id-ID", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  })
+}
+
+function humanizeBackupTrigger(trigger: SiteBackupItem["trigger"] | string) {
+  return trigger === "scheduled" ? "Otomatis" : "Manual"
+}
+
+function getBackupDisplayState(backup: SiteBackupItem) {
+  switch (backup.status) {
+    case "completed":
+      return {
+        rowStatus: "success" as const,
+        title: "Berhasil",
+      }
+    case "failed":
+      return {
+        rowStatus: "failed" as const,
+        title: "Gagal",
+      }
+    default:
+      return {
+        rowStatus: "processing" as const,
+        title: backup.status === "running" ? "Berjalan" : "Menunggu",
+      }
+  }
+}
+
+function createDefaultBackupSettings(siteID?: string | null): SiteBackupSettings {
+  return {
+    site_id: siteID ?? "",
+    enabled: true,
+    frequency: "daily",
+    retention_days: 30,
+    created_at: "",
+    updated_at: "",
+  }
+}
+
+function buildUsageSummary(
+  used: number | null,
+  limit: number | null,
+  formatter: (value?: number | null) => string
+) {
+  if (typeof limit === "number" && limit > 0) {
+    return `${formatter(used)} / ${formatter(limit)}`
+  }
+  return formatter(used)
+}
+
+function getCapacityState(used: number | null, limit: number | null): CapacityState | null {
+  if (typeof used !== "number" || typeof limit !== "number" || limit <= 0) {
+    return null
+  }
+
+  const ratio = used / limit
+  if (ratio >= 0.95) {
+    return "critical"
+  }
+  if (ratio >= 0.8) {
+    return "warning"
+  }
+  return "normal"
+}
+
+function getCapacityTone(
+  state: CapacityState | null,
+  used: number | null,
+  limit: number | null
+) {
+  if (state === "critical") {
+    const overLimit = typeof used === "number" && typeof limit === "number" && limit > 0 && used >= limit
+    return {
+      label: overLimit ? "Melebihi batas" : "Kritis",
+      textClassName: "text-red-600",
+      progressClassName: "bg-red-500",
+    }
+  }
+  if (state === "warning") {
+    return {
+      label: "Mendekati batas",
+      textClassName: "text-amber-600",
+      progressClassName: "bg-amber-500",
+    }
+  }
+  if (state === "normal") {
+    return {
+      label: "Aman",
+      textClassName: "text-green-600",
+      progressClassName: "bg-green-500",
+    }
+  }
+  return {
+    label: "Belum tersedia",
+    textClassName: "text-muted-foreground",
+    progressClassName: "bg-muted-foreground",
+  }
+}
+
+function buildPrimaryAlert(params: {
+  serviceError: string
+  overallStatus?: string
+  webStatusText?: string
+  cronStatusText?: string
+  customDomainStatus?: string
+  customDomainError?: string
+  warningLevel?: string
+  overLimit?: boolean
+}) {
+  const serviceError = params.serviceError.trim()
+  if (serviceError) {
+    return {
+      title: "Perlu perhatian",
+      message: serviceError,
+      iconClassName: "text-red-600",
+      boxClassName: "bg-red-500/5 border-red-500/20",
+    }
+  }
+
+  if (params.customDomainStatus === "failed") {
+    return {
+      title: "Custom domain bermasalah",
+      message: params.customDomainError?.trim() || "Aktivasi custom domain gagal. Periksa DNS lalu coba lagi.",
+      iconClassName: "text-red-600",
+      boxClassName: "bg-red-500/5 border-red-500/20",
+    }
+  }
+
+  if (params.overallStatus === "failed") {
+    return {
+      title: "Runtime bermasalah",
+      message: "Situs sedang mengalami kegagalan runtime. Periksa layanan Web dan Cron sebelum digunakan.",
+      iconClassName: "text-red-600",
+      boxClassName: "bg-red-500/5 border-red-500/20",
+    }
+  }
+
+  if (params.overallStatus === "stopped") {
+    return {
+      title: "Situs sedang berhenti",
+      message: "Layanan situs sedang berhenti. Jalankan Start untuk mengaktifkan kembali situs.",
+      iconClassName: "text-amber-600",
+      boxClassName: "bg-amber-500/5 border-amber-500/20",
+    }
+  }
+
+  if (params.overallStatus === "provisioning") {
+    return {
+      title: "Layanan sedang disiapkan",
+      message: "Runtime situs masih dalam proses penyiapan. Tunggu beberapa saat lalu cek kembali.",
+      iconClassName: "text-amber-600",
+      boxClassName: "bg-amber-500/5 border-amber-500/20",
+    }
+  }
+
+  if (params.overallStatus === "degraded") {
+    const pendingService =
+      (params.webStatusText && params.webStatusText !== "Berjalan" && `Web: ${params.webStatusText}`) ||
+      (params.cronStatusText && params.cronStatusText !== "Berjalan" && `Cron: ${params.cronStatusText}`)
+
+    return {
+      title: "Layanan belum stabil",
+      message: pendingService || "Salah satu layanan situs belum sepenuhnya sehat. Pantau status Web dan Cron.",
+      iconClassName: "text-amber-600",
+      boxClassName: "bg-amber-500/5 border-amber-500/20",
+    }
+  }
+
+  if (params.overLimit || params.warningLevel === "over_limit") {
+    return {
+      title: "Batas paket terlampaui",
+      message: "Pemakaian resource sudah melewati batas paket. Segera kosongkan resource atau upgrade paket.",
+      iconClassName: "text-red-600",
+      boxClassName: "bg-red-500/5 border-red-500/20",
+    }
+  }
+
+  if (params.warningLevel === "critical") {
+    return {
+      title: "Pemakaian sangat tinggi",
+      message: "Pemakaian resource sudah sangat tinggi. Pantau storage dan pengguna aktif secepatnya.",
+      iconClassName: "text-amber-600",
+      boxClassName: "bg-amber-500/5 border-amber-500/20",
+    }
+  }
+
+  if (params.warningLevel === "warning") {
+    return {
+      title: "Mendekati batas paket",
+      message: "Pemakaian resource mulai mendekati batas. Pantau kapasitas storage dan pengguna aktif.",
+      iconClassName: "text-amber-600",
+      boxClassName: "bg-amber-500/5 border-amber-500/20",
+    }
+  }
+
+  return {
+    title: "Semua normal",
+    message: "Semua layanan berjalan normal.",
+    iconClassName: "text-green-600",
+    boxClassName: "bg-green-500/5 border-green-500/20",
+  }
+}
+
 
 
 function isRuntimeControllable(runtimeStatus: SiteRuntimeStatus | null) {
@@ -292,6 +566,7 @@ function isRuntimeControllable(runtimeStatus: SiteRuntimeStatus | null) {
 
 export default function SiteDetailPage({ params }: { params: Promise<{ subdomain: string }> }) {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { subdomain } = use(params)
   const mockSite = getSiteData(subdomain)
   const [siteData, setSiteData] = useState<SiteSummary | null>(null)
@@ -301,6 +576,13 @@ export default function SiteDetailPage({ params }: { params: Promise<{ subdomain
   const [runtimeError, setRuntimeError] = useState("")
   const [runtimeAction, setRuntimeAction] = useState<"start" | "restart" | "stop" | null>(null)
   const [activeTab, setActiveTab] = useState("ringkasan")
+  const [backupSettings, setBackupSettings] = useState<SiteBackupSettings | null>(null)
+  const [siteBackups, setSiteBackups] = useState<SiteBackupItem[]>([])
+  const [backupLoaded, setBackupLoaded] = useState(false)
+  const [loadingBackups, setLoadingBackups] = useState(false)
+  const [creatingBackup, setCreatingBackup] = useState(false)
+  const [savingBackupSettings, setSavingBackupSettings] = useState(false)
+  const [downloadingBackupID, setDownloadingBackupID] = useState<string | null>(null)
   const [siteNameInput, setSiteNameInput] = useState("")
   const [savingSiteName, setSavingSiteName] = useState(false)
   const [customDomainInput, setCustomDomainInput] = useState("")
@@ -412,10 +694,37 @@ export default function SiteDetailPage({ params }: { params: Promise<{ subdomain
     }
   }
 
+  const loadBackupContext = async (siteID: string, options?: { silent?: boolean }) => {
+    setLoadingBackups(true)
+    try {
+      const response = await api.getSiteBackups(siteID)
+      setBackupSettings(response.settings)
+      setSiteBackups(response.backups)
+      setBackupLoaded(true)
+    } catch (error) {
+      if (!options?.silent) {
+        toast.error(isAPIError(error) ? error.message : "Gagal memuat backup situs")
+      }
+    } finally {
+      setLoadingBackups(false)
+    }
+  }
+
+  useEffect(() => {
+    const requestedTab = searchParams.get("tab")
+    if (requestedTab === "ringkasan" || requestedTab === "laporan" || requestedTab === "backup" || requestedTab === "pengaturan") {
+      setActiveTab(requestedTab)
+    }
+  }, [searchParams])
+
   useEffect(() => {
     let cancelled = false
 
     const load = async () => {
+      setBackupSettings(null)
+      setSiteBackups([])
+      setBackupLoaded(false)
+      setLoadingBackups(false)
       try {
         const context = await loadSiteContext(subdomain)
         if (cancelled) {
@@ -437,6 +746,29 @@ export default function SiteDetailPage({ params }: { params: Promise<{ subdomain
     }
   }, [subdomain])
 
+  useEffect(() => {
+    if (activeTab !== "backup" || !siteData || backupLoaded || loadingBackups) {
+      return
+    }
+    void loadBackupContext(siteData.id)
+  }, [activeTab, backupLoaded, loadingBackups, siteData])
+
+  const hasActiveBackup = siteBackups.some((backup) => backup.status === "pending" || backup.status === "running")
+
+  useEffect(() => {
+    if (activeTab !== "backup" || !siteData || !backupLoaded || !hasActiveBackup) {
+      return
+    }
+
+    const intervalID = window.setInterval(() => {
+      void loadBackupContext(siteData.id, { silent: true })
+    }, 5000)
+
+    return () => {
+      window.clearInterval(intervalID)
+    }
+  }, [activeTab, backupLoaded, hasActiveBackup, siteData])
+
   const siteUrl = siteData?.site_url ?? buildSiteURL(subdomain)
   const adminUrl = siteData?.admin_url ?? buildAdminURL(subdomain)
   const siteHost = siteHostFromURL(siteUrl, subdomain)
@@ -456,10 +788,33 @@ export default function SiteDetailPage({ params }: { params: Promise<{ subdomain
     : 0
   const activeUsers = siteUsage?.users_active_count ?? null
   const activeUsersLimit = siteData?.users_active_limit ?? null
+  const activeUsersPercent = typeof activeUsers === "number" && typeof activeUsersLimit === "number" && activeUsersLimit > 0
+    ? (activeUsers / activeUsersLimit) * 100
+    : 0
   const systemSummary = runtimeStatus?.system ?? null
   const serviceError = runtimeError || runtimeStatus?.last_error || siteUsage?.last_error || ""
+  const storageCapacityState = getCapacityState(storageUsed, storageLimit)
+  const userCapacityState = getCapacityState(activeUsers, activeUsersLimit)
+  const storageCapacityTone = getCapacityTone(storageCapacityState, storageUsed, storageLimit)
+  const userCapacityTone = getCapacityTone(userCapacityState, activeUsers, activeUsersLimit)
+  const storageSummary = buildUsageSummary(storageUsed, storageLimit, formatBytes)
+  const activeUsersSummary = buildUsageSummary(activeUsers, activeUsersLimit, formatCount)
+  const lastCheckedText = formatRelativeTimestamp(runtimeMetadata?.last_health_checked_at ?? siteUsage?.measured_at ?? null)
+  const primaryAlert = buildPrimaryAlert({
+    serviceError,
+    overallStatus: runtimeStatus?.overall_status,
+    webStatusText: webService?.status_text,
+    cronStatusText: cronService?.status_text,
+    customDomainStatus: customDomain?.status,
+    customDomainError: customDomain?.last_error,
+    warningLevel: siteUsage?.warning_level,
+    overLimit: siteUsage?.over_limit,
+  })
+  const statusSubtitle = primaryAlert.title === "Semua normal" ? lastCheckedText : primaryAlert.message
   const deleteConfirmationMatches = deleteConfirmation.trim() === subdomain
   const canControlRuntime = isRuntimeControllable(runtimeStatus)
+  const effectiveBackupSettings = backupSettings ?? createDefaultBackupSettings(siteData?.id)
+  const backupItems = siteBackups
   const canStart =
     canControlRuntime &&
     ((webService?.state ?? "unknown") !== "running" || (cronService?.state ?? "unknown") !== "running")
@@ -503,6 +858,69 @@ export default function SiteDetailPage({ params }: { params: Promise<{ subdomain
 
   const handleCopyUrl = () => {
     navigator.clipboard.writeText(siteUrl)
+  }
+
+  const handleCreateBackup = async () => {
+    if (!siteData) {
+      return
+    }
+
+    setCreatingBackup(true)
+    try {
+      const response = await api.createSiteBackup(siteData.id)
+      setSiteBackups((current) => [response.backup, ...current.filter((item) => item.id !== response.backup.id)])
+      setBackupLoaded(true)
+      toast.success(response.message)
+    } catch (error) {
+      toast.error(isAPIError(error) ? error.message : "Gagal menjalankan backup")
+    } finally {
+      setCreatingBackup(false)
+    }
+  }
+
+  const handleDownloadBackup = async (backup: SiteBackupItem) => {
+    if (!siteData) {
+      return
+    }
+
+    setDownloadingBackupID(backup.id)
+    try {
+      const blob = await api.downloadSiteBackup(siteData.id, backup.id)
+      const url = window.URL.createObjectURL(blob)
+      const link = document.createElement("a")
+      link.href = url
+      link.download = `site-backup-${backup.site_subdomain}.tar.gz`
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      window.URL.revokeObjectURL(url)
+    } catch (error) {
+      toast.error(isAPIError(error) ? error.message : "Gagal mengunduh backup")
+    } finally {
+      setDownloadingBackupID(null)
+    }
+  }
+
+  const handleSaveBackupSettings = async () => {
+    if (!siteData) {
+      return
+    }
+
+    setSavingBackupSettings(true)
+    try {
+      const response = await api.updateSiteBackupSettings(siteData.id, {
+        enabled: effectiveBackupSettings.enabled,
+        frequency: effectiveBackupSettings.frequency,
+        retentionDays: effectiveBackupSettings.retention_days,
+      })
+      setBackupSettings(response.settings)
+      setBackupLoaded(true)
+      toast.success(response.message)
+    } catch (error) {
+      toast.error(isAPIError(error) ? error.message : "Gagal menyimpan pengaturan backup")
+    } finally {
+      setSavingBackupSettings(false)
+    }
   }
 
   const handleSaveSiteName = async () => {
@@ -703,7 +1121,7 @@ export default function SiteDetailPage({ params }: { params: Promise<{ subdomain
                     </div>
                     <div>
                       <p className={`text-lg font-semibold ${runtimeBadge.className.split(" ")[0]}`}>{runtimeBadge.label}</p>
-                      <p className="text-xs text-muted-foreground">Status Situs</p>
+                      <p className="text-xs text-muted-foreground line-clamp-2">{statusSubtitle}</p>
                     </div>
                   </div>
                 </Card>
@@ -713,9 +1131,9 @@ export default function SiteDetailPage({ params }: { params: Promise<{ subdomain
                       <HardDrive className="h-5 w-5 text-purple-500" />
                     </div>
                     <div>
-                      <p className="text-lg font-semibold">{formatBytes(storageUsed)}</p>
-                      <p className="text-xs text-muted-foreground">
-                        Storage Terpakai{typeof storageLimit === "number" ? ` / ${formatBytes(storageLimit)}` : ""}
+                      <p className="text-lg font-semibold">{storageSummary}</p>
+                      <p className={`text-xs ${storageCapacityTone.textClassName}`}>
+                        Storage {storageCapacityTone.label}
                       </p>
                     </div>
                   </div>
@@ -726,9 +1144,9 @@ export default function SiteDetailPage({ params }: { params: Promise<{ subdomain
                       <Users className="h-5 w-5 text-orange-500" />
                     </div>
                     <div>
-                      <p className="text-lg font-semibold">{formatCount(activeUsers)}</p>
-                      <p className="text-xs text-muted-foreground">
-                        Pengguna Aktif{typeof activeUsersLimit === "number" ? ` / ${formatCount(activeUsersLimit)}` : ""}
+                      <p className="text-lg font-semibold">{activeUsersSummary}</p>
+                      <p className={`text-xs ${userCapacityTone.textClassName}`}>
+                        Pengguna aktif {userCapacityTone.label}
                       </p>
                     </div>
                   </div>
@@ -759,31 +1177,42 @@ export default function SiteDetailPage({ params }: { params: Promise<{ subdomain
                         </Badge>
                       </div>
                     ) : null}
-                    <div className="py-2 border-b border-border">
-                      <p className="text-xs text-muted-foreground">Kondisi Terakhir</p>
+                    <div className={`rounded-lg border p-3 ${primaryAlert.boxClassName}`}>
+                      <p className="text-xs text-muted-foreground">{primaryAlert.title}</p>
                       <div className="flex items-start gap-2 mt-2">
-                        <AlertTriangle className="h-4 w-4 text-muted-foreground mt-0.5" />
+                        <AlertTriangle className={`h-4 w-4 mt-0.5 ${primaryAlert.iconClassName}`} />
                         <p className="text-sm font-medium break-words">
-                          {serviceError ? serviceError : "Semua layanan berjalan normal."}
+                          {primaryAlert.message}
                         </p>
                       </div>
                     </div>
                     <div className="pt-1">
                       <div className="flex justify-between text-sm mb-2">
                         <span className="text-muted-foreground">Storage</span>
-                        <span className="font-medium">
-                          {formatBytes(storageUsed)} / {typeof storageLimit === "number" ? formatBytes(storageLimit) : "Belum tersedia"}
+                        <span className={`font-medium ${storageCapacityTone.textClassName}`}>
+                          {storageSummary}
                         </span>
                       </div>
                       <div className="h-2 bg-muted rounded-full overflow-hidden">
-                        <div className="h-full bg-primary rounded-full transition-all" style={{ width: formatPercentage(storagePercent) }} />
+                        <div className={`h-full rounded-full transition-all ${storageCapacityTone.progressClassName}`} style={{ width: formatPercentage(storagePercent) }} />
+                      </div>
+                    </div>
+                    <div className="pt-1">
+                      <div className="flex justify-between text-sm mb-2">
+                        <span className="text-muted-foreground">Pengguna Aktif</span>
+                        <span className={`font-medium ${userCapacityTone.textClassName}`}>
+                          {activeUsersSummary}
+                        </span>
+                      </div>
+                      <div className="h-2 bg-muted rounded-full overflow-hidden">
+                        <div className={`h-full rounded-full transition-all ${userCapacityTone.progressClassName}`} style={{ width: formatPercentage(activeUsersPercent) }} />
                       </div>
                     </div>
                   </div>
                 </Card>
 
                 <Card className="p-6 border-border">
-                  <h3 className="font-semibold mb-4">Informasi Sistem</h3>
+                  <h3 className="font-semibold mb-4">Akses & Sistem</h3>
                   <div className="space-y-3">
                     <div className="flex items-center justify-between py-2 border-b border-border">
                       <div className="flex items-center gap-2">
@@ -805,6 +1234,31 @@ export default function SiteDetailPage({ params }: { params: Promise<{ subdomain
                         <span className="text-sm text-muted-foreground">Database</span>
                       </div>
                       <span className="text-sm font-medium">{formatSystemValue(systemSummary?.database_label)}</span>
+                    </div>
+                    <div className="flex items-center justify-between py-2 border-b border-border">
+                      <div className="flex items-center gap-2">
+                        <ClipboardList className="h-4 w-4 text-muted-foreground" />
+                        <span className="text-sm text-muted-foreground">Paket</span>
+                      </div>
+                      <span className="text-sm font-medium">{formatLabel(siteData?.plan_code)}</span>
+                    </div>
+                    <div className="flex items-center justify-between py-2 border-b border-border">
+                      <div className="flex items-center gap-2">
+                        <Globe className="h-4 w-4 text-muted-foreground" />
+                        <span className="text-sm text-muted-foreground">Region</span>
+                      </div>
+                      <span className="text-sm font-medium">{formatLabel(siteData?.region)}</span>
+                    </div>
+                    <div className="flex items-center justify-between py-2 border-b border-border">
+                      <div className="flex items-center gap-2">
+                        <Mail className="h-4 w-4 text-muted-foreground" />
+                        <span className="text-sm text-muted-foreground">Admin Email</span>
+                      </div>
+                      <span className="text-sm font-medium break-all text-right">{formatSystemValue(siteData?.admin_email)}</span>
+                    </div>
+                    <div className="py-2 border-b border-border">
+                      <p className="text-sm text-muted-foreground mb-1">Domain Aktif</p>
+                      <p className="text-sm font-medium break-all">{currentDomainHost}</p>
                     </div>
                     <div className="py-2 border-b border-border">
                       <p className="text-sm text-muted-foreground mb-1">URL Situs</p>
@@ -1125,37 +1579,62 @@ export default function SiteDetailPage({ params }: { params: Promise<{ subdomain
                 <Card className="p-6 border-border lg:col-span-2">
                   <div className="flex items-center justify-between mb-6">
                     <h3 className="font-semibold">Riwayat Backup</h3>
-                    <Button size="sm">
-                      <Download className="mr-2 h-4 w-4" />
+                    <Button size="sm" onClick={handleCreateBackup} disabled={!siteData || creatingBackup}>
+                      {creatingBackup ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : (
+                        <Download className="mr-2 h-4 w-4" />
+                      )}
                       Backup Sekarang
                     </Button>
                   </div>
                   <div className="border border-border rounded-lg divide-y divide-border">
-                    {mockBackups.map((backup) => (
-                      <div key={backup.id} className="flex items-center justify-between p-4">
-                        <div className="flex items-center gap-3">
-                          <div className={`flex h-9 w-9 items-center justify-center rounded-lg ${backup.status === "success" ? "bg-green-500/10" : "bg-red-500/10"}`}>
-                            {backup.status === "success" ? (
-                              <CheckCircle2 className="h-4 w-4 text-green-500" />
-                            ) : (
-                              <AlertCircle className="h-4 w-4 text-red-500" />
-                            )}
+                    {backupItems.map((backup) => {
+                      const displayState = getBackupDisplayState(backup)
+
+                      return (
+                        <div key={backup.id} className="flex items-center justify-between p-4">
+                          <div className="flex items-center gap-3">
+                            <div className={`flex h-9 w-9 items-center justify-center rounded-lg ${
+                              displayState.rowStatus === "success"
+                                ? "bg-green-500/10"
+                                : displayState.rowStatus === "failed"
+                                  ? "bg-red-500/10"
+                                  : "bg-amber-500/10"
+                            }`}>
+                              {displayState.rowStatus === "success" ? (
+                                <CheckCircle2 className="h-4 w-4 text-green-500" />
+                              ) : displayState.rowStatus === "failed" ? (
+                                <AlertCircle className="h-4 w-4 text-red-500" />
+                              ) : (
+                                <Loader2 className="h-4 w-4 text-amber-500 animate-spin" />
+                              )}
+                            </div>
+                            <div>
+                              <p className="text-sm font-medium">{formatBackupTimestamp(backup.completed_at ?? backup.started_at ?? backup.created_at)}</p>
+                              <p className="text-xs text-muted-foreground">{backup.status === "completed" ? formatBytes(backup.size_bytes) : "Belum tersedia"} - {humanizeBackupTrigger(backup.trigger)}</p>
+                            </div>
                           </div>
-                          <div>
-                            <p className="text-sm font-medium">{backup.date}</p>
-                            <p className="text-xs text-muted-foreground">{backup.size} - {backup.type}</p>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              disabled={backup.status !== "completed" || downloadingBackupID === backup.id}
+                              onClick={() => handleDownloadBackup(backup)}
+                            >
+                              {downloadingBackupID === backup.id ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <Download className="h-4 w-4" />
+                              )}
+                            </Button>
+                            <Button variant="ghost" size="sm" disabled>
+                              <Upload className="h-4 w-4" />
+                            </Button>
                           </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <Button variant="ghost" size="sm" disabled={backup.status === "failed"}>
-                            <Download className="h-4 w-4" />
-                          </Button>
-                          <Button variant="ghost" size="sm" disabled={backup.status === "failed"}>
-                            <Upload className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
+                      )
+                    })}
                   </div>
                 </Card>
 
@@ -1164,11 +1643,30 @@ export default function SiteDetailPage({ params }: { params: Promise<{ subdomain
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
                       <Label htmlFor="auto-backup" className="text-sm text-muted-foreground">Backup Otomatis</Label>
-                      <Switch id="auto-backup" defaultChecked />
+                      <Switch
+                        id="auto-backup"
+                        checked={effectiveBackupSettings.enabled}
+                        disabled={loadingBackups}
+                        onCheckedChange={(checked) =>
+                          setBackupSettings((current) => ({
+                            ...(current ?? createDefaultBackupSettings(siteData?.id)),
+                            enabled: checked,
+                          }))
+                        }
+                      />
                     </div>
                     <div>
                       <Label className="text-sm text-muted-foreground">Frekuensi</Label>
-                      <Select defaultValue="daily">
+                      <Select
+                        value={effectiveBackupSettings.frequency}
+                        onValueChange={(value: "daily" | "weekly" | "monthly") =>
+                          setBackupSettings((current) => ({
+                            ...(current ?? createDefaultBackupSettings(siteData?.id)),
+                            frequency: value,
+                          }))
+                        }
+                        disabled={loadingBackups}
+                      >
                         <SelectTrigger className="mt-2 border-border">
                           <SelectValue />
                         </SelectTrigger>
@@ -1181,7 +1679,16 @@ export default function SiteDetailPage({ params }: { params: Promise<{ subdomain
                     </div>
                     <div>
                       <Label className="text-sm text-muted-foreground">Retensi</Label>
-                      <Select defaultValue="30">
+                      <Select
+                        value={String(effectiveBackupSettings.retention_days)}
+                        onValueChange={(value) =>
+                          setBackupSettings((current) => ({
+                            ...(current ?? createDefaultBackupSettings(siteData?.id)),
+                            retention_days: Number(value),
+                          }))
+                        }
+                        disabled={loadingBackups}
+                      >
                         <SelectTrigger className="mt-2 border-border">
                           <SelectValue />
                         </SelectTrigger>
@@ -1192,7 +1699,16 @@ export default function SiteDetailPage({ params }: { params: Promise<{ subdomain
                         </SelectContent>
                       </Select>
                     </div>
-                    <Button className="w-full mt-4">Simpan Pengaturan</Button>
+                    <Button className="w-full mt-4" onClick={handleSaveBackupSettings} disabled={!siteData || loadingBackups || savingBackupSettings}>
+                      {savingBackupSettings ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Menyimpan...
+                        </>
+                      ) : (
+                        "Simpan Pengaturan"
+                      )}
+                    </Button>
                   </div>
                 </Card>
               </div>

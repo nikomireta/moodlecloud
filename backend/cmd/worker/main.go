@@ -6,6 +6,7 @@ import (
 
 	"github.com/hibiken/asynq"
 
+	"moodlepilot/backend/internal/backup"
 	"moodlepilot/backend/internal/config"
 	"moodlepilot/backend/internal/mail"
 	"moodlepilot/backend/internal/provisioning"
@@ -30,6 +31,10 @@ func main() {
 	if err != nil {
 		log.Fatalf("create provisioning runtime: %v", err)
 	}
+	backupStorage, err := backup.NewStorage(cfg)
+	if err != nil {
+		log.Fatalf("create backup storage: %v", err)
+	}
 
 	// Pre-pull: verify the Moodle Docker image is available locally at
 	// startup so we fail fast instead of discovering a missing image during
@@ -42,6 +47,7 @@ func main() {
 		Store:             st,
 		Mailer:            mail.NewSMTPMailer(cfg.SMTPHost, cfg.SMTPPort, cfg.SMTPFrom, cfg.FrontendOrigin),
 		Runtime:           runtime,
+		BackupStorage:     backupStorage,
 		SiteDBAdminURL:    cfg.SiteDBAdminURL,
 		SiteRuntimeSecret: cfg.SiteRuntimeSecret,
 		RedisAddr:         cfg.RedisAddr,
@@ -63,6 +69,9 @@ func main() {
 	mux.HandleFunc(provisioning.TaskTypeMeterSiteUsageSweep, handler.HandleMeterSiteUsageSweepTask)
 	mux.HandleFunc(provisioning.TaskTypeHealthCheckSweep, handler.HandleHealthCheckSweepTask)
 	mux.HandleFunc(provisioning.TaskTypeReconcileOrphanedJobs, handler.HandleReconcileOrphanedJobsTask)
+	mux.HandleFunc(provisioning.TaskTypeBackupSite, handler.HandleSiteBackupTask)
+	mux.HandleFunc(provisioning.TaskTypeBackupScheduleSweep, handler.HandleBackupScheduleSweepTask)
+	mux.HandleFunc(provisioning.TaskTypeBackupRetentionSweep, handler.HandleBackupRetentionSweepTask)
 
 	scheduler := asynq.NewScheduler(asynq.RedisClientOpt{
 		Addr:     cfg.RedisAddr,
@@ -76,6 +85,12 @@ func main() {
 	}
 	if _, err := scheduler.Register(cfg.ReconcileSchedule, provisioning.NewReconcileOrphanedJobsTask()); err != nil {
 		log.Fatalf("register reconcile schedule: %v", err)
+	}
+	if _, err := scheduler.Register(cfg.BackupScheduleSweep, provisioning.NewBackupScheduleSweepTask()); err != nil {
+		log.Fatalf("register backup schedule sweep: %v", err)
+	}
+	if _, err := scheduler.Register(cfg.BackupRetentionSweep, provisioning.NewBackupRetentionSweepTask()); err != nil {
+		log.Fatalf("register backup retention sweep: %v", err)
 	}
 	go func() {
 		if err := scheduler.Run(); err != nil {

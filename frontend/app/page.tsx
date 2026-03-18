@@ -4,9 +4,12 @@
 import { Header } from "@/components/layout/header"
 import { Footer } from "@/components/layout/footer"
 import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ArrowRight, CloudUpload, BarChart3, Lock, Users, Zap, CheckCircle2 } from "lucide-react"
 import Link from "next/link"
 import { useAuth } from "@/components/providers/auth-provider"
+import { formatPrice, getGroupStartingPlan, pricingPlanGroups } from "@/lib/pricing"
 
 export default function HomePage() {
   const { status } = useAuth()
@@ -31,7 +34,7 @@ export default function HomePage() {
                 <div className="mt-8 flex flex-col gap-3 sm:flex-row">
                   <Link href={isLoggedIn ? "/dashboard" : "/daftar"}>
                     <Button size="lg" className="w-full sm:w-auto">
-                      Mulai Gratis
+                      Mulai Sekarang
                       <ArrowRight className="ml-2 h-4 w-4" />
                     </Button>
                   </Link>
@@ -188,57 +191,82 @@ export default function HomePage() {
               </p>
             </div>
 
-            <div className="grid md:grid-cols-3 gap-8">
-              {[
-                {
-                  name: "Starter",
-                  price: "Gratis",
-                  description: "Untuk individu dan kelas kecil",
-                  features: ["1 situs Moodle", "hingga 100 pengguna", "2 GB storage", "Support email"]
-                },
-                {
-                  name: "Professional",
-                  price: "Rp 499K",
-                  period: "/bulan",
-                  description: "Untuk institusi menengah",
-                  features: ["Hingga 5 situs", "hingga 1000 pengguna", "100 GB storage", "Support prioritas", "Backup harian"],
-                  highlighted: true
-                },
-                {
-                  name: "Enterprise",
-                  price: "Custom",
-                  description: "Untuk institusi besar",
-                  features: ["Unlimited situs", "Unlimited pengguna", "Unlimited storage", "Dedicated support", "SLA guarantee"]
-                }
-              ].map((plan, idx) => (
-                <div key={idx} className={`rounded-lg border-2 p-8 transition-colors ${
-                  plan.highlighted 
-                    ? 'border-primary bg-card' 
-                    : 'border-border bg-card/50'
-                }`}>
-                  <h3 className="text-2xl font-bold mb-2">{plan.name}</h3>
-                  <p className="text-sm text-muted-foreground mb-4">{plan.description}</p>
-                  <div className="mb-6">
-                    <span className="text-3xl font-bold">{plan.price}</span>
-                    {plan.period && <span className="text-muted-foreground ml-1">{plan.period}</span>}
-                  </div>
-                  <ul className="space-y-3 mb-8">
-                    {plan.features.map((feature, i) => (
-                      <li key={i} className="flex items-center gap-3 text-sm">
-                        <CheckCircle2 className="h-4 w-4 text-success flex-shrink-0" />
-                        {feature}
-                      </li>
-                    ))}
-                  </ul>
-                  <Button 
-                    variant={plan.highlighted ? "default" : "outline"} 
-                    className="w-full"
-                  >
-                    Pilih Paket
-                  </Button>
-                </div>
-              ))}
-            </div>
+            <Tabs defaultValue={pricingPlanGroups[0]?.id} className="gap-6">
+              <TabsList className="mx-auto grid h-auto w-full max-w-2xl grid-cols-3">
+                {pricingPlanGroups.map((group) => (
+                  <TabsTrigger key={group.id} value={group.id} className="px-4 py-2">
+                    {group.name}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+
+              {pricingPlanGroups.map((group) => {
+                const startingPlan = getGroupStartingPlan(group)
+
+                return (
+                  <TabsContent key={group.id} value={group.id}>
+                    <div className="rounded-xl border border-border bg-card/60 p-6 sm:p-8">
+                      <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+                        <div>
+                          <div className="mb-2 flex items-center gap-2">
+                            <h3 className="text-2xl font-bold">{group.name}</h3>
+                            {group.popular && (
+                              <Badge variant="default">Populer</Badge>
+                            )}
+                          </div>
+                          <p className="max-w-2xl text-sm text-muted-foreground">{group.description}</p>
+                        </div>
+                        <div className="shrink-0 md:text-right">
+                          <p className="text-xs uppercase tracking-wide text-muted-foreground">Mulai dari</p>
+                          <p className="text-2xl font-bold">Rp {formatPrice(startingPlan.monthlyPrice)}/bulan</p>
+                        </div>
+                      </div>
+
+                      <div className={`grid gap-4 ${
+                        group.plans.length === 4
+                          ? "sm:grid-cols-2 xl:grid-cols-4"
+                          : "sm:grid-cols-2 xl:grid-cols-3"
+                      }`}>
+                        {group.plans.map((plan) => (
+                          <div
+                            key={plan.code}
+                            className={`rounded-lg border p-4 ${
+                              plan.recommended
+                                ? "border-primary bg-background"
+                                : "border-border bg-background/60"
+                            }`}
+                          >
+                            <div className="mb-3">
+                              <div className="mb-1 flex items-center gap-2">
+                                <h4 className="font-semibold">{plan.label}</h4>
+                                {plan.recommended && (
+                                  <Badge variant="outline" className="text-[10px]">
+                                    Pilihan utama
+                                  </Badge>
+                                )}
+                              </div>
+                              <p className="text-xs text-muted-foreground">
+                                {plan.usersLabel} • {plan.storageLabel}
+                              </p>
+                            </div>
+                            <p className="text-lg font-bold">Rp {formatPrice(plan.monthlyPrice)}</p>
+                            <p className="text-xs text-muted-foreground">/bulan</p>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="mt-6 flex justify-center">
+                        <Link href="/harga">
+                          <Button variant="outline">
+                            Lihat Detail Paket
+                          </Button>
+                        </Link>
+                      </div>
+                    </div>
+                  </TabsContent>
+                )
+              })}
+            </Tabs>
           </div>
         </section>
 
@@ -254,7 +282,7 @@ export default function HomePage() {
             <div className="flex flex-col gap-3 sm:flex-row justify-center">
               <Link href={isLoggedIn ? "/dashboard" : "/daftar"}>
                 <Button size="lg">
-                  Mulai Sekarang - Gratis
+                  Mulai Sekarang
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
               </Link>

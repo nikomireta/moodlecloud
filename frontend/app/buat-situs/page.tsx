@@ -21,6 +21,7 @@ import Link from "next/link"
 import { ProtectedRoute } from "@/components/auth/protected-route"
 import { useAuth } from "@/components/providers/auth-provider"
 import { api, isAPIError } from "@/lib/api"
+import { getTierByCode, pricingPlanOptions } from "@/lib/pricing"
 import { buildSiteURL, SITE_BASE_DOMAIN } from "@/lib/site-url"
 
 type Step = 1 | 2 | 3
@@ -155,6 +156,7 @@ export default function BuatSitusPage() {
   const isStep1Valid = formData.siteName && formData.subdomain && subdomainAvailable
   const isStep2Valid = formData.adminName && isEmailValid && formData.plan && formData.region
   const previewSiteURL = formData.subdomain ? buildSiteURL(formData.subdomain) : ""
+  const selectedPlan = getTierByCode(formData.plan)
 
   return (
     <ProtectedRoute>
@@ -353,24 +355,14 @@ export default function BuatSitusPage() {
                         <SelectValue placeholder="Pilih paket layanan" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="starter">
-                          <div className="flex flex-col items-start">
-                            <span>Starter - Gratis</span>
-                            <span className="text-xs text-muted-foreground">Hingga 50 pengguna</span>
-                          </div>
-                        </SelectItem>
-                        <SelectItem value="professional">
-                          <div className="flex flex-col items-start">
-                            <span>Professional - Rp 750.000/bulan</span>
-                            <span className="text-xs text-muted-foreground">Hingga 2.000 pengguna</span>
-                          </div>
-                        </SelectItem>
-                        <SelectItem value="enterprise">
-                          <div className="flex flex-col items-start">
-                            <span>Enterprise - Hubungi Sales</span>
-                            <span className="text-xs text-muted-foreground">Tidak terbatas</span>
-                          </div>
-                        </SelectItem>
+                        {pricingPlanOptions.map((plan) => (
+                          <SelectItem key={plan.code} value={plan.code}>
+                            <div className="flex flex-col items-start">
+                              <span>{plan.label} - Rp {plan.caption}</span>
+                              <span className="text-xs text-muted-foreground">{plan.description}</span>
+                            </div>
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>
@@ -430,7 +422,7 @@ export default function BuatSitusPage() {
                     </div>
                     <div className="flex justify-between">
                       <span className="text-sm text-muted-foreground">Paket</span>
-                      <span className="text-sm font-medium capitalize">{formData.plan}</span>
+                      <span className="text-sm font-medium">{selectedPlan?.label ?? formData.plan}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-sm text-muted-foreground">Lokasi Server</span>

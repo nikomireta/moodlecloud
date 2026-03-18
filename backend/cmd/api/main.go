@@ -9,15 +9,16 @@ import (
 
 	"github.com/hibiken/asynq"
 
+	"log/slog"
 	"moodlepilot/backend/internal/ai"
 	"moodlepilot/backend/internal/auth"
+	"moodlepilot/backend/internal/backup"
 	"moodlepilot/backend/internal/config"
 	"moodlepilot/backend/internal/coursegen"
 	"moodlepilot/backend/internal/httpapi"
 	"moodlepilot/backend/internal/mail"
 	"moodlepilot/backend/internal/provisioning"
 	"moodlepilot/backend/internal/store"
-	"log/slog"
 )
 
 func main() {
@@ -71,12 +72,16 @@ func main() {
 	}
 
 	mailer := mail.NewSMTPMailer(cfg.SMTPHost, cfg.SMTPPort, cfg.SMTPFrom, cfg.FrontendOrigin)
+	backupStorage, err := backup.NewStorage(cfg)
+	if err != nil {
+		log.Fatalf("create backup storage: %v", err)
+	}
 
 	aiLogger := slog.Default()
 	aiClient := ai.NewClient(aiLogger, cfg.AiApiKey, cfg.AiBaseURL, cfg.AiModel)
 	courseGen := coursegen.NewGenerator("assets/template.mbz")
 
-	server := httpapi.New(cfg, st, mailer, asynqClient, runtime, aiClient, courseGen)
+	server := httpapi.New(cfg, st, mailer, asynqClient, runtime, backupStorage, aiClient, courseGen)
 
 	httpServer := &http.Server{
 		Addr:    cfg.HTTPAddr,

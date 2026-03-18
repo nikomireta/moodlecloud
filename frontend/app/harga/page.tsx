@@ -6,7 +6,7 @@ import { Footer } from "@/components/layout/footer"
 import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
-import { CheckCircle2, X, HelpCircle, ArrowRight } from "lucide-react"
+import { CheckCircle2, ArrowRight } from "lucide-react"
 import Link from "next/link"
 import { useAuth } from "@/components/providers/auth-provider"
 import {
@@ -16,121 +16,11 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion"
 import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip"
-
-const plans = [
-  {
-    name: "Starter",
-    description: "Untuk individu dan kelas kecil",
-    monthlyPrice: 0,
-    yearlyPrice: 0,
-    features: {
-      sites: "1 situs",
-      users: "100 pengguna",
-      storage: "2 GB",
-      bandwidth: "10 GB/bulan",
-      backup: "Mingguan",
-      support: "Email",
-      ssl: true,
-      customDomain: false,
-      api: false,
-      analytics: false,
-      plugins: "Terbatas",
-      sla: "-"
-    }
-  },
-  {
-    name: "Professional",
-    description: "Untuk institusi menengah",
-    monthlyPrice: 499000,
-    yearlyPrice: 4990000,
-    popular: true,
-    features: {
-      sites: "5 situs",
-      users: "1.000 pengguna",
-      storage: "100 GB",
-      bandwidth: "100 GB/bulan",
-      backup: "Harian",
-      support: "Prioritas",
-      ssl: true,
-      customDomain: true,
-      api: true,
-      analytics: true,
-      plugins: "Semua",
-      sla: "99.5%"
-    }
-  },
-  {
-    name: "Enterprise",
-    description: "Untuk institusi besar",
-    monthlyPrice: null,
-    yearlyPrice: null,
-    features: {
-      sites: "Unlimited",
-      users: "Unlimited",
-      storage: "Unlimited",
-      bandwidth: "Unlimited",
-      backup: "Real-time",
-      support: "Dedicated",
-      ssl: true,
-      customDomain: true,
-      api: true,
-      analytics: true,
-      plugins: "Semua + Custom",
-      sla: "99.99%"
-    }
-  }
-]
-
-const featureComparison = [
-  { name: "Jumlah Situs", key: "sites", tooltip: "Jumlah situs Moodle yang dapat dibuat" },
-  { name: "Pengguna", key: "users", tooltip: "Maksimal pengguna per situs" },
-  { name: "Storage", key: "storage", tooltip: "Kapasitas penyimpanan total" },
-  { name: "Bandwidth", key: "bandwidth", tooltip: "Transfer data per bulan" },
-  { name: "Backup", key: "backup", tooltip: "Frekuensi backup otomatis" },
-  { name: "Support", key: "support", tooltip: "Jenis dukungan pelanggan" },
-  { name: "SSL Certificate", key: "ssl", tooltip: "Sertifikat SSL gratis" },
-  { name: "Custom Domain", key: "customDomain", tooltip: "Gunakan domain sendiri" },
-  { name: "API Access", key: "api", tooltip: "Akses API untuk integrasi" },
-  { name: "Analytics", key: "analytics", tooltip: "Dashboard analitik lanjutan" },
-  { name: "Plugin Support", key: "plugins", tooltip: "Dukungan plugin Moodle" },
-  { name: "SLA Uptime", key: "sla", tooltip: "Jaminan uptime" },
-]
-
-const faqs = [
-  {
-    question: "Apakah ada biaya tersembunyi?",
-    answer: "Tidak ada biaya tersembunyi. Harga yang tertera sudah mencakup semua fitur yang disebutkan. Anda hanya membayar sesuai paket yang dipilih."
-  },
-  {
-    question: "Bagaimana cara upgrade atau downgrade paket?",
-    answer: "Anda dapat mengubah paket kapan saja melalui dashboard. Perubahan akan berlaku di siklus billing berikutnya. Untuk upgrade, Anda akan dikenakan biaya prorata."
-  },
-  {
-    question: "Apakah ada periode trial gratis?",
-    answer: "Ya, paket Starter gratis selamanya. Untuk paket berbayar, kami menyediakan trial 14 hari dengan akses penuh ke semua fitur."
-  },
-  {
-    question: "Metode pembayaran apa yang tersedia?",
-    answer: "Kami menerima pembayaran melalui kartu kredit/debit, transfer bank, dan e-wallet populer di Indonesia seperti GoPay, OVO, dan DANA."
-  },
-  {
-    question: "Bagaimana jika saya melebihi kuota?",
-    answer: "Anda akan menerima notifikasi saat mendekati batas kuota. Jika melebihi, layanan tidak akan langsung berhenti, namun kami akan menghubungi Anda untuk upgrade paket."
-  },
-  {
-    question: "Apakah data saya aman?",
-    answer: "Keamanan adalah prioritas kami. Semua data dienkripsi, backup dilakukan secara rutin, dan server kami memenuhi standar keamanan internasional."
-  }
-]
-
-function formatPrice(price: number) {
-  return new Intl.NumberFormat('id-ID').format(price)
-}
+  formatPrice,
+  pricingFaqs,
+  pricingPlanGroups,
+  pricingSiteNote,
+} from "@/lib/pricing"
 
 export default function PricingPage() {
   const [isYearly, setIsYearly] = useState(false)
@@ -140,204 +30,132 @@ export default function PricingPage() {
   return (
     <div className="flex min-h-screen flex-col bg-background">
       <Header />
-      
+
       <main className="flex-1">
-        {/* Hero Section */}
         <section className="border-b border-border py-16 sm:py-24">
-          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 text-center">
+          <div className="mx-auto max-w-7xl px-4 text-center sm:px-6 lg:px-8">
             <Badge variant="outline" className="mb-4">
               Harga Transparan
             </Badge>
-            <h1 className="text-3xl font-bold tracking-tight sm:text-4xl lg:text-5xl text-balance">
-              Paket Harga yang Sesuai Kebutuhan
+            <h1 className="text-3xl font-bold tracking-tight text-balance sm:text-4xl lg:text-5xl">
+              Pilih Paket Sesuai Kapasitas yang Dibutuhkan
             </h1>
-            <p className="mt-4 text-lg text-muted-foreground max-w-2xl mx-auto text-pretty">
-              Mulai gratis, upgrade kapan saja. Hemat hingga 20% dengan pembayaran tahunan.
+            <p className="mx-auto mt-4 max-w-2xl text-lg text-muted-foreground text-pretty">
+              Semua paket di bawah ini langsung bisa dipilih. Tinggal sesuaikan jumlah pengguna dan kebutuhan storage Anda.
             </p>
 
-            {/* Billing Toggle */}
             <div className="mt-8 flex items-center justify-center gap-3">
-              <span className={`text-sm ${!isYearly ? 'text-foreground font-medium' : 'text-muted-foreground'}`}>
+              <span className={`text-sm ${!isYearly ? "text-foreground font-medium" : "text-muted-foreground"}`}>
                 Bulanan
               </span>
-              <Switch
-                checked={isYearly}
-                onCheckedChange={setIsYearly}
-              />
-              <span className={`text-sm ${isYearly ? 'text-foreground font-medium' : 'text-muted-foreground'}`}>
+              <Switch checked={isYearly} onCheckedChange={setIsYearly} />
+              <span className={`text-sm ${isYearly ? "text-foreground font-medium" : "text-muted-foreground"}`}>
                 Tahunan
               </span>
               {isYearly && (
-                <Badge className="bg-green-500/10 text-green-600 border-green-500/20">
+                <Badge className="border-green-500/20 bg-green-500/10 text-green-600">
                   Hemat 20%
                 </Badge>
               )}
             </div>
+
+            <p className="mx-auto mt-6 max-w-2xl text-sm text-muted-foreground">
+              {pricingSiteNote}
+            </p>
           </div>
         </section>
 
-        {/* Pricing Cards */}
         <section className="py-16">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-            <div className="grid md:grid-cols-3 gap-8">
-              {plans.map((plan) => (
-                <div
-                  key={plan.name}
-                  className={`relative rounded-xl border-2 p-8 transition-all ${
-                    plan.popular
-                      ? 'border-primary bg-card shadow-lg scale-105'
-                      : 'border-border bg-card/50 hover:border-muted-foreground/50'
-                  }`}
-                >
-                  {plan.popular && (
-                    <Badge className="absolute -top-3 left-1/2 -translate-x-1/2 bg-primary text-primary-foreground">
-                      Direkomendasikan
-                    </Badge>
-                  )}
-
-                  <div className="mb-6">
-                    <h3 className="text-2xl font-bold">{plan.name}</h3>
-                    <p className="text-sm text-muted-foreground mt-1">{plan.description}</p>
+            <div className="space-y-16">
+              {pricingPlanGroups.map((group) => (
+                <section key={group.id}>
+                  <div className="mb-8">
+                    <h2 className="text-2xl font-bold tracking-tight">{group.name}</h2>
+                    <p className="mt-2 max-w-2xl text-muted-foreground">{group.description}</p>
                   </div>
 
-                  <div className="mb-6">
-                    {plan.monthlyPrice !== null ? (
-                      <>
-                        <span className="text-4xl font-bold">
-                          Rp {formatPrice(isYearly ? Math.round(plan.yearlyPrice! / 12) : plan.monthlyPrice)}
-                        </span>
-                        <span className="text-muted-foreground">/bulan</span>
-                        {isYearly && plan.yearlyPrice! > 0 && (
-                          <p className="text-sm text-muted-foreground mt-1">
-                            Ditagih Rp {formatPrice(plan.yearlyPrice!)}/tahun
-                          </p>
-                        )}
-                      </>
-                    ) : (
-                      <span className="text-4xl font-bold">Custom</span>
-                    )}
+                  <div
+                    className={`grid gap-6 ${
+                      group.plans.length === 4
+                        ? "md:grid-cols-2 xl:grid-cols-4"
+                        : "md:grid-cols-2 xl:grid-cols-3"
+                    }`}
+                  >
+                    {group.plans.map((plan) => {
+                      const displayPrice = isYearly ? plan.yearlyPrice : plan.monthlyPrice
+                      const equivalentMonthly = Math.round(plan.yearlyPrice / 12)
+
+                      return (
+                        <div
+                          key={plan.code}
+                          className={`relative rounded-xl border-2 p-8 transition-all ${
+                            plan.recommended
+                              ? "border-primary bg-card shadow-lg"
+                              : "border-border bg-card/50 hover:border-muted-foreground/50"
+                          }`}
+                        >
+                          {plan.recommended && (
+                            <Badge className="absolute -top-3 left-6 bg-primary text-primary-foreground">
+                              Direkomendasikan
+                            </Badge>
+                          )}
+
+                          <div className="mb-6">
+                            <h3 className="text-2xl font-bold">{plan.label}</h3>
+                            <p className="mt-1 text-sm text-muted-foreground">{plan.groupLabel}</p>
+                          </div>
+
+                          <div className="mb-6">
+                            <span className="text-4xl font-bold">
+                              Rp {formatPrice(displayPrice)}
+                            </span>
+                            <span className="text-muted-foreground">/{isYearly ? "tahun" : "bulan"}</span>
+                            {isYearly && (
+                              <p className="mt-1 text-sm text-muted-foreground">
+                                Setara Rp {formatPrice(equivalentMonthly)}/bulan
+                              </p>
+                            )}
+                          </div>
+
+                          <div className="mb-6 space-y-2 text-sm">
+                            <p className="font-medium">{plan.usersLabel}</p>
+                            <p className="text-muted-foreground">{plan.storageLabel} storage</p>
+                          </div>
+
+                          <ul className="mb-8 space-y-3">
+                            {plan.highlights.map((highlight) => (
+                              <li key={highlight} className="flex items-center gap-3 text-sm">
+                                <CheckCircle2 className="h-4 w-4 flex-shrink-0 text-green-500" />
+                                {highlight}
+                              </li>
+                            ))}
+                          </ul>
+
+                          <Link href={isLoggedIn ? "/buat-situs" : "/daftar"}>
+                            <Button className="w-full" variant={plan.recommended ? "default" : "outline"}>
+                              Pilih Paket
+                              <ArrowRight className="ml-2 h-4 w-4" />
+                            </Button>
+                          </Link>
+                        </div>
+                      )
+                    })}
                   </div>
-
-                  <ul className="space-y-3 mb-8">
-                    <li className="flex items-center gap-3 text-sm">
-                      <CheckCircle2 className="h-4 w-4 text-green-500 flex-shrink-0" />
-                      {plan.features.sites}
-                    </li>
-                    <li className="flex items-center gap-3 text-sm">
-                      <CheckCircle2 className="h-4 w-4 text-green-500 flex-shrink-0" />
-                      Hingga {plan.features.users}
-                    </li>
-                    <li className="flex items-center gap-3 text-sm">
-                      <CheckCircle2 className="h-4 w-4 text-green-500 flex-shrink-0" />
-                      {plan.features.storage} storage
-                    </li>
-                    <li className="flex items-center gap-3 text-sm">
-                      <CheckCircle2 className="h-4 w-4 text-green-500 flex-shrink-0" />
-                      Backup {plan.features.backup.toLowerCase()}
-                    </li>
-                    <li className="flex items-center gap-3 text-sm">
-                      <CheckCircle2 className="h-4 w-4 text-green-500 flex-shrink-0" />
-                      Support {plan.features.support.toLowerCase()}
-                    </li>
-                    {plan.features.customDomain && (
-                      <li className="flex items-center gap-3 text-sm">
-                        <CheckCircle2 className="h-4 w-4 text-green-500 flex-shrink-0" />
-                        Custom domain
-                      </li>
-                    )}
-                    {plan.features.api && (
-                      <li className="flex items-center gap-3 text-sm">
-                        <CheckCircle2 className="h-4 w-4 text-green-500 flex-shrink-0" />
-                        API access
-                      </li>
-                    )}
-                  </ul>
-
-                  <Link href={plan.monthlyPrice !== null ? (isLoggedIn ? "/dashboard" : "/daftar") : "/kontak"}>
-                    <Button
-                      className="w-full"
-                      variant={plan.popular ? "default" : "outline"}
-                    >
-                      {plan.monthlyPrice === 0 ? "Mulai Gratis" : plan.monthlyPrice === null ? "Hubungi Sales" : "Pilih Paket"}
-                      {plan.monthlyPrice !== null && <ArrowRight className="ml-2 h-4 w-4" />}
-                    </Button>
-                  </Link>
-                </div>
+                </section>
               ))}
             </div>
           </div>
         </section>
 
-        {/* Feature Comparison Table */}
-        <section className="border-t border-border py-16">
-          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-            <h2 className="text-2xl font-bold text-center mb-12">
-              Perbandingan Fitur Lengkap
-            </h2>
-
-            <div className="overflow-x-auto">
-              <table className="w-full border-collapse">
-                <thead>
-                  <tr className="border-b border-border">
-                    <th className="text-left py-4 px-4 font-medium text-muted-foreground">Fitur</th>
-                    {plans.map((plan) => (
-                      <th key={plan.name} className="text-center py-4 px-4 font-semibold">
-                        {plan.name}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  <TooltipProvider>
-                    {featureComparison.map((feature) => (
-                      <tr key={feature.key} className="border-b border-border hover:bg-muted/50">
-                        <td className="py-4 px-4">
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm">{feature.name}</span>
-                            <Tooltip>
-                              <TooltipTrigger>
-                                <HelpCircle className="h-3.5 w-3.5 text-muted-foreground" />
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                <p>{feature.tooltip}</p>
-                              </TooltipContent>
-                            </Tooltip>
-                          </div>
-                        </td>
-                        {plans.map((plan) => {
-                          const value = plan.features[feature.key as keyof typeof plan.features]
-                          return (
-                            <td key={plan.name} className="text-center py-4 px-4">
-                              {typeof value === 'boolean' ? (
-                                value ? (
-                                  <CheckCircle2 className="h-5 w-5 text-green-500 mx-auto" />
-                                ) : (
-                                  <X className="h-5 w-5 text-muted-foreground mx-auto" />
-                                )
-                              ) : (
-                                <span className="text-sm">{value}</span>
-                              )}
-                            </td>
-                          )
-                        })}
-                      </tr>
-                    ))}
-                  </TooltipProvider>
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </section>
-
-        {/* FAQ Section */}
         <section className="border-t border-border py-16">
           <div className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
-            <h2 className="text-2xl font-bold text-center mb-12">
+            <h2 className="mb-12 text-center text-2xl font-bold">
               Pertanyaan yang Sering Diajukan
             </h2>
 
             <Accordion type="single" collapsible className="w-full">
-              {faqs.map((faq, idx) => (
+              {pricingFaqs.map((faq, idx) => (
                 <AccordionItem key={idx} value={`item-${idx}`}>
                   <AccordionTrigger className="text-left">
                     {faq.question}
@@ -351,19 +169,18 @@ export default function PricingPage() {
           </div>
         </section>
 
-        {/* CTA Section */}
-        <section className="border-t border-border py-16 bg-muted/30">
-          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 text-center">
-            <h2 className="text-2xl font-bold mb-4">
-              Masih Ragu? Coba Dulu Gratis!
+        <section className="border-t border-border bg-muted/30 py-16">
+          <div className="mx-auto max-w-7xl px-4 text-center sm:px-6 lg:px-8">
+            <h2 className="mb-4 text-2xl font-bold">
+              Butuh Bantuan Memilih Paket?
             </h2>
-            <p className="text-muted-foreground mb-8 max-w-xl mx-auto">
-              Daftar sekarang dan dapatkan akses ke paket Starter gratis selamanya. Tidak perlu kartu kredit.
+            <p className="mx-auto mb-8 max-w-xl text-muted-foreground">
+              Ceritakan jumlah pengguna aktif dan kebutuhan storage Anda. Kami bantu pilih paket yang paling pas tanpa harus menebak-nebak.
             </p>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Link href={isLoggedIn ? "/dashboard" : "/daftar"}>
+            <div className="flex flex-col justify-center gap-4 sm:flex-row">
+              <Link href={isLoggedIn ? "/buat-situs" : "/daftar"}>
                 <Button size="lg">
-                  Mulai Gratis Sekarang
+                  Mulai Pilih Paket
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
               </Link>

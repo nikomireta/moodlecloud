@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/hibiken/asynq"
 
+	"moodlepilot/backend/internal/backup"
 	"moodlepilot/backend/internal/mail"
 	"moodlepilot/backend/internal/store"
 )
@@ -19,6 +20,7 @@ type Handler struct {
 	Store             *store.Store
 	Mailer            mail.Mailer
 	Runtime           Runtime
+	BackupStorage     *backup.Storage
 	SiteDBAdminURL    string
 	SiteRuntimeSecret string
 	RedisAddr         string

@@ -163,6 +163,34 @@ type SiteUsageSnapshot struct {
 	UpdatedAt         time.Time  `json:"updated_at"`
 }
 
+type SiteBackupSettings struct {
+	SiteID        uuid.UUID `json:"site_id"`
+	Enabled       bool      `json:"enabled"`
+	Frequency     string    `json:"frequency"`
+	RetentionDays int       `json:"retention_days"`
+	CreatedAt     time.Time `json:"created_at"`
+	UpdatedAt     time.Time `json:"updated_at"`
+}
+
+type SiteBackup struct {
+	ID            uuid.UUID  `json:"id"`
+	OwnerUserID   uuid.UUID  `json:"owner_user_id"`
+	SiteID        *uuid.UUID `json:"site_id,omitempty"`
+	SiteName      string     `json:"site_name"`
+	SiteSubdomain string     `json:"site_subdomain"`
+	Trigger       string     `json:"trigger"`
+	Status        string     `json:"status"`
+	ObjectKey     string     `json:"object_key"`
+	SizeBytes     int64      `json:"size_bytes"`
+	SHA256        string     `json:"sha256"`
+	ExpiresAt     *time.Time `json:"expires_at,omitempty"`
+	LastError     string     `json:"last_error"`
+	StartedAt     *time.Time `json:"started_at,omitempty"`
+	CompletedAt   *time.Time `json:"completed_at,omitempty"`
+	CreatedAt     time.Time  `json:"created_at"`
+	UpdatedAt     time.Time  `json:"updated_at"`
+}
+
 type Notification struct {
 	ID        uuid.UUID  `json:"id"`
 	UserID    uuid.UUID  `json:"user_id"`
@@ -258,6 +286,36 @@ type UpsertSiteCustomDomainParams struct {
 	LastError         string
 	VerifiedAt        *time.Time
 	ActivatedAt       *time.Time
+}
+
+type CreateSiteBackupParams struct {
+	Site          Site
+	Trigger       string
+	RetentionDays int
+}
+
+type UpdateSiteBackupSettingsParams struct {
+	OwnerUserID   uuid.UUID
+	SiteID        uuid.UUID
+	Enabled       bool
+	Frequency     string
+	RetentionDays int
+}
+
+type SiteBackupExecutionContext struct {
+	Backup   SiteBackup
+	Settings SiteBackupSettings
+	Site     Site
+	Job      ProvisioningJob
+	Runtime  *SiteRuntimeMetadata
+}
+
+type SiteBackupScheduleCandidate struct {
+	Site                   Site
+	Job                    ProvisioningJob
+	Runtime                *SiteRuntimeMetadata
+	Settings               SiteBackupSettings
+	LastSuccessfulBackupAt *time.Time
 }
 
 type CreateNotificationParams struct {

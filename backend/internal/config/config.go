@@ -16,6 +16,14 @@ type Config struct {
 	FrontendOrigin           string
 	DatabaseURL              string
 	SiteDBAdminURL           string
+	BackupS3Endpoint         string
+	BackupS3Region           string
+	BackupS3Bucket           string
+	BackupS3AccessKey        string
+	BackupS3SecretKey        string
+	BackupS3UsePathStyle     bool
+	BackupS3UseTLS           bool
+	BackupDockerPostgresSvc  string
 	RedisAddr                string
 	RedisPassword            string
 	SMTPHost                 string
@@ -40,6 +48,8 @@ type Config struct {
 	UsageMeterSchedule       string
 	HealthCheckSchedule      string
 	ReconcileSchedule        string
+	BackupScheduleSweep      string
+	BackupRetentionSweep     string
 	HostStorageBudgetBytes   int64
 	HostCPUMillicoresBudget  int
 	HostMemoryMiBBudget      int
@@ -68,6 +78,12 @@ func Load() (Config, error) {
 		FrontendOrigin:           getEnv("FRONTEND_ORIGIN", "http://localhost:3000"),
 		DatabaseURL:              getEnv("DATABASE_URL", "postgres://postgres:postgres@localhost:5432/moodlepilot?sslmode=disable"),
 		SiteDBAdminURL:           getEnv("SITE_DB_ADMIN_URL", "postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable"),
+		BackupS3Endpoint:         getEnv("BACKUP_S3_ENDPOINT", "http://localhost:9000"),
+		BackupS3Region:           getEnv("BACKUP_S3_REGION", "us-east-1"),
+		BackupS3Bucket:           getEnv("BACKUP_S3_BUCKET", "moodlepilot-backups"),
+		BackupS3AccessKey:        getEnv("BACKUP_S3_ACCESS_KEY", "minioadmin"),
+		BackupS3SecretKey:        getEnv("BACKUP_S3_SECRET_KEY", "minioadmin"),
+		BackupDockerPostgresSvc:  getEnv("BACKUP_DOCKER_POSTGRES_SERVICE", "postgres"),
 		RedisAddr:                getEnv("REDIS_ADDR", "localhost:6379"),
 		RedisPassword:            os.Getenv("REDIS_PASSWORD"),
 		SMTPHost:                 getEnv("SMTP_HOST", "localhost"),
@@ -86,6 +102,8 @@ func Load() (Config, error) {
 		UsageMeterSchedule:       getEnv("USAGE_METER_SCHEDULE", "@every 5m"),
 		HealthCheckSchedule:      getEnv("HEALTH_CHECK_SCHEDULE", "@every 2m"),
 		ReconcileSchedule:        getEnv("RECONCILE_SCHEDULE", "@every 1m"),
+		BackupScheduleSweep:      getEnv("BACKUP_SCHEDULE_SWEEP", "@every 1h"),
+		BackupRetentionSweep:     getEnv("BACKUP_RETENTION_SWEEP", "@every 24h"),
 		RunMigrations:            getEnv("RUN_MIGRATIONS", "true") != "false",
 		PlaywrightSeedName:       getEnv("PLAYWRIGHT_SEED_NAME", "Playwright Test"),
 		PlaywrightSeedEmail:      getEnv("PLAYWRIGHT_SEED_EMAIL", "playwright@example.com"),
@@ -101,6 +119,8 @@ func Load() (Config, error) {
 		cfg.SeedPlaywrightUser = value != "false"
 	}
 	cfg.CustomDomainEnabled = getEnv("CUSTOM_DOMAIN_ENABLED", "false") == "true"
+	cfg.BackupS3UsePathStyle = getEnv("BACKUP_S3_USE_PATH_STYLE", "true") != "false"
+	cfg.BackupS3UseTLS = getEnv("BACKUP_S3_USE_TLS", "false") == "true"
 
 	smtpPort, err := strconv.Atoi(getEnv("SMTP_PORT", "1025"))
 	if err != nil {

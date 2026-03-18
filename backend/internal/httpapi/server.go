@@ -19,6 +19,7 @@ import (
 
 	"moodlepilot/backend/internal/ai"
 	"moodlepilot/backend/internal/auth"
+	"moodlepilot/backend/internal/backup"
 	"moodlepilot/backend/internal/config"
 	"moodlepilot/backend/internal/coursegen"
 	"moodlepilot/backend/internal/mail"
@@ -32,6 +33,7 @@ type Server struct {
 	mailer      mail.Mailer
 	asynqClient *asynq.Client
 	runtime     provisioning.Runtime
+	backupStore *backup.Storage
 	aiClient    *ai.Client
 	courseGen   *coursegen.Generator
 }
@@ -48,13 +50,14 @@ const (
 	sessionContextKey contextKey = "session"
 )
 
-func New(cfg config.Config, st *store.Store, mailer mail.Mailer, client *asynq.Client, runtime provisioning.Runtime, aiClient *ai.Client, courseGen *coursegen.Generator) *Server {
+func New(cfg config.Config, st *store.Store, mailer mail.Mailer, client *asynq.Client, runtime provisioning.Runtime, backupStore *backup.Storage, aiClient *ai.Client, courseGen *coursegen.Generator) *Server {
 	return &Server{
 		cfg:         cfg,
 		store:       st,
 		mailer:      mailer,
 		asynqClient: client,
 		runtime:     runtime,
+		backupStore: backupStore,
 		aiClient:    aiClient,
 		courseGen:   courseGen,
 	}
@@ -112,6 +115,10 @@ func (s *Server) Router() http.Handler {
 			r.Get("/sites/{siteID}/usage", s.handleGetSiteUsage)
 			r.Get("/sites/{siteID}/provisioning", s.handleGetProvisioningBySiteID)
 			r.Get("/sites/{siteID}/runtime", s.handleGetSiteRuntime)
+			r.Get("/sites/{siteID}/backups", s.handleGetSiteBackups)
+			r.Post("/sites/{siteID}/backups", s.handleCreateSiteBackup)
+			r.Put("/sites/{siteID}/backups/settings", s.handleUpdateSiteBackupSettings)
+			r.Get("/sites/{siteID}/backups/{backupID}/download", s.handleDownloadSiteBackup)
 			r.Post("/sites/{siteID}/runtime/start", s.handleStartSiteRuntime)
 			r.Post("/sites/{siteID}/runtime/restart", s.handleRestartSiteRuntime)
 			r.Post("/sites/{siteID}/runtime/stop", s.handleStopSiteRuntime)
