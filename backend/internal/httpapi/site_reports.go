@@ -37,15 +37,19 @@ func (s *Server) handleIngestSiteReportSnapshot(w http.ResponseWriter, r *http.R
 	}
 
 	var req struct {
-		SiteID        string          `json:"site_id"`
-		SnapshotKey   string          `json:"snapshot_key"`
-		PeriodKey     string          `json:"period_key"`
-		PeriodStart   string          `json:"period_start"`
-		PeriodEnd     string          `json:"period_end"`
-		GeneratedAt   string          `json:"generated_at"`
-		Payload       json.RawMessage `json:"payload"`
-		PluginVersion string          `json:"plugin_version"`
-		MoodleVersion string          `json:"moodle_version"`
+		SiteID             string          `json:"site_id"`
+		SiteURL            string          `json:"site_url"`
+		SnapshotKey        string          `json:"snapshot_key"`
+		PeriodKey          string          `json:"period_key"`
+		PeriodStart        string          `json:"period_start"`
+		PeriodEnd          string          `json:"period_end"`
+		GeneratedAt        string          `json:"generated_at"`
+		TrackingMode       string          `json:"tracking_mode"`
+		TrackingLastSeenAt string          `json:"tracking_last_seen_at"`
+		Payload            json.RawMessage `json:"payload"`
+		PluginVersion      string          `json:"plugin_version"`
+		MoodleVersion      string          `json:"moodle_version"`
+		Capabilities       []string        `json:"capabilities"`
 	}
 	if err := decodeJSON(r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
@@ -74,6 +78,24 @@ func (s *Server) handleIngestSiteReportSnapshot(w http.ResponseWriter, r *http.R
 		})
 		writeError(w, http.StatusUnauthorized, "Site ID tidak cocok dengan koneksi plugin")
 		return
+	}
+
+	var trackingLastSeenAt *time.Time
+	if strings.TrimSpace(req.TrackingLastSeenAt) != "" {
+		parsed, err := time.Parse(timeRFC3339UTC, strings.TrimSpace(req.TrackingLastSeenAt))
+		if err != nil {
+			_, _ = s.store.UpdateSiteReportConnectionHeartbeat(r.Context(), store.UpdateSiteReportConnectionHeartbeatParams{
+				SiteID:        connection.SiteID,
+				PluginVersion: req.PluginVersion,
+				MoodleVersion: req.MoodleVersion,
+				LastError:     "Tracking last seen ingest tidak valid",
+				LastSeenAt:    time.Now().UTC(),
+			})
+			writeError(w, http.StatusBadRequest, "Tracking last seen tidak valid")
+			return
+		}
+		parsed = parsed.UTC()
+		trackingLastSeenAt = &parsed
 	}
 
 	periodStart, err := time.Parse(timeRFC3339UTC, strings.TrimSpace(req.PeriodStart))
@@ -169,12 +191,16 @@ func (s *Server) handleIngestSiteReportSnapshot(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	if _, err := s.store.UpdateSiteReportConnectionHeartbeat(r.Context(), store.UpdateSiteReportConnectionHeartbeatParams{
-		SiteID:        connection.SiteID,
-		PluginVersion: snapshot.PluginVersion,
-		MoodleVersion: snapshot.MoodleVersion,
-		LastError:     "",
-		LastSeenAt:    receivedAt,
+	if _, err := s.store.UpsertSiteReportConnection(r.Context(), store.UpsertSiteReportConnectionParams{
+		SiteID:             connection.SiteID,
+		IngestTokenHash:    connection.IngestTokenHash,
+		SiteURLSnapshot:    firstNonEmpty(strings.TrimSpace(req.SiteURL), connection.SiteURLSnapshot),
+		PluginVersion:      snapshot.PluginVersion,
+		MoodleVersion:      snapshot.MoodleVersion,
+		Capabilities:       normalizeCapabilities(firstNonEmptyCapabilities(req.Capabilities, connection.Capabilities)),
+		TrackingMode:       firstNonEmpty(strings.TrimSpace(req.TrackingMode), connection.TrackingMode),
+		TrackingLastSeenAt: trackingLastSeenAt,
+		LastError:          "",
 	}); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -186,6 +212,16 @@ func (s *Server) handleIngestSiteReportSnapshot(w http.ResponseWriter, r *http.R
 		"snapshot_id": snapshot.ID,
 		"received_at": snapshot.ReceivedAt.Format(timeRFC3339UTC),
 	})
+}
+
+func firstNonEmptyCapabilities(values ...[]string) []string {
+	for _, current := range values {
+		if len(current) == 0 {
+			continue
+		}
+		return current
+	}
+	return nil
 }
 
 func (s *Server) handleGetLatestSiteReportSnapshot(w http.ResponseWriter, r *http.Request) {
@@ -239,8 +275,12 @@ func normalizeReportSnapshotKey(value string) string {
 
 func normalizeReportPeriodKey(value string) string {
 	value = strings.ToLower(strings.TrimSpace(value))
-	if value == "" {
+	switch value {
+	case "last_30_days", "this_month", "last_month":
+		return value
+	case "", "last_7_days":
+		return "last_7_days"
+	default:
 		return "last_7_days"
 	}
-	return value
 }

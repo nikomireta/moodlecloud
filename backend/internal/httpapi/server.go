@@ -83,6 +83,7 @@ func (s *Server) Router() http.Handler {
 		r.Get("/plans", s.handleListPlans)
 		r.Get("/sites/subdomain-availability", s.handleSubdomainAvailability)
 		r.Post("/internal/moodle/report/bootstrap", s.handleBootstrapSiteReportPlugin)
+		r.Post("/internal/moodle/report/connect", s.handleConnectSiteReportPlugin)
 		r.Post("/internal/moodle/report/ingest", s.handleIngestSiteReportSnapshot)
 
 		r.Route("/auth", func(r chi.Router) {
@@ -117,6 +118,10 @@ func (s *Server) Router() http.Handler {
 			r.Get("/sites/{siteID}/usage", s.handleGetSiteUsage)
 			r.Get("/sites/{siteID}/provisioning", s.handleGetProvisioningBySiteID)
 			r.Get("/sites/{siteID}/runtime", s.handleGetSiteRuntime)
+			r.Get("/sites/{siteID}/report-connection", s.handleGetSiteReportConnection)
+			r.Post("/sites/{siteID}/report-connection/connect-token", s.handleIssueSiteReportConnectToken)
+			r.Get("/sites/{siteID}/reports/summary", s.handleGetSiteReportSummary)
+			r.Get("/sites/{siteID}/reports/full", s.handleGetSiteFullReport)
 			r.Get("/sites/{siteID}/reports/latest", s.handleGetLatestSiteReportSnapshot)
 			r.Get("/sites/{siteID}/backups", s.handleGetSiteBackups)
 			r.Post("/sites/{siteID}/backups", s.handleCreateSiteBackup)

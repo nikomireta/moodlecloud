@@ -16,8 +16,12 @@
 
 defined('MOODLE_INTERNAL') || die();
 
-$plugin->component = 'local_moodlepilot_report';
-$plugin->version = 2026031903;
-$plugin->requires = 2022041900;
-$plugin->release = '0.5.2';
-$plugin->maturity = MATURITY_ALPHA;
+$functions = [
+    'local_moodlepilot_report_track_heartbeat' => [
+        'classname' => 'local_moodlepilot_report\\external',
+        'methodname' => 'track_heartbeat',
+        'description' => 'Accept browser heartbeat tracking for Moodlepilot report.',
+        'type' => 'write',
+        'ajax' => true,
+    ],
+];

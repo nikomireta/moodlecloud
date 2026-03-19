@@ -252,12 +252,71 @@ export type SiteReportUserActivityItem = {
   last_action_at: string
 }
 
+export type SiteReportUserStatusItem = {
+  user_id: number
+  user_name: string
+  username: string
+  email: string
+  role_label: string
+  course_id: number
+  course_name: string
+  course_short_name: string
+  enrolment_method: string
+  enrolment_method_label: string
+  enrolled_on: string
+  status_key: string
+  status_label: string
+  average_grade: number
+  last_action_at: string
+}
+
+export type SiteReportActivityStatsItem = {
+  course_id: number
+  course_name: string
+  activity_id: number
+  module_type: string
+  component_name: string
+  activity_label: string
+  visits: number
+  time_spent_seconds: number
+  time_spent_label: string
+  first_access_at: string
+  created_at: string
+  num_completed: number
+  total_events: number
+  unique_users: number
+  last_activity_at: string
+}
+
+export type SiteReportQuizActivityItem = {
+  quiz_id: number
+  quiz_name: string
+  course_id: number
+  course_name: string
+  user_id: number
+  user_name: string
+  email: string
+  attempts: number
+  finished_attempts: number
+  best_score: number
+  average_score: number
+  lowest_score: number
+  time_spent_seconds: number
+  time_spent_label: string
+  status_label: string
+  completion_at: string
+  last_attempt_at: string
+}
+
 export type SiteReportSnapshotPayload = {
   summary_metrics: SiteReportSummaryMetrics
   recent_activity: SiteReportRecentActivityItem[]
   course_completion_summary: SiteReportCourseCompletionItem[]
   grade_recap_per_course: SiteReportGradeRecapItem[]
   user_activity_summary: SiteReportUserActivityItem[]
+  user_status: SiteReportUserStatusItem[]
+  activity_stats_summary: SiteReportActivityStatsItem[]
+  quiz_activity_detail: SiteReportQuizActivityItem[]
 }
 
 export type SiteReportSnapshot = {
@@ -274,6 +333,65 @@ export type SiteReportSnapshot = {
   received_at: string
   created_at: string
   updated_at: string
+}
+
+export type SiteReportConnectionState =
+  | "not_connected"
+  | "connected_waiting_sync"
+  | "sync_error"
+  | "tracking_active"
+  | "tracking_stale"
+  | "synced"
+  | "synced_no_activity"
+
+export type SiteReportConnectionStatus = {
+  site_id: string
+  state: SiteReportConnectionState
+  state_label: string
+  state_message: string
+  site_url_snapshot: string
+  plugin_version: string
+  moodle_version: string
+  capabilities: string[]
+  tracking_mode: string
+  tracking_last_seen_at?: string
+  tracking_state: string
+  tracking_state_label: string
+  tracking_state_message: string
+  last_error: string
+  registered_at?: string
+  last_seen_at?: string
+  last_sync_at?: string
+  has_snapshot: boolean
+  has_activity: boolean
+  snapshot_key?: string
+  period_key?: string
+}
+
+export type SiteReportConnectTokenResponse = {
+  status: string
+  mode: string
+  site_id: string
+  registration_token: string
+  message: string
+}
+
+export type SiteReportHighlight = {
+  title: string
+  message: string
+  tone: "info" | "warning" | "danger" | "success"
+}
+
+export type SiteReportSummaryResponse = {
+  connection: SiteReportConnectionStatus
+  snapshot?: SiteReportSnapshot | null
+  highlight: SiteReportHighlight
+}
+
+export type SiteReportFullResponse = {
+  connection: SiteReportConnectionStatus
+  snapshot?: SiteReportSnapshot | null
+  highlight: SiteReportHighlight
 }
 
 export type SiteSystemSummary = {
@@ -388,6 +506,10 @@ type SiteReportSnapshotResponse = {
   snapshot: SiteReportSnapshot
 }
 
+type SiteReportConnectionResponse = {
+  connection: SiteReportConnectionStatus
+}
+
 export class APIError extends Error {
   status: number
 
@@ -399,6 +521,11 @@ export class APIError extends Error {
 }
 
 const API_BASE_URL = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080/v1").replace(/\/$/, "")
+const SITE_REPORT_PLUGIN_API_BASE_URL = API_BASE_URL.endsWith("/v1") ? API_BASE_URL.slice(0, -3) : API_BASE_URL
+
+export function getSiteReportPluginAPIBaseURL(): string {
+  return SITE_REPORT_PLUGIN_API_BASE_URL
+}
 
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const headers = new Headers(init?.headers)
@@ -624,6 +751,40 @@ export const api = {
 
   getSiteBackups(siteID: string) {
     return apiFetch<SiteBackupsResponse>(`/sites/${encodeURIComponent(siteID)}/backups`)
+  },
+
+  getSiteReportConnection(siteID: string) {
+    return apiFetch<SiteReportConnectionResponse>(`/sites/${encodeURIComponent(siteID)}/report-connection`)
+  },
+
+  issueSiteReportConnectToken(siteID: string) {
+    return apiFetch<SiteReportConnectTokenResponse>(`/sites/${encodeURIComponent(siteID)}/report-connection/connect-token`, {
+      method: "POST",
+    })
+  },
+
+  getSiteReportSummary(siteID: string, input?: { snapshotKey?: string; periodKey?: string }) {
+    const search = new URLSearchParams()
+    if (input?.snapshotKey) {
+      search.set("snapshot_key", input.snapshotKey)
+    }
+    if (input?.periodKey) {
+      search.set("period_key", input.periodKey)
+    }
+    const suffix = search.size > 0 ? `?${search.toString()}` : ""
+    return apiFetch<SiteReportSummaryResponse>(`/sites/${encodeURIComponent(siteID)}/reports/summary${suffix}`)
+  },
+
+  getSiteFullReport(siteID: string, input?: { snapshotKey?: string; periodKey?: string }) {
+    const search = new URLSearchParams()
+    if (input?.snapshotKey) {
+      search.set("snapshot_key", input.snapshotKey)
+    }
+    if (input?.periodKey) {
+      search.set("period_key", input.periodKey)
+    }
+    const suffix = search.size > 0 ? `?${search.toString()}` : ""
+    return apiFetch<SiteReportFullResponse>(`/sites/${encodeURIComponent(siteID)}/reports/full${suffix}`)
   },
 
   getLatestSiteReportSnapshot(siteID: string, input?: { snapshotKey?: string; periodKey?: string }) {

@@ -16,8 +16,10 @@
 
 defined('MOODLE_INTERNAL') || die();
 
-$plugin->component = 'local_moodlepilot_report';
-$plugin->version = 2026031903;
-$plugin->requires = 2022041900;
-$plugin->release = '0.5.2';
-$plugin->maturity = MATURITY_ALPHA;
+$callbacks = [
+    [
+        'hook' => \core\hook\output\before_standard_top_of_body_html_generation::class,
+        'callback' => \local_moodlepilot_report\hook_callbacks::class . '::before_standard_top_of_body_html_generation',
+        'priority' => 0,
+    ],
+];

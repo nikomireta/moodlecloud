@@ -48,37 +48,45 @@ func (s *Store) UpsertSiteReportConnection(ctx context.Context, params UpsertSit
 	}
 
 	connection := SiteReportConnection{
-		SiteID:          params.SiteID,
-		IngestTokenHash: strings.TrimSpace(params.IngestTokenHash),
-		SiteURLSnapshot: strings.TrimSpace(params.SiteURLSnapshot),
-		PluginVersion:   strings.TrimSpace(params.PluginVersion),
-		MoodleVersion:   strings.TrimSpace(params.MoodleVersion),
-		Capabilities:    append([]string(nil), params.Capabilities...),
-		LastError:       strings.TrimSpace(params.LastError),
+		SiteID:             params.SiteID,
+		IngestTokenHash:    strings.TrimSpace(params.IngestTokenHash),
+		SiteURLSnapshot:    strings.TrimSpace(params.SiteURLSnapshot),
+		PluginVersion:      strings.TrimSpace(params.PluginVersion),
+		MoodleVersion:      strings.TrimSpace(params.MoodleVersion),
+		Capabilities:       append([]string(nil), params.Capabilities...),
+		TrackingMode:       strings.TrimSpace(params.TrackingMode),
+		TrackingLastSeenAt: params.TrackingLastSeenAt,
+		LastError:          strings.TrimSpace(params.LastError),
+	}
+	if connection.TrackingLastSeenAt != nil {
+		t := connection.TrackingLastSeenAt.UTC()
+		connection.TrackingLastSeenAt = &t
 	}
 
 	var rawCapabilities []byte
 	err = s.pool.QueryRow(ctx, `
 		INSERT INTO site_report_connections (
 			site_id, ingest_token_hash, site_url_snapshot, plugin_version, moodle_version,
-			capabilities, last_error, registered_at, last_seen_at, created_at, updated_at
+			capabilities, tracking_mode, tracking_last_seen_at, last_error, registered_at, last_seen_at, created_at, updated_at
 		)
-		VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $8, $8, $8)
+		VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, $10, $10, $10, $10)
 		ON CONFLICT (site_id) DO UPDATE SET
 			ingest_token_hash = EXCLUDED.ingest_token_hash,
 			site_url_snapshot = EXCLUDED.site_url_snapshot,
 			plugin_version = EXCLUDED.plugin_version,
 			moodle_version = EXCLUDED.moodle_version,
 			capabilities = EXCLUDED.capabilities,
+			tracking_mode = EXCLUDED.tracking_mode,
+			tracking_last_seen_at = COALESCE(EXCLUDED.tracking_last_seen_at, site_report_connections.tracking_last_seen_at),
 			last_error = EXCLUDED.last_error,
 			last_seen_at = EXCLUDED.last_seen_at,
 			updated_at = EXCLUDED.updated_at
 		RETURNING
 			site_id, ingest_token_hash, site_url_snapshot, plugin_version, moodle_version,
-			capabilities, last_error, registered_at, last_seen_at, created_at, updated_at
-	`, connection.SiteID, connection.IngestTokenHash, connection.SiteURLSnapshot, connection.PluginVersion, connection.MoodleVersion, string(capabilitiesJSON), connection.LastError, now).Scan(
+			capabilities, tracking_mode, tracking_last_seen_at, last_error, registered_at, last_seen_at, created_at, updated_at
+	`, connection.SiteID, connection.IngestTokenHash, connection.SiteURLSnapshot, connection.PluginVersion, connection.MoodleVersion, string(capabilitiesJSON), connection.TrackingMode, connection.TrackingLastSeenAt, connection.LastError, now).Scan(
 		&connection.SiteID, &connection.IngestTokenHash, &connection.SiteURLSnapshot, &connection.PluginVersion, &connection.MoodleVersion,
-		&rawCapabilities, &connection.LastError, &connection.RegisteredAt, &connection.LastSeenAt, &connection.CreatedAt, &connection.UpdatedAt,
+		&rawCapabilities, &connection.TrackingMode, &connection.TrackingLastSeenAt, &connection.LastError, &connection.RegisteredAt, &connection.LastSeenAt, &connection.CreatedAt, &connection.UpdatedAt,
 	)
 	if err != nil {
 		return SiteReportConnection{}, fmt.Errorf("upsert site report connection: %w", err)
@@ -86,5 +94,35 @@ func (s *Store) UpsertSiteReportConnection(ctx context.Context, params UpsertSit
 	if err := json.Unmarshal(rawCapabilities, &connection.Capabilities); err != nil {
 		return SiteReportConnection{}, fmt.Errorf("decode site report connection capabilities: %w", err)
 	}
+	return connection, nil
+}
+
+func (s *Store) GetSiteReportConnectionBySiteIDForOwner(ctx context.Context, ownerUserID, siteID uuid.UUID) (SiteReportConnection, error) {
+	var connection SiteReportConnection
+	var rawCapabilities []byte
+
+	err := s.pool.QueryRow(ctx, `
+		SELECT
+			src.site_id, src.ingest_token_hash, src.site_url_snapshot, src.plugin_version, src.moodle_version,
+			src.capabilities, src.tracking_mode, src.tracking_last_seen_at, src.last_error, src.registered_at, src.last_seen_at, src.created_at, src.updated_at
+		FROM site_report_connections src
+		INNER JOIN sites s ON s.id = src.site_id
+		WHERE s.owner_user_id = $1
+		  AND src.site_id = $2
+	`, ownerUserID, siteID).Scan(
+		&connection.SiteID, &connection.IngestTokenHash, &connection.SiteURLSnapshot, &connection.PluginVersion, &connection.MoodleVersion,
+		&rawCapabilities, &connection.TrackingMode, &connection.TrackingLastSeenAt, &connection.LastError, &connection.RegisteredAt, &connection.LastSeenAt, &connection.CreatedAt, &connection.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return SiteReportConnection{}, ErrNotFound
+		}
+		return SiteReportConnection{}, fmt.Errorf("get site report connection by site id for owner: %w", err)
+	}
+
+	if err := json.Unmarshal(rawCapabilities, &connection.Capabilities); err != nil {
+		return SiteReportConnection{}, fmt.Errorf("decode site report connection capabilities: %w", err)
+	}
+
 	return connection, nil
 }

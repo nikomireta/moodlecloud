@@ -19,12 +19,12 @@ func (s *Store) GetSiteReportConnectionByIngestTokenHash(ctx context.Context, in
 	err := s.pool.QueryRow(ctx, `
 		SELECT
 			site_id, ingest_token_hash, site_url_snapshot, plugin_version, moodle_version,
-			capabilities, last_error, registered_at, last_seen_at, created_at, updated_at
+			capabilities, tracking_mode, tracking_last_seen_at, last_error, registered_at, last_seen_at, created_at, updated_at
 		FROM site_report_connections
 		WHERE ingest_token_hash = $1
 	`, strings.TrimSpace(ingestTokenHash)).Scan(
 		&connection.SiteID, &connection.IngestTokenHash, &connection.SiteURLSnapshot, &connection.PluginVersion, &connection.MoodleVersion,
-		&rawCapabilities, &connection.LastError, &connection.RegisteredAt, &connection.LastSeenAt, &connection.CreatedAt, &connection.UpdatedAt,
+		&rawCapabilities, &connection.TrackingMode, &connection.TrackingLastSeenAt, &connection.LastError, &connection.RegisteredAt, &connection.LastSeenAt, &connection.CreatedAt, &connection.UpdatedAt,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -42,14 +42,20 @@ func (s *Store) GetSiteReportConnectionByIngestTokenHash(ctx context.Context, in
 
 func (s *Store) UpdateSiteReportConnectionHeartbeat(ctx context.Context, params UpdateSiteReportConnectionHeartbeatParams) (SiteReportConnection, error) {
 	connection := SiteReportConnection{
-		SiteID:        params.SiteID,
-		PluginVersion: strings.TrimSpace(params.PluginVersion),
-		MoodleVersion: strings.TrimSpace(params.MoodleVersion),
-		LastError:     strings.TrimSpace(params.LastError),
-		LastSeenAt:    params.LastSeenAt.UTC(),
+		SiteID:             params.SiteID,
+		PluginVersion:      strings.TrimSpace(params.PluginVersion),
+		MoodleVersion:      strings.TrimSpace(params.MoodleVersion),
+		TrackingMode:       strings.TrimSpace(params.TrackingMode),
+		TrackingLastSeenAt: params.TrackingLastSeenAt,
+		LastError:          strings.TrimSpace(params.LastError),
+		LastSeenAt:         params.LastSeenAt.UTC(),
 	}
 	if connection.LastSeenAt.IsZero() {
 		connection.LastSeenAt = time.Now().UTC()
+	}
+	if connection.TrackingLastSeenAt != nil {
+		t := connection.TrackingLastSeenAt.UTC()
+		connection.TrackingLastSeenAt = &t
 	}
 
 	var rawCapabilities []byte
@@ -58,16 +64,18 @@ func (s *Store) UpdateSiteReportConnectionHeartbeat(ctx context.Context, params 
 		SET
 			plugin_version = CASE WHEN $2 <> '' THEN $2 ELSE plugin_version END,
 			moodle_version = CASE WHEN $3 <> '' THEN $3 ELSE moodle_version END,
-			last_error = $4,
-			last_seen_at = $5,
-			updated_at = $5
+			tracking_mode = CASE WHEN $4 <> '' THEN $4 ELSE tracking_mode END,
+			tracking_last_seen_at = COALESCE($5, tracking_last_seen_at),
+			last_error = $6,
+			last_seen_at = $7,
+			updated_at = $7
 		WHERE site_id = $1
 		RETURNING
 			site_id, ingest_token_hash, site_url_snapshot, plugin_version, moodle_version,
-			capabilities, last_error, registered_at, last_seen_at, created_at, updated_at
-	`, connection.SiteID, connection.PluginVersion, connection.MoodleVersion, connection.LastError, connection.LastSeenAt).Scan(
+			capabilities, tracking_mode, tracking_last_seen_at, last_error, registered_at, last_seen_at, created_at, updated_at
+	`, connection.SiteID, connection.PluginVersion, connection.MoodleVersion, connection.TrackingMode, connection.TrackingLastSeenAt, connection.LastError, connection.LastSeenAt).Scan(
 		&connection.SiteID, &connection.IngestTokenHash, &connection.SiteURLSnapshot, &connection.PluginVersion, &connection.MoodleVersion,
-		&rawCapabilities, &connection.LastError, &connection.RegisteredAt, &connection.LastSeenAt, &connection.CreatedAt, &connection.UpdatedAt,
+		&rawCapabilities, &connection.TrackingMode, &connection.TrackingLastSeenAt, &connection.LastError, &connection.RegisteredAt, &connection.LastSeenAt, &connection.CreatedAt, &connection.UpdatedAt,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {

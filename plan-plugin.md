@@ -13,6 +13,7 @@ Dokumen ini adalah `living reference`. Setiap keputusan baru terkait fitur lapor
 - `intelliboard-refrensi` dipakai sebagai referensi suite analytics penuh, bukan template yang disalin mentah.
 - Data flow utama `moodlepilot-report` adalah plugin `push` aggregate ke backend Moodlepilot.
 - Otorisasi plugin untuk site yang dibuat lewat Moodlepilot harus otomatis, bukan authorize manual seperti IntelliBoard.
+- Plugin harus mendukung dua jalur distribusi: `bundled` di image Moodlepilot dan `standalone` sebagai plugin ZIP atau listing repo plugin Moodle.
 - Consumer awal data plugin adalah tab `Laporan` pada halaman detail situs.
 - Tab `Laporan` boleh dirombak total dan harus mengikuti dataset plugin, bukan mockup lama.
 - Bentuk `Laporan` v1 adalah `plugin-first summary`.
@@ -370,6 +371,50 @@ Yang perlu dicatat:
 - untuk Moodlepilot, flow default harus `zero-touch` selama tenant berasal dari provisioning platform
 - jika nanti ada fitur `Connect Existing Site`, barulah flow authorize manual atau semi-manual dibuka sebagai jalur terpisah
 
+### Model Distribusi Plugin
+
+Mulai fase berikutnya, plugin harus diposisikan sebagai `dual distribution plugin`.
+
+Artinya plugin harus bisa hidup pada dua jalur sekaligus:
+
+- `bundled distribution`: plugin ikut dibawa oleh image Moodlepilot untuk tenant baru hasil provisioning
+- `standalone distribution`: plugin tersedia sebagai ZIP atau listing resmi yang bisa di-install atau di-upgrade langsung oleh admin Moodle
+
+Konsekuensi arsitekturnya:
+
+- kita tidak boleh hanya bergantung pada env bootstrap dari provisioning docker
+- plugin harus bisa bekerja dengan lifecycle upgrade Moodle biasa
+- plugin harus tetap bisa terkoneksi ke Moodlepilot walaupun di-install manual dari halaman admin plugin Moodle
+- build image tetap penting, tetapi tidak lagi menjadi satu-satunya jalur distribusi
+
+#### Implikasi Untuk Mode Koneksi
+
+Dengan model distribusi ganda, koneksi plugin dibagi menjadi dua mode utama:
+
+- `auto-bootstrap`
+- `manual connect`
+
+`Auto-bootstrap` dipakai untuk tenant hasil provisioning Moodlepilot.
+
+Syaratnya:
+
+- plugin ikut dibundel di image
+- config bootstrap tersedia di `$CFG`
+- task bootstrap registrasi berjalan otomatis
+
+`Manual connect` dipakai untuk:
+
+- Moodle yang di-install atau di-upgrade manual
+- site existing yang bukan hasil provisioning Moodlepilot
+- tenant yang kehilangan bootstrap context tetapi masih perlu reconnect
+
+Keputusan penting yang dikunci:
+
+- `auto-bootstrap` tetap menjadi default untuk tenant Moodlepilot
+- `manual connect` menjadi jalur resmi kedua, bukan fallback darurat
+- plugin harus bisa berpindah aman dari state `not_connected` ke `connected` tanpa env provisioning
+- upgrade plugin oleh admin tenant tidak boleh merusak ingest token, status koneksi, atau sync journal tanpa alasan yang jelas
+
 #### Detail Handshake Yang Sudah Dikunci
 
 Untuk implementasi Moodlepilot, kontrak handshake bootstrap yang dipakai adalah:
@@ -399,6 +444,41 @@ Konsekuensinya:
 - trust awal tidak bergantung pada UI frontend
 - rotasi ingest token bisa dilakukan lewat bootstrap ulang bila memang diperlukan
 - data koneksi plugin tersimpan di backend pusat, bukan hanya di sisi tenant
+
+#### Kontrak Manual Connect Yang Harus Disiapkan
+
+Karena plugin akan didistribusikan juga ke luar jalur image Moodlepilot, maka plugin harus punya kontrak `manual connect` yang jelas.
+
+Field admin settings minimal yang nanti harus tersedia:
+
+- `Moodlepilot API Base URL`
+- `Registration Token` atau `Connect Token`
+- `Connection Status`
+- `Last Sync`
+- `Last Error`
+- `Tracking Mode`
+
+Kontrol admin minimal yang nanti harus tersedia:
+
+- `Connect`
+- `Reconnect`
+- `Test Connection`
+- `Sync Now`
+
+Alur yang diinginkan:
+
+- admin memasang atau meng-upgrade plugin dari ZIP
+- admin membuka settings plugin
+- admin mengisi endpoint Moodlepilot dan token registrasi
+- plugin melakukan handshake ke backend Moodlepilot
+- backend mengembalikan ingest token dan metadata koneksi
+- task ingest berikutnya berjalan seperti tenant auto-bootstrap
+
+Yang perlu dikunci dari sekarang:
+
+- flow manual connect harus memakai kontrak koneksi yang setara dengan auto-bootstrap
+- perbedaan keduanya hanya cara memperoleh trust awal
+- setelah koneksi sukses, jalur ingest, tracking, rollup, dan reporting harus sama
 
 ### Bentuk V1
 
@@ -541,6 +621,76 @@ Artinya:
 - SQL report builder publik pada fase awal
 - fitur yang tidak relevan dulu seperti ecommerce, BBB tracking, notification engine penuh, dan integrasi vendor lain
 
+## Status Milestone Tracking Hybrid
+
+Status saat ini:
+
+- plugin sudah punya `browser heartbeat tracking` lewat `lib.php`, AMD module, dan service `local_moodlepilot_report_track_heartbeat`
+- tenant sekarang menyimpan detail heartbeat ke `local_mpilot_rpt_detail`
+- task `tracking_rollup_task` sudah memisahkan proses `collect -> rollup -> ingest`
+- ingest ke backend Moodlepilot sekarang mengirim metadata `tracking_mode` dan `tracking_last_seen_at`
+- backend Moodlepilot sekarang bisa menurunkan state seperti `tracking_active`, `tracking_stale`, `connected_waiting_sync`, `sync_error`, `synced_no_activity`, dan `synced`
+- tab `Laporan` dan halaman laporan penuh sekarang menampilkan status tracking minimum tanpa mengubah arah produk menjadi full console di tab detail
+
+Paritas yang sudah mulai dicapai:
+
+- `User Status` sudah bergerak ke level user-course enrolment dan menambah `username`, `email`, `enrolment method`, `enrolled_on`, dan `status`
+- `Activity Stats Summary` sudah menambah `visits`, `time_spent`, `first_access`, `created`, dan `num_completed`
+- `Quiz Activity Detail` sudah menambah `email`, `lowest_score`, `time_spent`, dan status yang lebih eksplisit
+
+Yang masih sengaja belum dicakup di milestone ini:
+
+- export CSV/PDF
+- multi-periode di luar `last_7_days`
+- role-specific dashboard produk
+- SQL report builder
+- manual connect flow untuk Moodle existing
+
+## Model Upgrade Dan Release
+
+### Upgrade Oleh Admin Tenant
+
+Mulai sekarang kita mengasumsikan admin tenant bisa meng-upgrade plugin sendiri dari panel Moodle.
+
+Implikasinya:
+
+- `db/upgrade.php` harus menjadi jalur upgrade resmi, bukan hanya penyesuaian internal image
+- migrasi plugin harus idempotent dan aman untuk tenant yang tertinggal beberapa versi
+- upgrade plugin tidak boleh menghapus state koneksi penting tanpa langkah recovery yang jelas
+- reconnect harus bisa dilakukan dari UI admin plugin tanpa perlu akses container
+
+### Release ZIP Dan Repo Plugin Moodle
+
+Target distribusi jangka menengah:
+
+- plugin di-pack sebagai ZIP release
+- plugin dipersiapkan untuk listing di repo plugin Moodle
+- image Moodlepilot tetap dibangun dari source plugin yang sama
+
+Konsekuensi operasional:
+
+- source plugin harus bersih dari asumsi environment internal yang tidak bisa dipenuhi di instalasi umum
+- README plugin harus menjelaskan dua mode koneksi
+- versioning plugin harus konsisten antara source, ZIP release, dan image build
+- changelog dan upgrade notes perlu dijaga
+
+### Arah Pipeline Yang Diinginkan
+
+Pipeline distribusi yang sehat nanti adalah:
+
+1. source plugin berubah di repo ini
+2. plugin version dinaikkan
+3. ZIP plugin dihasilkan dari source yang sama
+4. image Moodlepilot dibangun dari source plugin yang sama
+5. tenant baru memakai plugin bundled
+6. tenant existing atau instalasi mandiri bisa meng-upgrade dari ZIP
+
+Prinsip yang dikunci:
+
+- tidak boleh ada dua source of truth untuk plugin
+- image build dan ZIP release harus berasal dari codebase yang sama
+- fitur baru harus dirancang agar tetap bekerja di kedua jalur distribusi
+
 ## Roadmap
 
 ### Phase 1
@@ -564,6 +714,8 @@ Fokus:
 - tabel detail
 - export yang lebih besar
 - navigasi laporan yang lebih kaya
+- manual connect flow yang stabil untuk plugin standalone
+- release ZIP yang siap dipakai admin Moodle
 
 ### Phase 3
 
@@ -590,7 +742,8 @@ Fokus:
 - Plugin target: `local_moodlepilot_report`
 - Data flow utama: plugin push ke backend Moodlepilot
 - Otorisasi default: auto-authorize untuk tenant hasil provisioning Moodlepilot
-- Otorisasi manual: hanya untuk site di luar jalur provisioning normal
+- Otorisasi manual: jalur resmi kedua untuk site di luar jalur provisioning normal
+- Distribusi plugin: `bundled` di image Moodlepilot dan `standalone` sebagai plugin ZIP atau repo plugin Moodle
 - Consumer awal: tab `Laporan` di site detail
 - Consumer lanjutan: halaman laporan khusus
 - Tab `Laporan` boleh berubah total agar selaras dengan data plugin

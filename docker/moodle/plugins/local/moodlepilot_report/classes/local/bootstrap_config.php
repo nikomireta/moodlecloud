@@ -19,6 +19,10 @@ namespace local_moodlepilot_report\local;
 defined('MOODLE_INTERNAL') || die();
 
 class bootstrap_config {
+    private static function plugin_config_value(string $name): string {
+        return trim((string)get_config('local_moodlepilot_report', $name));
+    }
+
     public static function plugin_enabled(): bool {
         $value = get_config('local_moodlepilot_report', 'enabled');
         if ($value === false || $value === null || $value === '') {
@@ -27,10 +31,18 @@ class bootstrap_config {
         return !in_array(strtolower(trim((string)$value)), ['0', 'false', 'off', 'no'], true);
     }
 
-    public static function site_id(): string {
+    public static function provisioned_site_id(): string {
         global $CFG;
 
         return trim((string)($CFG->moodlepilot_site_id ?? ''));
+    }
+
+    public static function manual_site_id(): string {
+        return self::plugin_config_value('manual_site_id');
+    }
+
+    public static function site_id(): string {
+        return self::first_non_empty(self::provisioned_site_id(), self::manual_site_id());
     }
 
     public static function auto_authorize_enabled(): bool {
@@ -40,10 +52,18 @@ class bootstrap_config {
         return !in_array($value, ['0', 'false', 'off', 'no'], true);
     }
 
-    public static function api_base_url(): string {
+    public static function provisioned_api_base_url(): string {
         global $CFG;
 
         return trim((string)($CFG->moodlepilot_api_base_url ?? ''));
+    }
+
+    public static function manual_api_base_url(): string {
+        return self::plugin_config_value('manual_api_base_url');
+    }
+
+    public static function api_base_url(): string {
+        return self::first_non_empty(self::provisioned_api_base_url(), self::manual_api_base_url());
     }
 
     public static function bootstrap_token_present(): bool {
@@ -56,11 +76,27 @@ class bootstrap_config {
         return trim((string)($CFG->moodlepilot_report_bootstrap_token ?? ''));
     }
 
+    public static function manual_registration_token(): string {
+        return self::plugin_config_value('manual_registration_token');
+    }
+
+    public static function manual_reconnect_requested(): bool {
+        $value = strtolower(self::plugin_config_value('manual_force_reconnect'));
+        return in_array($value, ['1', 'true', 'on', 'yes'], true);
+    }
+
     public static function bootstrap_endpoint(): string {
         if (self::api_base_url() === '') {
             return '';
         }
         return rtrim(self::api_base_url(), '/') . '/v1/internal/moodle/report/bootstrap';
+    }
+
+    public static function connect_endpoint(): string {
+        if (self::api_base_url() === '') {
+            return '';
+        }
+        return rtrim(self::api_base_url(), '/') . '/v1/internal/moodle/report/connect';
     }
 
     public static function plugin_version(): string {
@@ -98,6 +134,14 @@ class bootstrap_config {
             'course_completion_v1',
             'grade_recap_v1',
             'user_activity_v1',
+            'user_status_v1',
+            'activity_stats_summary_v1',
+            'quiz_activity_detail_v1',
+            'tracking_events_v1',
+            'browser_tracking_v1',
+            'tracking_rollup_v1',
+            'sync_journal_v1',
+            'local_reports_v1',
         ];
     }
 
@@ -109,10 +153,16 @@ class bootstrap_config {
         if (self::is_registered()) {
             return 'registered';
         }
-        if (self::bootstrap_state() !== 'ready') {
+        if (self::connection_mode() !== '') {
+            return 'pending';
+        }
+        if (self::manual_connect_state() === 'partial') {
+            return 'manual_incomplete';
+        }
+        if (self::bootstrap_state() !== 'ready' && self::bootstrap_state() !== 'missing_site_id') {
             return 'bootstrap_incomplete';
         }
-        return 'pending';
+        return 'not_connected';
     }
 
     public static function is_registered(): bool {
@@ -139,6 +189,40 @@ class bootstrap_config {
         return trim((string)get_config('local_moodlepilot_report', 'last_report_push_at'));
     }
 
+    public static function last_tracking_seen_at(): string {
+        return trim((string)get_config('local_moodlepilot_report', 'last_tracking_seen_at'));
+    }
+
+    public static function last_rollup_at(): string {
+        return trim((string)get_config('local_moodlepilot_report', 'last_rollup_at'));
+    }
+
+    public static function tracking_mode(): string {
+        $configured = trim((string)get_config('local_moodlepilot_report', 'tracking_mode'));
+        if ($configured !== '') {
+            return $configured;
+        }
+        return 'browser_heartbeat_v1';
+    }
+
+    public static function connection_mode(): string {
+        if (self::bootstrap_state() === 'ready') {
+            return 'auto';
+        }
+        if (self::manual_connect_state() === 'ready') {
+            return 'manual';
+        }
+        return '';
+    }
+
+    public static function tracking_interval_seconds(): int {
+        return 15;
+    }
+
+    public static function tracking_inactivity_seconds(): int {
+        return 60;
+    }
+
     public static function last_ingest_error(): string {
         return trim((string)get_config('local_moodlepilot_report', 'last_ingest_error'));
     }
@@ -157,13 +241,27 @@ class bootstrap_config {
     }
 
     public static function bootstrap_state(): string {
-        if (self::site_id() === '') {
+        if (self::provisioned_site_id() === '') {
             return 'missing_site_id';
         }
         if (!self::auto_authorize_enabled()) {
             return 'disabled';
         }
-        if (self::api_base_url() === '' || !self::bootstrap_token_present()) {
+        if (self::provisioned_api_base_url() === '' || !self::bootstrap_token_present()) {
+            return 'partial';
+        }
+        return 'ready';
+    }
+
+    public static function manual_connect_state(): string {
+        $siteid = self::manual_site_id();
+        $apibaseurl = self::manual_api_base_url();
+        $token = self::manual_registration_token();
+
+        if ($siteid === '' && $apibaseurl === '' && $token === '') {
+            return 'not_configured';
+        }
+        if ($siteid === '' || $apibaseurl === '' || $token === '') {
             return 'partial';
         }
         return 'ready';
@@ -174,5 +272,15 @@ class bootstrap_config {
             return get_string('bootstrap:not_configured', 'local_moodlepilot_report');
         }
         return $value;
+    }
+
+    private static function first_non_empty(string ...$values): string {
+        foreach ($values as $value) {
+            $value = trim($value);
+            if ($value !== '') {
+                return $value;
+            }
+        }
+        return '';
     }
 }

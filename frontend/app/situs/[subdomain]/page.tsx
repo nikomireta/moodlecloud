@@ -2,6 +2,7 @@
 
 import { Header } from "@/components/layout/header"
 import { Footer } from "@/components/layout/footer"
+import { SiteReportTab } from "@/components/dashboard/site-report-tab"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -77,7 +78,6 @@ import {
   isAPIError,
   type SiteBackupItem,
   type SiteBackupSettings,
-  type SiteReportSnapshot,
   type SiteRuntimeStatus,
   type SiteSettingsResponse,
   type SiteSummary,
@@ -107,46 +107,6 @@ const getSiteData = (subdomain: string) => ({
     weekly: subdomain === "ut-learning" ? 2845 : subdomain === "smkn1jakarta" ? 892 : 312,
   },
 })
-
-const mockReports = [
-  { id: "1", name: "Laporan Aktivitas Bulanan - Maret 2024", date: "1 Mar 2024", type: "Aktivitas", size: "245 KB" },
-  { id: "2", name: "Rekap Nilai Semester Genap", date: "28 Feb 2024", type: "Nilai", size: "1.2 MB" },
-  { id: "3", name: "Laporan Penyelesaian Kursus", date: "15 Feb 2024", type: "Completion", size: "380 KB" },
-  { id: "4", name: "Statistik Login Pengguna", date: "10 Feb 2024", type: "Logs", size: "92 KB" },
-  { id: "5", name: "Laporan Partisipasi - Matematika XI", date: "5 Feb 2024", type: "Partisipasi", size: "156 KB" },
-]
-
-const mockLogData = [
-  { user: "Budi Santoso", action: "Mengakses kursus Matematika XI", time: "2 menit lalu", ip: "180.244.x.x" },
-  { user: "Siti Rahayu", action: "Mengumpulkan tugas Fisika", time: "8 menit lalu", ip: "114.122.x.x" },
-  { user: "Ahmad Fauzi", action: "Login ke sistem", time: "12 menit lalu", ip: "103.56.x.x" },
-  { user: "Dewi Kusuma", action: "Mengakses kuis Kimia", time: "15 menit lalu", ip: "36.75.x.x" },
-  { user: "Rudi Hermawan", action: "Menyelesaikan modul Biologi", time: "22 menit lalu", ip: "180.244.x.x" },
-]
-
-const mockCourseCompletion = [
-  { course: "Matematika XI", enrolled: 38, completed: 30, inProgress: 6, notStarted: 2, rate: 79 },
-  { course: "Fisika Dasar", enrolled: 32, completed: 25, inProgress: 5, notStarted: 2, rate: 78 },
-  { course: "Kimia Organik", enrolled: 28, completed: 18, inProgress: 8, notStarted: 2, rate: 64 },
-  { course: "Biologi Sel", enrolled: 35, completed: 31, inProgress: 3, notStarted: 1, rate: 89 },
-  { course: "Bahasa Inggris", enrolled: 40, completed: 38, inProgress: 2, notStarted: 0, rate: 95 },
-]
-
-const mockGradeStats = [
-  { course: "Matematika XI", avg: 78.4, highest: 98, lowest: 42, passed: 32, failed: 6 },
-  { course: "Fisika Dasar", avg: 81.2, highest: 100, lowest: 55, passed: 29, failed: 3 },
-  { course: "Kimia Organik", avg: 72.6, highest: 95, lowest: 38, passed: 20, failed: 8 },
-  { course: "Biologi Sel", avg: 85.0, highest: 100, lowest: 60, passed: 34, failed: 1 },
-  { course: "Bahasa Inggris", avg: 88.5, highest: 100, lowest: 70, passed: 40, failed: 0 },
-]
-
-const mockUserActivity = [
-  { name: "Budi Santoso", role: "Siswa", lastLogin: "Hari ini, 09:14", sessions: 48, courses: 5, completed: 3 },
-  { name: "Siti Rahayu", role: "Siswa", lastLogin: "Hari ini, 08:52", sessions: 62, courses: 5, completed: 4 },
-  { name: "Ahmad Fauzi", role: "Siswa", lastLogin: "Kemarin, 21:30", sessions: 35, courses: 4, completed: 2 },
-  { name: "Dewi Kusuma", role: "Guru", lastLogin: "Hari ini, 07:45", sessions: 120, courses: 3, completed: 0 },
-  { name: "Rudi Hermawan", role: "Siswa", lastLogin: "2 hari lalu", sessions: 18, courses: 3, completed: 1 },
-]
 
 // Notification triggers and templates for Moodle activities
 const notificationTriggers = [
@@ -341,57 +301,6 @@ function formatLabel(value?: string | null) {
 }
 
 function formatBackupTimestamp(value?: string | null) {
-  const trimmed = value?.trim()
-  if (!trimmed) {
-    return "Belum tersedia"
-  }
-
-  const date = new Date(trimmed)
-  if (Number.isNaN(date.getTime())) {
-    return "Belum tersedia"
-  }
-
-  return date.toLocaleString("id-ID", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  })
-}
-
-function formatReportClock(value?: string | null) {
-  const trimmed = value?.trim()
-  if (!trimmed) {
-    return "-"
-  }
-
-  const date = new Date(trimmed)
-  if (Number.isNaN(date.getTime())) {
-    return "-"
-  }
-
-  return date.toLocaleTimeString("id-ID", {
-    hour: "2-digit",
-    minute: "2-digit",
-  })
-}
-
-function formatReportDateInput(value?: string | null) {
-  const trimmed = value?.trim()
-  if (!trimmed) {
-    return ""
-  }
-
-  const date = new Date(trimmed)
-  if (Number.isNaN(date.getTime())) {
-    return ""
-  }
-
-  return date.toISOString().split("T")[0]
-}
-
-function formatReportLastAction(value?: string | null) {
   const trimmed = value?.trim()
   if (!trimmed) {
     return "Belum tersedia"
@@ -644,73 +553,6 @@ export default function SiteDetailPage({ params }: { params: Promise<{ subdomain
   const [deleteConfirmation, setDeleteConfirmation] = useState("")
   const [deletingSite, setDeletingSite] = useState(false)
 
-  // Laporan period state — max 7 days
-  const today = new Date()
-  const sevenDaysAgo = new Date(today)
-  sevenDaysAgo.setDate(today.getDate() - 6)
-  const fmt = (d: Date) => d.toISOString().split("T")[0]
-  const [periodeStart, setPeriodeStart] = useState(fmt(sevenDaysAgo))
-  const [periodeEnd, setPeriodeEnd] = useState(fmt(today))
-  const [periodeError, setPeriodeError] = useState("")
-  const [reportGenerated, setReportGenerated] = useState(true)
-  const [reportSnapshot, setReportSnapshot] = useState<SiteReportSnapshot | null>(null)
-  const [reportLoaded, setReportLoaded] = useState(false)
-  const [loadingReport, setLoadingReport] = useState(false)
-
-  const handlePeriodeChange = (start: string, end: string) => {
-    const s = new Date(start), e = new Date(end)
-    const diff = (e.getTime() - s.getTime()) / (1000 * 60 * 60 * 24)
-    if (diff < 0) { setPeriodeError("Tanggal akhir harus setelah tanggal mulai."); return }
-    if (diff > 6) { setPeriodeError("Periode maksimal 7 hari."); return }
-    setPeriodeError("")
-    setPeriodeStart(start)
-    setPeriodeEnd(end)
-    setReportGenerated(false)
-  }
-
-  const reportPayload = reportSnapshot?.payload
-  const periodLogData = (reportPayload?.recent_activity ?? []).map((item) => ({
-    user: item.user_name,
-    action: item.action,
-    time: formatReportClock(item.occurred_at),
-    date: item.occurred_at,
-    ip: item.ip_address || "-",
-  }))
-
-  const periodStats = {
-    loginCount: reportPayload?.summary_metrics?.login_count ?? 0,
-    activeUsers: reportPayload?.summary_metrics?.active_users ?? 0,
-    submissions: reportPayload?.summary_metrics?.submissions ?? 0,
-    avgOnline: reportPayload?.summary_metrics?.avg_online_label ?? "0 m",
-  }
-
-  const periodCompletion = (reportPayload?.course_completion_summary ?? []).map((row) => ({
-    course: row.course_name,
-    enrolled: row.enrolled,
-    completed: row.completed,
-    inProgress: row.in_progress,
-    notStarted: row.not_started,
-    rate: row.completion_rate,
-  }))
-
-  const periodGrades = (reportPayload?.grade_recap_per_course ?? []).map((row) => ({
-    course: row.course_name,
-    avg: row.average_grade,
-    highest: row.highest_grade,
-    lowest: row.lowest_grade,
-    passed: row.passed,
-    failed: row.failed,
-  }))
-
-  const periodUserActivity = (reportPayload?.user_activity_summary ?? []).map((row) => ({
-    name: row.user_name,
-    role: row.role_label,
-    sessions: row.sessions,
-    timeOnline: row.total_online_label,
-    submissions: row.submissions,
-    lastAction: formatReportLastAction(row.last_action_at),
-  }))
-
   const loadSiteContext = async (siteSubdomain: string) => {
     const siteResponse = await api.getSiteBySubdomain(siteSubdomain)
 
@@ -764,46 +606,6 @@ export default function SiteDetailPage({ params }: { params: Promise<{ subdomain
     }
   }
 
-  const applyReportSnapshot = (snapshot: SiteReportSnapshot | null) => {
-    setReportSnapshot(snapshot)
-    setReportLoaded(true)
-    setReportGenerated(true)
-
-    if (!snapshot) {
-      return
-    }
-
-    const nextStart = formatReportDateInput(snapshot.period_start)
-    const nextEnd = formatReportDateInput(snapshot.period_end)
-
-    if (nextStart) {
-      setPeriodeStart(nextStart)
-    }
-    if (nextEnd) {
-      setPeriodeEnd(nextEnd)
-    }
-  }
-
-  const loadReportSnapshot = async (siteID: string, options?: { silent?: boolean }) => {
-    setLoadingReport(true)
-    try {
-      const response = await api.getLatestSiteReportSnapshot(siteID)
-      applyReportSnapshot(response.snapshot)
-    } catch (error) {
-      if (isAPIError(error) && error.status === 404) {
-        applyReportSnapshot(null)
-        return
-      }
-      setReportLoaded(false)
-      setReportGenerated(false)
-      if (!options?.silent) {
-        toast.error(isAPIError(error) ? error.message : "Gagal memuat laporan situs")
-      }
-    } finally {
-      setLoadingReport(false)
-    }
-  }
-
   useEffect(() => {
     const requestedTab = searchParams.get("tab")
     if (requestedTab === "ringkasan" || requestedTab === "laporan" || requestedTab === "backup" || requestedTab === "pengaturan") {
@@ -815,10 +617,6 @@ export default function SiteDetailPage({ params }: { params: Promise<{ subdomain
     let cancelled = false
 
     const load = async () => {
-      setReportSnapshot(null)
-      setReportLoaded(false)
-      setLoadingReport(false)
-      setReportGenerated(true)
       setBackupSettings(null)
       setSiteBackups([])
       setBackupLoaded(false)
@@ -843,13 +641,6 @@ export default function SiteDetailPage({ params }: { params: Promise<{ subdomain
       cancelled = true
     }
   }, [subdomain])
-
-  useEffect(() => {
-    if (activeTab !== "laporan" || !siteData || reportLoaded || loadingReport || !reportGenerated) {
-      return
-    }
-    void loadReportSnapshot(siteData.id, { silent: true })
-  }, [activeTab, loadingReport, reportGenerated, reportLoaded, siteData])
 
   useEffect(() => {
     if (activeTab !== "backup" || !siteData || backupLoaded || loadingBackups) {
@@ -963,14 +754,6 @@ export default function SiteDetailPage({ params }: { params: Promise<{ subdomain
 
   const handleCopyUrl = () => {
     navigator.clipboard.writeText(siteUrl)
-  }
-
-  const handleGenerateReport = async () => {
-    if (!siteData || periodeError) {
-      return
-    }
-
-    await loadReportSnapshot(siteData.id)
   }
 
   const handleCreateBackup = async () => {
@@ -1388,302 +1171,14 @@ export default function SiteDetailPage({ params }: { params: Promise<{ subdomain
 
             {/* Tab: Laporan */}
             <TabsContent value="laporan" className="space-y-6">
-
-              {/* Period Picker */}
-              <Card className="p-4 border-border">
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-                  <div>
-                    <p className="text-sm font-medium mb-1">Periode Laporan</p>
-                    <p className="text-xs text-muted-foreground">Pilih rentang tanggal (maksimal 7 hari)</p>
-                  </div>
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-                    <div className="flex items-center gap-2">
-                      <div>
-                        <Label className="text-xs text-muted-foreground">Dari</Label>
-                        <Input
-                          type="date"
-                          value={periodeStart}
-                          max={periodeEnd}
-                          onChange={e => handlePeriodeChange(e.target.value, periodeEnd)}
-                          className="mt-1 h-9 text-sm border-border w-40"
-                        />
-                      </div>
-                      <span className="text-muted-foreground mt-5">—</span>
-                      <div>
-                        <Label className="text-xs text-muted-foreground">Sampai</Label>
-                        <Input
-                          type="date"
-                          value={periodeEnd}
-                          min={periodeStart}
-                          max={fmt(today)}
-                          onChange={e => handlePeriodeChange(periodeStart, e.target.value)}
-                          className="mt-1 h-9 text-sm border-border w-40"
-                        />
-                      </div>
-                    </div>
-                    <Button
-                      size="sm"
-                      onClick={() => void handleGenerateReport()}
-                      disabled={!!periodeError || loadingReport}
-                    >
-                      Tampilkan Laporan
-                    </Button>
-                  </div>
-                </div>
-                {periodeError && (
-                  <p className="text-xs text-destructive mt-3 flex items-center gap-1.5">
-                    <AlertCircle className="h-3.5 w-3.5" />
-                    {periodeError}
-                  </p>
-                )}
-              </Card>
-
-              {/* Plugin Notice */}
-              <Card className="p-4 border-border bg-amber-500/5 border-amber-500/20">
-                <div className="flex items-start gap-3">
-                  <AlertCircle className="h-4 w-4 text-amber-500 mt-0.5 flex-shrink-0" />
-                  <p className="text-xs text-muted-foreground">
-                    Jika laporan tidak muncul atau data kosong, install plugin{" "}
-                    <span className="font-mono bg-muted px-1 py-0.5 rounded text-foreground">logstore_standard</span>,{" "}
-                    <span className="font-mono bg-muted px-1 py-0.5 rounded text-foreground">report_completion</span>, atau{" "}
-                    <span className="font-mono bg-muted px-1 py-0.5 rounded text-foreground">gradereport_overview</span>{" "}
-                    melalui <strong>Admin Panel → Plugins → Install Plugin</strong>.
-                  </p>
-                </div>
-              </Card>
-
-              {reportGenerated && (
-                <>
-                  {/* Period Label */}
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Calendar className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-sm font-medium">
-                        {new Date(periodeStart).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })}
-                        {" "}&ndash;{" "}
-                        {new Date(periodeEnd).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })}
-                      </span>
-                    </div>
-                    <Button variant="outline" size="sm" className="border-border text-xs h-8">
-                      <Download className="mr-1.5 h-3.5 w-3.5" />
-                      Export Semua
-                    </Button>
-                  </div>
-
-                  {/* Summary Stats */}
-                  <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-                    {[
-                      { label: "Total Login",      value: periodStats.loginCount.toLocaleString(), icon: Activity,      color: "text-blue-500",   bg: "bg-blue-500/10" },
-                      { label: "Pengguna Aktif",   value: periodStats.activeUsers.toLocaleString(), icon: Users,          color: "text-green-500",  bg: "bg-green-500/10" },
-                      { label: "Tugas Dikumpul",   value: periodStats.submissions.toLocaleString(), icon: CheckCircle2,   color: "text-purple-500", bg: "bg-purple-500/10" },
-                      { label: "Avg. Online",      value: periodStats.avgOnline,                    icon: Clock,          color: "text-orange-500", bg: "bg-orange-500/10" },
-                    ].map((s, i) => (
-                      <Card key={i} className="p-4 border-border">
-                        <div className={`inline-flex h-9 w-9 items-center justify-center rounded-lg ${s.bg} mb-3`}>
-                          <s.icon className={`h-4 w-4 ${s.color}`} />
-                        </div>
-                        <p className={`text-2xl font-bold ${s.color}`}>{s.value}</p>
-                        <p className="text-xs font-medium text-foreground mt-0.5">{s.label}</p>
-                      </Card>
-                    ))}
-                  </div>
-
-                  {/* Activity Log */}
-                  <Card className="border-border">
-                    <div className="flex items-center justify-between p-6 pb-4">
-                      <div className="flex items-center gap-2">
-                        <Activity className="h-4 w-4 text-primary" />
-                        <h3 className="font-semibold">Log Aktivitas</h3>
-                      </div>
-                      <Button variant="outline" size="sm" className="border-border h-8">
-                        <Download className="h-3.5 w-3.5 mr-1.5" />
-                        Export Log
-                      </Button>
-                    </div>
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="border-t border-border bg-muted/30">
-                            <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground">Pengguna</th>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Aktivitas</th>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground hidden sm:table-cell">Tanggal</th>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground hidden md:table-cell">IP</th>
-                            <th className="px-6 py-3 text-right text-xs font-medium text-muted-foreground">Waktu</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-border">
-                          {periodLogData.map((log, i) => (
-                            <tr key={i} className="hover:bg-muted/20 transition-colors">
-                              <td className="px-6 py-3">
-                                <div className="flex items-center gap-2">
-                                  <div className="flex h-7 w-7 items-center justify-center rounded-full bg-muted text-xs font-semibold flex-shrink-0">
-                                    {log.user.split(" ").map(n => n[0]).join("").slice(0, 2)}
-                                  </div>
-                                  <span className="font-medium whitespace-nowrap">{log.user}</span>
-                                </div>
-                              </td>
-                              <td className="px-4 py-3 text-muted-foreground">{log.action}</td>
-                              <td className="px-4 py-3 text-muted-foreground hidden sm:table-cell whitespace-nowrap">
-                                {new Date(log.date).toLocaleDateString("id-ID", { day: "numeric", month: "short" })}
-                              </td>
-                              <td className="px-4 py-3 text-muted-foreground font-mono text-xs hidden md:table-cell">{log.ip}</td>
-                              <td className="px-6 py-3 text-right text-muted-foreground whitespace-nowrap">{log.time}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </Card>
-
-                  {/* Course Completion */}
-                  <Card className="border-border">
-                    <div className="flex items-center justify-between p-6 pb-4">
-                      <div className="flex items-center gap-2">
-                        <CheckCircle2 className="h-4 w-4 text-primary" />
-                        <h3 className="font-semibold">Penyelesaian Kursus</h3>
-                      </div>
-                      <Button variant="outline" size="sm" className="border-border h-8">
-                        <Download className="h-3.5 w-3.5 mr-1.5" />
-                        Export CSV
-                      </Button>
-                    </div>
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="border-t border-border bg-muted/30">
-                            <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground">Kursus</th>
-                            <th className="px-4 py-3 text-right text-xs font-medium text-muted-foreground">Terdaftar</th>
-                            <th className="px-4 py-3 text-right text-xs font-medium text-muted-foreground">Selesai</th>
-                            <th className="px-4 py-3 text-right text-xs font-medium text-muted-foreground">Proses</th>
-                            <th className="px-4 py-3 text-right text-xs font-medium text-muted-foreground hidden sm:table-cell">Belum Mulai</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground">Progress</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-border">
-                          {periodCompletion.map((row, i) => (
-                            <tr key={i} className="hover:bg-muted/20 transition-colors">
-                              <td className="px-6 py-3 font-medium">{row.course}</td>
-                              <td className="px-4 py-3 text-right text-muted-foreground">{row.enrolled}</td>
-                              <td className="px-4 py-3 text-right text-green-600 font-medium">{row.completed}</td>
-                              <td className="px-4 py-3 text-right text-blue-600">{row.inProgress}</td>
-                              <td className="px-4 py-3 text-right text-muted-foreground hidden sm:table-cell">{row.notStarted}</td>
-                              <td className="px-6 py-3">
-                                <div className="flex items-center gap-2">
-                                  <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden min-w-16">
-                                    <div className="h-full bg-green-500 rounded-full transition-all" style={{ width: `${row.rate}%` }} />
-                                  </div>
-                                  <span className="text-xs font-medium w-8 text-right">{row.rate}%</span>
-                                </div>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </Card>
-
-                  {/* Grade Overview */}
-                  <Card className="border-border">
-                    <div className="flex items-center justify-between p-6 pb-4">
-                      <div className="flex items-center gap-2">
-                        <GraduationCap className="h-4 w-4 text-primary" />
-                        <h3 className="font-semibold">Rekap Nilai</h3>
-                      </div>
-                      <Button variant="outline" size="sm" className="border-border h-8">
-                        <Download className="h-3.5 w-3.5 mr-1.5" />
-                        Export CSV
-                      </Button>
-                    </div>
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="border-t border-border bg-muted/30">
-                            <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground">Kursus</th>
-                            <th className="px-4 py-3 text-right text-xs font-medium text-muted-foreground">Rata-rata</th>
-                            <th className="px-4 py-3 text-right text-xs font-medium text-muted-foreground hidden sm:table-cell">Tertinggi</th>
-                            <th className="px-4 py-3 text-right text-xs font-medium text-muted-foreground hidden sm:table-cell">Terendah</th>
-                            <th className="px-4 py-3 text-right text-xs font-medium text-muted-foreground">Lulus</th>
-                            <th className="px-4 py-3 text-right text-xs font-medium text-muted-foreground">Tidak Lulus</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-border">
-                          {periodGrades.map((row, i) => (
-                            <tr key={i} className="hover:bg-muted/20 transition-colors">
-                              <td className="px-6 py-3 font-medium">{row.course}</td>
-                              <td className="px-4 py-3 text-right">
-                                <span className={`font-semibold ${row.avg >= 80 ? "text-green-600" : row.avg >= 65 ? "text-orange-500" : "text-destructive"}`}>
-                                  {row.avg}
-                                </span>
-                              </td>
-                              <td className="px-4 py-3 text-right text-muted-foreground hidden sm:table-cell">{row.highest}</td>
-                              <td className="px-4 py-3 text-right text-muted-foreground hidden sm:table-cell">{row.lowest}</td>
-                              <td className="px-4 py-3 text-right text-green-600 font-medium">{row.passed}</td>
-                              <td className="px-4 py-3 text-right text-destructive">{row.failed}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </Card>
-
-                  {/* User Activity */}
-                  <Card className="border-border">
-                    <div className="flex items-center justify-between p-6 pb-4">
-                      <div className="flex items-center gap-2">
-                        <Users className="h-4 w-4 text-primary" />
-                        <h3 className="font-semibold">Aktivitas Per Pengguna</h3>
-                      </div>
-                      <Button variant="outline" size="sm" className="border-border h-8">
-                        <Download className="h-3.5 w-3.5 mr-1.5" />
-                        Export CSV
-                      </Button>
-                    </div>
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="border-t border-border bg-muted/30">
-                            <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground">Pengguna</th>
-                            <th className="px-4 py-3 text-right text-xs font-medium text-muted-foreground">Sesi</th>
-                            <th className="px-4 py-3 text-right text-xs font-medium text-muted-foreground hidden sm:table-cell">Total Online</th>
-                            <th className="px-4 py-3 text-right text-xs font-medium text-muted-foreground">Tugas</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground hidden md:table-cell">Terakhir Akses</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-border">
-                          {periodUserActivity.map((u, i) => (
-                            <tr key={i} className="hover:bg-muted/20 transition-colors">
-                              <td className="px-6 py-3">
-                                <div className="flex items-center gap-2">
-                                  <div className="flex h-7 w-7 items-center justify-center rounded-full bg-muted text-xs font-semibold flex-shrink-0">
-                                    {u.name.split(" ").map(n => n[0]).join("").slice(0, 2)}
-                                  </div>
-                                  <div>
-                                    <p className="font-medium">{u.name}</p>
-                                    <Badge variant={u.role === "Guru" ? "default" : "secondary"} className="text-[10px] h-4 mt-0.5">{u.role}</Badge>
-                                  </div>
-                                </div>
-                              </td>
-                              <td className="px-4 py-3 text-right font-medium">{u.sessions}</td>
-                              <td className="px-4 py-3 text-right text-muted-foreground hidden sm:table-cell">{u.timeOnline}</td>
-                              <td className="px-4 py-3 text-right font-medium text-purple-600">{u.submissions}</td>
-                              <td className="px-6 py-3 text-muted-foreground text-xs hidden md:table-cell">{u.lastAction}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </Card>
-                </>
-              )}
-
-              {!reportGenerated && !periodeError && (
+              {siteData ? (
+                <SiteReportTab siteID={siteData.id} siteName={siteName} siteSubdomain={siteData.subdomain} />
+              ) : (
                 <Card className="p-12 border-border text-center border-dashed">
-                  <Calendar className="h-10 w-10 mx-auto text-muted-foreground mb-3" />
-                  <p className="text-sm font-medium">Klik &ldquo;Tampilkan Laporan&rdquo;</p>
-                  <p className="text-xs text-muted-foreground mt-1">Laporan akan ditampilkan sesuai periode yang dipilih</p>
+                  <Loader2 className="h-10 w-10 mx-auto text-muted-foreground mb-3 animate-spin" />
+                  <p className="text-sm font-medium">Memuat data situs...</p>
                 </Card>
               )}
-
             </TabsContent>
 
             {/* Tab: Backup */}

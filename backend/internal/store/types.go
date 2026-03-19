@@ -193,17 +193,19 @@ type SiteBackup struct {
 }
 
 type SiteReportConnection struct {
-	SiteID          uuid.UUID `json:"site_id"`
-	IngestTokenHash string    `json:"-"`
-	SiteURLSnapshot string    `json:"site_url_snapshot"`
-	PluginVersion   string    `json:"plugin_version"`
-	MoodleVersion   string    `json:"moodle_version"`
-	Capabilities    []string  `json:"capabilities"`
-	LastError       string    `json:"last_error"`
-	RegisteredAt    time.Time `json:"registered_at"`
-	LastSeenAt      time.Time `json:"last_seen_at"`
-	CreatedAt       time.Time `json:"created_at"`
-	UpdatedAt       time.Time `json:"updated_at"`
+	SiteID             uuid.UUID  `json:"site_id"`
+	IngestTokenHash    string     `json:"-"`
+	SiteURLSnapshot    string     `json:"site_url_snapshot"`
+	PluginVersion      string     `json:"plugin_version"`
+	MoodleVersion      string     `json:"moodle_version"`
+	Capabilities       []string   `json:"capabilities"`
+	TrackingMode       string     `json:"tracking_mode"`
+	TrackingLastSeenAt *time.Time `json:"tracking_last_seen_at,omitempty"`
+	LastError          string     `json:"last_error"`
+	RegisteredAt       time.Time  `json:"registered_at"`
+	LastSeenAt         time.Time  `json:"last_seen_at"`
+	CreatedAt          time.Time  `json:"created_at"`
+	UpdatedAt          time.Time  `json:"updated_at"`
 }
 
 type SiteReportSnapshot struct {
@@ -291,21 +293,25 @@ type UpdateSiteURLsParams struct {
 }
 
 type UpsertSiteReportConnectionParams struct {
-	SiteID          uuid.UUID
-	IngestTokenHash string
-	SiteURLSnapshot string
-	PluginVersion   string
-	MoodleVersion   string
-	Capabilities    []string
-	LastError       string
+	SiteID             uuid.UUID
+	IngestTokenHash    string
+	SiteURLSnapshot    string
+	PluginVersion      string
+	MoodleVersion      string
+	Capabilities       []string
+	TrackingMode       string
+	TrackingLastSeenAt *time.Time
+	LastError          string
 }
 
 type UpdateSiteReportConnectionHeartbeatParams struct {
-	SiteID        uuid.UUID
-	PluginVersion string
-	MoodleVersion string
-	LastError     string
-	LastSeenAt    time.Time
+	SiteID             uuid.UUID
+	PluginVersion      string
+	MoodleVersion      string
+	TrackingMode       string
+	TrackingLastSeenAt *time.Time
+	LastError          string
+	LastSeenAt         time.Time
 }
 
 type UpsertSiteReportSnapshotParams struct {

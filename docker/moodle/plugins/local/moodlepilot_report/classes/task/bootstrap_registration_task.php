@@ -33,18 +33,29 @@ class bootstrap_registration_task extends scheduled_task {
             return;
         }
 
-        if (bootstrap_config::is_registered()) {
+        $mode = bootstrap_config::connection_mode();
+        $forcereconnect = bootstrap_config::manual_reconnect_requested();
+
+        if (bootstrap_config::is_registered() && !$forcereconnect) {
             set_config('registration_state', 'registered', 'local_moodlepilot_report');
             return;
         }
 
-        if (!bootstrap_config::auto_authorize_enabled()) {
-            set_config('registration_state', 'disabled', 'local_moodlepilot_report');
+        if ($mode === '') {
+            if (bootstrap_config::manual_connect_state() === 'partial') {
+                set_config('registration_state', 'manual_incomplete', 'local_moodlepilot_report');
+            } else if (bootstrap_config::bootstrap_state() !== 'ready' && bootstrap_config::bootstrap_state() !== 'missing_site_id') {
+                set_config('registration_state', 'bootstrap_incomplete', 'local_moodlepilot_report');
+            } else if (!bootstrap_config::auto_authorize_enabled()) {
+                set_config('registration_state', 'disabled', 'local_moodlepilot_report');
+            } else {
+                set_config('registration_state', 'not_connected', 'local_moodlepilot_report');
+            }
             return;
         }
 
-        if (bootstrap_config::bootstrap_state() !== 'ready') {
-            set_config('registration_state', 'bootstrap_incomplete', 'local_moodlepilot_report');
+        if ($mode === 'auto' && !bootstrap_config::auto_authorize_enabled()) {
+            set_config('registration_state', 'disabled', 'local_moodlepilot_report');
             return;
         }
 
@@ -52,12 +63,16 @@ class bootstrap_registration_task extends scheduled_task {
 
         $payload = [
             'site_id' => bootstrap_config::site_id(),
-            'bootstrap_token' => bootstrap_config::bootstrap_token(),
             'site_url' => rtrim((string)$CFG->wwwroot, '/'),
             'plugin_version' => bootstrap_config::plugin_version(),
             'moodle_version' => bootstrap_config::moodle_version(),
             'capabilities' => bootstrap_config::capabilities(),
         ];
+        if ($mode === 'auto') {
+            $payload['bootstrap_token'] = bootstrap_config::bootstrap_token();
+        } else {
+            $payload['registration_token'] = bootstrap_config::manual_registration_token();
+        }
 
         $json = json_encode($payload);
         if ($json === false) {
@@ -65,11 +80,20 @@ class bootstrap_registration_task extends scheduled_task {
             return;
         }
 
-        // The bootstrap target is provisioned by Moodlepilot itself and may use
-        // an internal host like host.docker.internal in local environments.
+        $targetendpoint = $mode === 'manual'
+            ? bootstrap_config::connect_endpoint()
+            : bootstrap_config::bootstrap_endpoint();
+
+        if (trim($targetendpoint) === '') {
+            $this->store_error(get_string('connection:error_missing_endpoint', 'local_moodlepilot_report'));
+            return;
+        }
+
+        // The bootstrap or connect target may use an internal host like
+        // host.docker.internal in local environments.
         $curl = new \curl(['ignoresecurity' => true]);
         $response = $curl->post(
-            bootstrap_config::bootstrap_endpoint(),
+            $targetendpoint,
             $json,
             [
                 'CURLOPT_RETURNTRANSFER' => true,
@@ -104,7 +128,10 @@ class bootstrap_registration_task extends scheduled_task {
         set_config('registration_state', 'registered', 'local_moodlepilot_report');
         set_config('last_bootstrap_error', '', 'local_moodlepilot_report');
         set_config('last_ingest_error', '', 'local_moodlepilot_report');
-        mtrace('[local_moodlepilot_report] bootstrap registration completed.');
+        if ($mode === 'manual') {
+            set_config('manual_force_reconnect', 0, 'local_moodlepilot_report');
+        }
+        mtrace('[local_moodlepilot_report] ' . $mode . ' registration completed.');
     }
 
     private function store_error(string $message): void {

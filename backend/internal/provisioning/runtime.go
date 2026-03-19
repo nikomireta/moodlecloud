@@ -165,6 +165,16 @@ func ValidateReportBootstrapToken(secret, siteID, provided string) bool {
 	return subtle.ConstantTimeCompare([]byte(strings.TrimSpace(expected)), []byte(strings.TrimSpace(provided))) == 1
 }
 
+func ReportConnectToken(secret string, siteID string) string {
+	sum := sha256.Sum256([]byte(strings.TrimSpace(secret) + ":report-connect:" + strings.TrimSpace(siteID)))
+	return base64.RawURLEncoding.EncodeToString(sum[:])
+}
+
+func ValidateReportConnectToken(secret, siteID, provided string) bool {
+	expected := ReportConnectToken(secret, siteID)
+	return subtle.ConstantTimeCompare([]byte(strings.TrimSpace(expected)), []byte(strings.TrimSpace(provided))) == 1
+}
+
 func derivedPassword(secret, scope, siteID, prefix string) string {
 	sum := sha256.Sum256([]byte(strings.TrimSpace(secret) + ":" + scope + ":" + strings.TrimSpace(siteID)))
 	token := base64.RawURLEncoding.EncodeToString(sum[:])

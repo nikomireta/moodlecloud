@@ -1,0 +1,97 @@
+<svg width="1280" height="720" viewBox="0 0 1280 720" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1280" height="720" rx="24" fill="#FAFAFA"/>
+  <rect x="28" y="28" width="1224" height="56" rx="18" fill="#FFFFFF" stroke="#E5E7EB"/>
+  <rect x="52" y="46" width="132" height="18" rx="9" fill="#111827"/>
+  <rect x="200" y="46" width="82" height="18" rx="9" fill="#E5E7EB"/>
+  <rect x="294" y="46" width="62" height="18" rx="9" fill="#E5E7EB"/>
+  <rect x="1112" y="40" width="108" height="30" rx="12" fill="#111827"/>
+  <text x="1166" y="59" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" font-weight="700" fill="#FFFFFF">Buat Site</text>
+
+  <text x="40" y="132" font-family="Arial, sans-serif" font-size="36" font-weight="700" fill="#111827">Situs Moodle Saya</text>
+  <text x="40" y="164" font-family="Arial, sans-serif" font-size="20" fill="#6B7280">Kelola semua site Moodle dari satu dashboard operasional</text>
+
+  <rect x="40" y="206" width="280" height="96" rx="20" fill="#FFFFFF" stroke="#E5E7EB"/>
+  <rect x="340" y="206" width="280" height="96" rx="20" fill="#FFFFFF" stroke="#E5E7EB"/>
+  <rect x="640" y="206" width="280" height="96" rx="20" fill="#FFFFFF" stroke="#E5E7EB"/>
+  <rect x="940" y="206" width="280" height="96" rx="20" fill="#FFFFFF" stroke="#E5E7EB"/>
+
+  <text x="66" y="244" font-family="Arial, sans-serif" font-size="18" fill="#6B7280">Total Site</text>
+  <text x="66" y="281" font-family="Arial, sans-serif" font-size="36" font-weight="700" fill="#111827">12</text>
+
+  <text x="366" y="244" font-family="Arial, sans-serif" font-size="18" fill="#6B7280">Site Aktif</text>
+  <text x="366" y="281" font-family="Arial, sans-serif" font-size="36" font-weight="700" fill="#111827">10</text>
+
+  <text x="666" y="244" font-family="Arial, sans-serif" font-size="18" fill="#6B7280">Sedang Dibuat</text>
+  <text x="666" y="281" font-family="Arial, sans-serif" font-size="36" font-weight="700" fill="#111827">2</text>
+
+  <text x="966" y="244" font-family="Arial, sans-serif" font-size="18" fill="#6B7280">Backup Hari Ini</text>
+  <text x="966" y="281" font-family="Arial, sans-serif" font-size="36" font-weight="700" fill="#111827">9</text>
+
+  <rect x="40" y="330" width="790" height="46" rx="16" fill="#FFFFFF" stroke="#E5E7EB"/>
+  <circle cx="70" cy="353" r="8" stroke="#9CA3AF" stroke-width="2"/>
+  <text x="92" y="360" font-family="Arial, sans-serif" font-size="18" fill="#9CA3AF">Cari site...</text>
+
+  <rect x="850" y="330" width="142" height="46" rx="16" fill="#FFFFFF" stroke="#E5E7EB"/>
+  <text x="921" y="360" text-anchor="middle" font-family="Arial, sans-serif" font-size="18" fill="#374151">Semua</text>
+  <rect x="1008" y="330" width="98" height="46" rx="16" fill="#FFFFFF" stroke="#E5E7EB"/>
+  <rect x="1122" y="330" width="98" height="46" rx="16" fill="#FFFFFF" stroke="#E5E7EB"/>
+
+  <rect x="40" y="404" width="382" height="122" rx="22" fill="#FFFFFF" stroke="#E5E7EB"/>
+  <rect x="448" y="404" width="382" height="122" rx="22" fill="#FFFFFF" stroke="#E5E7EB"/>
+  <rect x="856" y="404" width="364" height="122" rx="22" fill="#FFFFFF" stroke="#E5E7EB"/>
+
+  <rect x="40" y="546" width="382" height="122" rx="22" fill="#FFFFFF" stroke="#E5E7EB"/>
+  <rect x="448" y="546" width="382" height="122" rx="22" fill="#FFFFFF" stroke="#E5E7EB"/>
+
+  <g>
+    <rect x="64" y="430" width="42" height="42" rx="14" fill="#F3F4F6"/>
+    <text x="124" y="448" font-family="Arial, sans-serif" font-size="24" font-weight="700" fill="#111827">Kampus Utama</text>
+    <text x="124" y="478" font-family="Arial, sans-serif" font-size="18" fill="#6B7280">kampus-utama.moodlepilot.id</text>
+    <rect x="314" y="430" width="74" height="28" rx="10" fill="#DCFCE7"/>
+    <text x="351" y="449" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" font-weight="700" fill="#16A34A">Aktif</text>
+    <circle cx="84" cy="500" r="6" fill="#16A34A"/>
+    <text x="100" y="506" font-family="Arial, sans-serif" font-size="16" fill="#16A34A">Stabil</text>
+    <text x="306" y="506" font-family="Arial, sans-serif" font-size="16" fill="#6B7280">Kunjungi →</text>
+  </g>
+
+  <g>
+    <rect x="472" y="430" width="42" height="42" rx="14" fill="#F3F4F6"/>
+    <text x="532" y="448" font-family="Arial, sans-serif" font-size="24" font-weight="700" fill="#111827">Pelatihan Guru</text>
+    <text x="532" y="478" font-family="Arial, sans-serif" font-size="18" fill="#6B7280">pelatihan-guru.moodlepilot.id</text>
+    <rect x="722" y="430" width="74" height="28" rx="10" fill="#FEF3C7"/>
+    <text x="759" y="449" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" font-weight="700" fill="#D97706">Proses</text>
+    <circle cx="492" cy="500" r="6" fill="#D97706"/>
+    <text x="508" y="506" font-family="Arial, sans-serif" font-size="16" fill="#D97706">Provisioning</text>
+    <text x="714" y="506" font-family="Arial, sans-serif" font-size="16" fill="#6B7280">Pantau →</text>
+  </g>
+
+  <g>
+    <rect x="880" y="430" width="42" height="42" rx="14" fill="#F3F4F6"/>
+    <text x="940" y="448" font-family="Arial, sans-serif" font-size="24" font-weight="700" fill="#111827">Akademi Online</text>
+    <text x="940" y="478" font-family="Arial, sans-serif" font-size="18" fill="#6B7280">custom domain aktif</text>
+    <rect x="1118" y="430" width="74" height="28" rx="10" fill="#DBEAFE"/>
+    <text x="1155" y="449" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" font-weight="700" fill="#2563EB">Report</text>
+    <circle cx="900" cy="500" r="6" fill="#2563EB"/>
+    <text x="916" y="506" font-family="Arial, sans-serif" font-size="16" fill="#2563EB">Snapshot baru</text>
+  </g>
+
+  <g>
+    <rect x="64" y="572" width="42" height="42" rx="14" fill="#F3F4F6"/>
+    <text x="124" y="590" font-family="Arial, sans-serif" font-size="24" font-weight="700" fill="#111827">Program Sertifikasi</text>
+    <text x="124" y="620" font-family="Arial, sans-serif" font-size="18" fill="#6B7280">backup harian aktif</text>
+    <rect x="314" y="572" width="74" height="28" rx="10" fill="#DCFCE7"/>
+    <text x="351" y="591" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" font-weight="700" fill="#16A34A">Aman</text>
+    <circle cx="84" cy="642" r="6" fill="#16A34A"/>
+    <text x="100" y="648" font-family="Arial, sans-serif" font-size="16" fill="#16A34A">Backup sukses</text>
+  </g>
+
+  <g>
+    <rect x="472" y="572" width="42" height="42" rx="14" fill="#F3F4F6"/>
+    <text x="532" y="590" font-family="Arial, sans-serif" font-size="24" font-weight="700" fill="#111827">Kelas Hybrid</text>
+    <text x="532" y="620" font-family="Arial, sans-serif" font-size="18" fill="#6B7280">laporan dan notifikasi aktif</text>
+    <rect x="722" y="572" width="74" height="28" rx="10" fill="#EDE9FE"/>
+    <text x="759" y="591" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" font-weight="700" fill="#7C3AED">Info</text>
+    <circle cx="492" cy="642" r="6" fill="#7C3AED"/>
+    <text x="508" y="648" font-family="Arial, sans-serif" font-size="16" fill="#7C3AED">Notifikasi baru</text>
+  </g>
+</svg>

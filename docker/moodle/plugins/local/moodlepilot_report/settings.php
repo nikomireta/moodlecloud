@@ -19,6 +19,13 @@ defined('MOODLE_INTERNAL') || die();
 use local_moodlepilot_report\local\bootstrap_config;
 
 if ($hassiteconfig) {
+    $ADMIN->add('localplugins', new admin_externalpage(
+        'local_moodlepilot_report_dashboard',
+        get_string('dashboard:page_title', 'local_moodlepilot_report'),
+        new moodle_url('/local/moodlepilot_report/index.php'),
+        'moodle/site:config'
+    ));
+
     $settings = new admin_settingpage(
         'local_moodlepilot_report',
         get_string('pluginname', 'local_moodlepilot_report')
@@ -36,20 +43,37 @@ if ($hassiteconfig) {
             get_string('bootstrap:state_label', 'local_moodlepilot_report') . ': ' .
                 get_string('bootstrap:state:' . bootstrap_config::bootstrap_state(), 'local_moodlepilot_report'),
             get_string('bootstrap:site_id_label', 'local_moodlepilot_report') . ': ' .
-                bootstrap_config::display_value(bootstrap_config::site_id()),
+                bootstrap_config::display_value(bootstrap_config::provisioned_site_id()),
             get_string('bootstrap:auto_authorize_label', 'local_moodlepilot_report') . ': ' .
                 bootstrap_config::display_value(bootstrap_config::auto_authorize_enabled() ? 'enabled' : 'disabled'),
             get_string('bootstrap:api_base_url_label', 'local_moodlepilot_report') . ': ' .
-                bootstrap_config::display_value(bootstrap_config::api_base_url()),
+                bootstrap_config::display_value(bootstrap_config::provisioned_api_base_url()),
             get_string('bootstrap:token_label', 'local_moodlepilot_report') . ': ' .
                 bootstrap_config::display_value(bootstrap_config::bootstrap_token_present() ? 'configured' : ''),
+        ];
+
+        $manualitems = [
+            get_string('manual:state_label', 'local_moodlepilot_report') . ': ' .
+                get_string('manual:state:' . bootstrap_config::manual_connect_state(), 'local_moodlepilot_report'),
+            get_string('manual:site_id_label', 'local_moodlepilot_report') . ': ' .
+                bootstrap_config::display_value(bootstrap_config::manual_site_id()),
+            get_string('manual:api_base_url_label', 'local_moodlepilot_report') . ': ' .
+                bootstrap_config::display_value(bootstrap_config::manual_api_base_url()),
+            get_string('manual:token_label', 'local_moodlepilot_report') . ': ' .
+                bootstrap_config::display_value(bootstrap_config::manual_registration_token() !== '' ? 'configured' : ''),
+            get_string('manual:reconnect_label', 'local_moodlepilot_report') . ': ' .
+                bootstrap_config::display_value(bootstrap_config::manual_reconnect_requested() ? 'enabled' : 'disabled'),
         ];
 
         $connectionitems = [
             get_string('connection:state_label', 'local_moodlepilot_report') . ': ' .
                 get_string('connection:state:' . bootstrap_config::registration_state(), 'local_moodlepilot_report'),
+            get_string('connection:mode_label', 'local_moodlepilot_report') . ': ' .
+                bootstrap_config::display_value(bootstrap_config::connection_mode()),
             get_string('connection:bootstrap_endpoint_label', 'local_moodlepilot_report') . ': ' .
                 bootstrap_config::display_value(bootstrap_config::bootstrap_endpoint()),
+            get_string('connection:connect_endpoint_label', 'local_moodlepilot_report') . ': ' .
+                bootstrap_config::display_value(bootstrap_config::connect_endpoint()),
             get_string('connection:ingest_url_label', 'local_moodlepilot_report') . ': ' .
                 bootstrap_config::display_value(bootstrap_config::ingest_url()),
             get_string('connection:ingest_token_label', 'local_moodlepilot_report') . ': ' .
@@ -71,6 +95,11 @@ if ($hassiteconfig) {
         $details .= html_writer::alist($items);
         $details .= html_writer::tag(
             'p',
+            get_string('manual:description', 'local_moodlepilot_report')
+        );
+        $details .= html_writer::alist($manualitems);
+        $details .= html_writer::tag(
+            'p',
             get_string('connection:description', 'local_moodlepilot_report')
         );
         $details .= html_writer::alist($connectionitems);
@@ -79,6 +108,43 @@ if ($hassiteconfig) {
             'local_moodlepilot_report/bootstrap',
             get_string('bootstrap:heading', 'local_moodlepilot_report'),
             $details
+        ));
+
+        $settings->add(new admin_setting_heading(
+            'local_moodlepilot_report/manualconnect',
+            get_string('manual:heading', 'local_moodlepilot_report'),
+            get_string('manual:settings_intro', 'local_moodlepilot_report')
+        ));
+
+        $settings->add(new admin_setting_configtext(
+            'local_moodlepilot_report/manual_site_id',
+            get_string('manual:site_id_label', 'local_moodlepilot_report'),
+            get_string('manual:site_id_desc', 'local_moodlepilot_report'),
+            '',
+            PARAM_TEXT
+        ));
+
+        $settings->add(new admin_setting_configtext(
+            'local_moodlepilot_report/manual_api_base_url',
+            get_string('manual:api_base_url_label', 'local_moodlepilot_report'),
+            get_string('manual:api_base_url_desc', 'local_moodlepilot_report'),
+            '',
+            PARAM_URL
+        ));
+
+        $settings->add(new admin_setting_configtext(
+            'local_moodlepilot_report/manual_registration_token',
+            get_string('manual:token_label', 'local_moodlepilot_report'),
+            get_string('manual:token_desc', 'local_moodlepilot_report'),
+            '',
+            PARAM_RAW_TRIMMED
+        ));
+
+        $settings->add(new admin_setting_configcheckbox(
+            'local_moodlepilot_report/manual_force_reconnect',
+            get_string('manual:reconnect_label', 'local_moodlepilot_report'),
+            get_string('manual:reconnect_desc', 'local_moodlepilot_report'),
+            0
         ));
     }
 

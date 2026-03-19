@@ -1,15 +1,143 @@
 'use client'
 
-// Moodlepilot Indonesia - Landing Page
-import { Header } from "@/components/layout/header"
-import { Footer } from "@/components/layout/footer"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { ArrowRight, CloudUpload, BarChart3, Lock, Users, Zap, CheckCircle2 } from "lucide-react"
+import Image from "next/image"
 import Link from "next/link"
+import {
+  ArrowRight,
+  BarChart3,
+  CheckCircle2,
+  CloudUpload,
+  Database,
+  Globe,
+  Server,
+  Shield,
+  Sparkles,
+} from "lucide-react"
+
+import { Footer } from "@/components/layout/footer"
+import { Header } from "@/components/layout/header"
 import { useAuth } from "@/components/providers/auth-provider"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import { formatPrice, getGroupStartingPlan, pricingPlanGroups } from "@/lib/pricing"
+
+const heroHighlights = [
+  "Provisioning lebih cepat",
+  "Domain lebih fleksibel",
+  "Backup lebih rapi",
+]
+
+const featurePillars = [
+  {
+    icon: CloudUpload,
+    title: "Provisioning lebih rapi",
+    description:
+      "Daftar, pilih paket, cek subdomain, lalu pantau progres pembuatan site sampai aktif tanpa setup server manual.",
+  },
+  {
+    icon: Globe,
+    title: "Branding lebih siap pakai",
+    description:
+      "Mulai cepat dengan subdomain bawaan, lalu sambungkan custom domain ketika butuh domain institusi sendiri.",
+  },
+  {
+    icon: Shield,
+    title: "Backup tidak ditaruh di belakang",
+    description:
+      "Backup manual dan terjadwal sudah masuk ke alur produk sehingga operasional tidak bergantung pada proses ad hoc.",
+  },
+  {
+    icon: BarChart3,
+    title: "Laporan lebih mudah dilihat",
+    description:
+      "Ada reporting dan snapshot aktivitas agar tim admin lebih cepat membaca kondisi penggunaan site.",
+  },
+  {
+    icon: Server,
+    title: "Kontrol runtime tetap ada",
+    description:
+      "Saat perlu penanganan cepat, runtime site bisa di-start, stop, atau restart dari alur operasional yang sama.",
+  },
+  {
+    icon: Sparkles,
+    title: "Workflow AI mulai disiapkan",
+    description:
+      "AI outline dan export MBZ sudah ada sebagai jalur awal untuk mempercepat penyusunan course.",
+    badge: "Eksperimen",
+  },
+]
+
+const comparisonCards = [
+  {
+    title: "Moodlepilot",
+    subtitle: "Fokus operasional institusi",
+    badge: "Paling lengkap",
+    items: [
+      "Provisioning diarahkan dari alur produk",
+      "Subdomain bawaan plus custom domain",
+      "Backup terjadwal dan kontrol runtime",
+      "Reporting, snapshot, dan notifikasi operasional",
+    ],
+  },
+  {
+    title: "MoodleCloud",
+    subtitle: "Layanan paket siap pakai",
+    items: [
+      "Mulai cepat dengan model paket",
+      "Domain sendiri tersedia di paket tertentu",
+      "Kontrol mengikuti batas layanan paket",
+      "Lebih fokus pada hosting siap jalan",
+    ],
+  },
+  {
+    title: "Hosting Moodle biasa",
+    subtitle: "Lebih banyak setup di pihak Anda",
+    items: [
+      "Sering butuh setup dan maintain manual",
+      "Fleksibel, tetapi konfigurasi ada di pihak Anda",
+      "Backup dan kontrol bergantung provider atau admin",
+      "Laporan sering perlu plugin atau integrasi tambahan",
+    ],
+  },
+]
+
+const workflowSteps = [
+  {
+    number: "01",
+    title: "Mulai dari paket yang pas",
+    description:
+      "Pilih kapasitas yang sesuai kebutuhan institusi, bukan langsung masuk ke pekerjaan teknis server.",
+  },
+  {
+    number: "02",
+    title: "Atur identitas site",
+    description:
+      "Tentukan nama site, subdomain, admin utama, lalu lanjutkan ke provisioning dengan alur yang jelas.",
+  },
+  {
+    number: "03",
+    title: "Pantau sampai site aktif",
+    description:
+      "Progress provisioning, status langkah kerja, dan error terakhir bisa dibaca tanpa menebak-nebak.",
+  },
+  {
+    number: "04",
+    title: "Kelola operasional harian",
+    description:
+      "Masuk ke backup, laporan, notifikasi, dan kontrol runtime dari satu dashboard operasional.",
+  },
+]
+
+const mockupItems = [
+  {
+    title: "Pendampingan migrasi terarah",
+    description: "Framing onboarding untuk institusi yang pindah dari hosting manual atau LMS lama.",
+  },
+  {
+    title: "Ringkasan health lintas site",
+    description: "Ikhtisar operasional untuk membantu admin memantau beberapa site dengan lebih cepat.",
+  },
+]
 
 export default function HomePage() {
   const { status } = useAuth()
@@ -18,277 +146,275 @@ export default function HomePage() {
   return (
     <div className="flex min-h-screen flex-col bg-background">
       <Header />
-      
+
       <main className="flex-1">
-        {/* Hero Section */}
         <section className="relative overflow-hidden border-b border-border">
-          <div className="mx-auto max-w-7xl px-4 py-24 sm:px-6 lg:px-8">
-            <div className="grid gap-12 lg:grid-cols-2 lg:gap-8 items-center">
-              <div className="flex flex-col justify-center">
-                <h1 className="text-4xl font-bold tracking-tight sm:text-5xl lg:text-6xl text-balance">
-                  Platform Manajemen Moodlepilot untuk Indonesia
-                </h1>
-                <p className="mt-6 text-lg text-muted-foreground max-w-lg text-pretty">
-                  Buat, kelola, dan skalakan situs Moodle Anda dengan mudah. Infrastruktur cloud yang andal, performa tinggi, dan dukungan penuh dalam bahasa Indonesia.
-                </p>
-                <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-                  <Link href={isLoggedIn ? "/dashboard" : "/daftar"}>
-                    <Button size="lg" className="w-full sm:w-auto">
-                      Mulai Sekarang
-                      <ArrowRight className="ml-2 h-4 w-4" />
-                    </Button>
-                  </Link>
-                  <Link href="/dokumentasi">
-                    <Button variant="outline" size="lg" className="w-full sm:w-auto">
-                      Pelajari Lebih Lanjut
-                    </Button>
-                  </Link>
-                </div>
-                
-                {/* Stats */}
-                <div className="mt-12 grid grid-cols-3 gap-8">
-                  <div>
-                    <p className="text-2xl font-bold">500+</p>
-                    <p className="text-sm text-muted-foreground">Institusi Pendidikan</p>
-                  </div>
-                  <div>
-                    <p className="text-2xl font-bold">50K+</p>
-                    <p className="text-sm text-muted-foreground">Pengguna Aktif</p>
-                  </div>
-                  <div>
-                    <p className="text-2xl font-bold">99.9%</p>
-                    <p className="text-sm text-muted-foreground">Uptime</p>
-                  </div>
-                </div>
+          <div className="absolute inset-0 bg-gradient-to-b from-muted/40 via-background to-background" />
+          <div className="mx-auto grid max-w-7xl items-center gap-10 px-4 py-16 sm:px-6 lg:grid-cols-[0.95fr_1.05fr] lg:px-8 lg:py-18">
+            <div className="relative flex flex-col justify-center">
+              <Badge variant="outline" className="w-fit">
+                Untuk sekolah, kampus, dan lembaga pelatihan
+              </Badge>
+              <h1 className="mt-4 max-w-2xl text-4xl font-bold tracking-tight text-balance sm:text-5xl lg:text-[3.35rem] lg:leading-[1.05]">
+                Jalankan Moodle lebih cepat tanpa repot mengurus operasional server dari nol
+              </h1>
+              <p className="mt-4 max-w-xl text-base text-muted-foreground text-pretty sm:text-lg">
+                Moodlepilot membantu institusi menyiapkan site, mengatur domain, memantau backup, membaca laporan,
+                dan menangani operasional penting dari satu alur yang lebih rapi.
+              </p>
+
+              <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+                <Link href={isLoggedIn ? "/dashboard" : "/daftar"}>
+                  <Button size="lg" className="w-full sm:w-auto">
+                    Mulai Sekarang
+                    <ArrowRight className="ml-2 h-4 w-4" />
+                  </Button>
+                </Link>
+                <Link href="/harga">
+                  <Button variant="outline" size="lg" className="w-full sm:w-auto">
+                    Lihat Harga
+                  </Button>
+                </Link>
               </div>
 
-              {/* Visual Element */}
-              <div className="relative h-96 rounded-lg border border-border bg-card overflow-hidden">
-                <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-accent/5" />
-                <div className="flex items-center justify-center h-full">
-                  <div className="text-center">
-                    <CloudUpload className="h-16 w-16 mx-auto text-muted-foreground mb-4" />
-                    <p className="text-muted-foreground">Dashboard Manajemen Intuitif</p>
+              <div className="mt-5 flex flex-wrap gap-2">
+                {heroHighlights.map((item) => (
+                  <div
+                    key={item}
+                    className="inline-flex items-center gap-2 rounded-full border border-border bg-card/70 px-3 py-1.5 text-xs text-muted-foreground sm:text-sm"
+                  >
+                    <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-primary" />
+                    <span>{item}</span>
                   </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="relative">
+              <div className="rounded-2xl border border-border bg-card p-3 shadow-sm sm:p-4">
+                <div className="mb-3 flex items-center justify-between gap-4">
+                  <div>
+                    <p className="text-sm font-semibold tracking-tight">Dashboard nyata Moodlepilot</p>
+                    <p className="text-xs text-muted-foreground sm:text-sm">Ringkasan site dan operasional dalam satu layar.</p>
+                  </div>
+                  <Badge variant="secondary">Contoh dashboard</Badge>
+                </div>
+
+                <div className="overflow-hidden rounded-xl border border-border bg-background">
+                  <Image
+                    src="/hero-dashboard-safe.svg"
+                    alt="Screenshot dashboard Moodlepilot"
+                    width={1280}
+                    height={720}
+                    className="h-auto w-full"
+                    priority
+                  />
                 </div>
               </div>
             </div>
           </div>
         </section>
 
-        {/* Features Section */}
-        <section className="border-b border-border py-24">
+        <section className="border-b border-border py-20">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-            <div className="text-center mb-16">
-              <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">
-                Fitur Unggulan
+            <div className="max-w-3xl">
+              <Badge variant="outline">Kenapa ini lebih pas untuk institusi</Badge>
+              <h2 className="mt-4 text-3xl font-bold tracking-tight text-balance sm:text-4xl">
+                Bukan sekadar hosting Moodle, tetapi alur operasional yang lebih mudah dijalankan
               </h2>
-              <p className="mt-4 text-lg text-muted-foreground max-w-2xl mx-auto">
-                Semua yang Anda butuhkan untuk mengelola Moodle dengan efisien
+              <p className="mt-4 text-lg text-muted-foreground text-pretty">
+                Fokus homepage ini hanya pada hal yang paling penting: memudahkan tim akademik dan admin menjalankan LMS
+                tanpa memecah pekerjaan ke banyak alat dan proses manual.
               </p>
             </div>
 
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-              {[
-                {
-                  icon: CloudUpload,
-                  title: "Pembuatan Situs Instant",
-                  description: "Buat situs Moodle baru dalam hitungan menit tanpa perlu konfigurasi server yang rumit"
-                },
-                {
-                  icon: BarChart3,
-                  title: "Analytics Mendalam",
-                  description: "Pantau performa situs dengan dashboard analytics yang comprehensive dan real-time"
-                },
-                {
-                  icon: Lock,
-                  title: "Keamanan Enterprise",
-                  description: "Enkripsi end-to-end, backup otomatis harian, dan compliance dengan standar internasional"
-                },
-                {
-                  icon: Zap,
-                  title: "Performa Tinggi",
-                  description: "CDN global, caching otomatis, dan optimasi server untuk kecepatan maksimal"
-                },
-                {
-                  icon: Users,
-                  title: "Manajemen Tim",
-                  description: "Kelola anggota tim, atur role dan permission dengan sistem kontrol akses yang fleksibel"
-                },
-                {
-                  icon: CheckCircle2,
-                  title: "Dukungan Lokal",
-                  description: "Tim support berpengalaman siap membantu dalam bahasa Indonesia 24/7"
-                }
-              ].map((feature, idx) => {
+            <div className="mt-12 grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+              {featurePillars.map((feature) => {
                 const Icon = feature.icon
+
                 return (
-                  <div key={idx} className="rounded-lg border border-border bg-card p-6 hover:bg-card/80 transition-colors">
-                    <Icon className="h-8 w-8 mb-4 text-primary" />
-                    <h3 className="text-lg font-semibold mb-2">{feature.title}</h3>
-                    <p className="text-sm text-muted-foreground">{feature.description}</p>
+                  <div key={feature.title} className="rounded-xl border border-border bg-card p-6">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                        <Icon className="h-5 w-5" />
+                      </div>
+                      {feature.badge ? <Badge variant="secondary">{feature.badge}</Badge> : null}
+                    </div>
+                    <h3 className="mt-5 text-lg font-semibold">{feature.title}</h3>
+                    <p className="mt-2 text-sm text-muted-foreground">{feature.description}</p>
                   </div>
                 )
               })}
             </div>
+
+            <div className="mt-8 rounded-xl border border-dashed border-border bg-muted/30 p-6">
+              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="secondary">Segera</Badge>
+                    <p className="text-sm font-semibold">Beberapa alur bisa dimockup dulu untuk memperjelas arah produk</p>
+                  </div>
+                  <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
+                    Item di bawah ini dapat tampil sebagai sinyal arah pengembangan tanpa diposisikan sebagai fitur yang sudah live.
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-5 grid gap-4 md:grid-cols-2">
+                {mockupItems.map((item) => (
+                  <div key={item.title} className="rounded-lg border border-border bg-background p-4">
+                    <p className="text-sm font-medium">{item.title}</p>
+                    <p className="mt-1 text-sm text-muted-foreground">{item.description}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         </section>
 
-        {/* How It Works Section */}
-        <section className="border-b border-border py-24">
+        <section className="border-b border-border py-20">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-            <div className="text-center mb-16">
-              <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">
-                Cara Kerja
+            <div className="max-w-3xl">
+              <Badge variant="outline">Perbandingan singkat</Badge>
+              <h2 className="mt-4 text-3xl font-bold tracking-tight text-balance sm:text-4xl">
+                Bandingkan model pengelolaannya, bukan sekadar tempat menjalankan Moodle
               </h2>
-              <p className="mt-4 text-lg text-muted-foreground max-w-2xl mx-auto">
-                Tiga langkah sederhana untuk mulai menggunakan Moodlepilot
+              <p className="mt-4 text-lg text-muted-foreground text-pretty">
+                Ringkasan ini mengikuti capability produk di repo dan framing dari dokumentasi publik layanan pembanding.
+                Tujuannya untuk membantu tim institusi membaca perbedaan model kerja dengan cepat.
               </p>
             </div>
 
-            <div className="grid md:grid-cols-3 gap-8">
-              {[
-                {
-                  number: "01",
-                  title: "Daftar Akun",
-                  description: "Buat akun Moodlepilot Anda dengan email dalam waktu kurang dari 2 menit"
-                },
-                {
-                  number: "02",
-                  title: "Konfigurasi Situs",
-                  description: "Pilih subdomain, atur informasi dasar, dan sesuaikan pengaturan situs sesuai kebutuhan"
-                },
-                {
-                  number: "03",
-                  title: "Mulai Mengajar",
-                  description: "Situs Anda siap digunakan! Mulai buat kursus dan undang pengguna sekarang"
-                }
-              ].map((step, idx) => (
-                <div key={idx} className="relative">
-                  <div className="rounded-lg border border-border bg-card p-8">
-                    <div className="text-4xl font-bold text-muted-foreground mb-4">{step.number}</div>
-                    <h3 className="text-xl font-semibold mb-3">{step.title}</h3>
-                    <p className="text-muted-foreground text-sm">{step.description}</p>
+            <div className="mt-10 grid gap-6 lg:grid-cols-3">
+              {comparisonCards.map((card) => (
+                <div key={card.title} className="rounded-2xl border border-border bg-card p-6">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <h3 className="text-lg font-semibold">{card.title}</h3>
+                      <p className="mt-1 text-sm text-muted-foreground">{card.subtitle}</p>
+                    </div>
+                    {card.badge ? <Badge>{card.badge}</Badge> : null}
                   </div>
-                  {idx < 2 && (
-                    <div className="hidden md:block absolute top-1/2 -right-4 w-8 h-0.5 bg-border" />
-                  )}
+
+                  <div className="mt-6 space-y-3">
+                    {card.items.map((item) => (
+                      <div key={item} className="flex items-start gap-3">
+                        <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                        <p className="text-sm text-muted-foreground">{item}</p>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               ))}
             </div>
           </div>
         </section>
 
-        {/* Pricing Section */}
-        <section className="border-b border-border py-24">
+        <section className="border-b border-border py-20">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-            <div className="text-center mb-16">
-              <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">
-                Paket Harga Terjangkau
+            <div className="max-w-3xl">
+              <Badge variant="outline">Cara kerja</Badge>
+              <h2 className="mt-4 text-3xl font-bold tracking-tight text-balance sm:text-4xl">
+                Dari daftar sampai site aktif, alurnya dibuat agar mudah diikuti
               </h2>
-              <p className="mt-4 text-lg text-muted-foreground max-w-2xl mx-auto">
-                Pilih paket yang sesuai dengan kebutuhan Anda
+            </div>
+
+            <div className="mt-12 grid gap-6 md:grid-cols-2 xl:grid-cols-4">
+              {workflowSteps.map((step) => (
+                <div key={step.number} className="rounded-xl border border-border bg-card p-6">
+                  <p className="text-4xl font-bold text-muted-foreground">{step.number}</p>
+                  <h3 className="mt-5 text-lg font-semibold">{step.title}</h3>
+                  <p className="mt-3 text-sm text-muted-foreground">{step.description}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section className="border-b border-border py-20">
+          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+            <div className="max-w-3xl">
+              <Badge variant="outline">Paket ringkas</Badge>
+              <h2 className="mt-4 text-3xl font-bold tracking-tight text-balance sm:text-4xl">
+                Mulai dari kapasitas yang sesuai, lalu naik saat kebutuhan bertambah
+              </h2>
+              <p className="mt-4 text-lg text-muted-foreground text-pretty">
+                Homepage cukup menunjukkan pilihan awal. Detail lengkap, FAQ, dan opsi pembayaran tetap ada di halaman harga.
               </p>
             </div>
 
-            <Tabs defaultValue={pricingPlanGroups[0]?.id} className="gap-6">
-              <TabsList className="mx-auto grid h-auto w-full max-w-2xl grid-cols-3">
-                {pricingPlanGroups.map((group) => (
-                  <TabsTrigger key={group.id} value={group.id} className="px-4 py-2">
-                    {group.name}
-                  </TabsTrigger>
-                ))}
-              </TabsList>
-
+            <div className="mt-12 grid gap-6 lg:grid-cols-3">
               {pricingPlanGroups.map((group) => {
                 const startingPlan = getGroupStartingPlan(group)
 
                 return (
-                  <TabsContent key={group.id} value={group.id}>
-                    <div className="rounded-xl border border-border bg-card/60 p-6 sm:p-8">
-                      <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-                        <div>
-                          <div className="mb-2 flex items-center gap-2">
-                            <h3 className="text-2xl font-bold">{group.name}</h3>
-                            {group.popular && (
-                              <Badge variant="default">Populer</Badge>
-                            )}
-                          </div>
-                          <p className="max-w-2xl text-sm text-muted-foreground">{group.description}</p>
+                  <div key={group.id} className="rounded-xl border border-border bg-card p-6">
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h3 className="text-xl font-semibold">{group.name}</h3>
+                          {group.popular ? <Badge>Populer</Badge> : null}
                         </div>
-                        <div className="shrink-0 md:text-right">
-                          <p className="text-xs uppercase tracking-wide text-muted-foreground">Mulai dari</p>
-                          <p className="text-2xl font-bold">Rp {formatPrice(startingPlan.monthlyPrice)}/bulan</p>
-                        </div>
+                        <p className="mt-2 text-sm text-muted-foreground">{group.description}</p>
                       </div>
-
-                      <div className={`grid gap-4 ${
-                        group.plans.length === 4
-                          ? "sm:grid-cols-2 xl:grid-cols-4"
-                          : "sm:grid-cols-2 xl:grid-cols-3"
-                      }`}>
-                        {group.plans.map((plan) => (
-                          <div
-                            key={plan.code}
-                            className={`rounded-lg border p-4 ${
-                              plan.recommended
-                                ? "border-primary bg-background"
-                                : "border-border bg-background/60"
-                            }`}
-                          >
-                            <div className="mb-3">
-                              <div className="mb-1 flex items-center gap-2">
-                                <h4 className="font-semibold">{plan.label}</h4>
-                                {plan.recommended && (
-                                  <Badge variant="outline" className="text-[10px]">
-                                    Pilihan utama
-                                  </Badge>
-                                )}
-                              </div>
-                              <p className="text-xs text-muted-foreground">
-                                {plan.usersLabel} • {plan.storageLabel}
-                              </p>
-                            </div>
-                            <p className="text-lg font-bold">Rp {formatPrice(plan.monthlyPrice)}</p>
-                            <p className="text-xs text-muted-foreground">/bulan</p>
-                          </div>
-                        ))}
-                      </div>
-
-                      <div className="mt-6 flex justify-center">
-                        <Link href="/harga">
-                          <Button variant="outline">
-                            Lihat Detail Paket
-                          </Button>
-                        </Link>
+                      <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                        <Database className="h-5 w-5" />
                       </div>
                     </div>
-                  </TabsContent>
+
+                    <div className="mt-6 rounded-xl bg-muted/40 p-4">
+                      <p className="text-xs uppercase tracking-wide text-muted-foreground">Mulai dari</p>
+                      <p className="mt-1 text-2xl font-bold">Rp {formatPrice(startingPlan.monthlyPrice)}/bulan</p>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        {startingPlan.usersLabel} • {startingPlan.storageLabel}
+                      </p>
+                    </div>
+
+                    <div className="mt-6 space-y-3">
+                      {group.summaryFeatures.map((feature) => (
+                        <div key={feature} className="flex items-start gap-3">
+                          <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                          <p className="text-sm text-muted-foreground">{feature}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 )
               })}
-            </Tabs>
+            </div>
+
+            <div className="mt-8 flex justify-center">
+              <Link href="/harga">
+                <Button variant="outline" size="lg">
+                  Lihat Detail Paket
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+              </Link>
+            </div>
           </div>
         </section>
 
-        {/* CTA Section */}
-        <section className="py-24">
-          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 text-center">
-            <h2 className="text-3xl font-bold tracking-tight sm:text-4xl mb-4">
-              Siap Memulai?
+        <section className="py-20">
+          <div className="mx-auto max-w-5xl px-4 text-center sm:px-6 lg:px-8">
+            <Badge variant="outline">Siap mulai</Badge>
+            <h2 className="mt-4 text-3xl font-bold tracking-tight text-balance sm:text-4xl">
+              Jika yang Anda cari adalah Moodle yang lebih siap dijalankan, mulai dari sini
             </h2>
-            <p className="text-lg text-muted-foreground mb-8 max-w-2xl mx-auto">
-              Bergabunglah dengan ribuan institusi pendidikan yang telah mempercayai Moodlepilot untuk mengelola pembelajaran mereka
+            <p className="mx-auto mt-4 max-w-2xl text-lg text-muted-foreground text-pretty">
+              Mulai dari paket yang sesuai, aktifkan site, lalu kelola domain, backup, laporan, dan operasional harian
+              dari alur yang lebih rapi.
             </p>
-            <div className="flex flex-col gap-3 sm:flex-row justify-center">
+
+            <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
               <Link href={isLoggedIn ? "/dashboard" : "/daftar"}>
                 <Button size="lg">
                   Mulai Sekarang
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
               </Link>
-              <Link href="/dokumentasi">
+              <Link href="/harga">
                 <Button variant="outline" size="lg">
-                  Lihat Dokumentasi
+                  Bandingkan Paket
                 </Button>
               </Link>
             </div>

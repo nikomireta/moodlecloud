@@ -120,6 +120,25 @@ func TestReportBootstrapTokenIsStableAndValidatable(t *testing.T) {
 	}
 }
 
+func TestReportConnectTokenIsStableAndValidatable(t *testing.T) {
+	secret := "test-secret"
+	siteID := "11111111-2222-3333-4444-555555555555"
+
+	token := ReportConnectToken(secret, siteID)
+	if token == "" {
+		t.Fatal("expected connect token to be generated")
+	}
+	if token != ReportConnectToken(secret, siteID) {
+		t.Fatal("expected connect token derivation to be stable")
+	}
+	if !ValidateReportConnectToken(secret, siteID, token) {
+		t.Fatal("expected derived connect token to validate")
+	}
+	if ValidateReportConnectToken(secret, siteID, token+"x") {
+		t.Fatal("expected modified connect token to be rejected")
+	}
+}
+
 func TestBuildSiteDatabaseURLUsesAdminConnectionHost(t *testing.T) {
 	metadata := store.SiteRuntimeMetadata{
 		DatabaseName: "mc_demo_11111111",
