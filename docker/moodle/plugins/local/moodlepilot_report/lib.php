@@ -18,27 +18,39 @@ defined('MOODLE_INTERNAL') || die();
 
 use local_moodlepilot_report\local\bootstrap_config;
 
-function local_moodlepilot_report_before_standard_top_of_body_html(): string {
+function local_moodlepilot_report_tracking_enabled(): bool {
+    return bootstrap_config::plugin_enabled() && isloggedin() && !isguestuser();
+}
+
+function local_moodlepilot_report_after_require_login(
+    $courseorid = null,
+    $autologinguest = null,
+    $cm = null,
+    $setwantsurltome = null,
+    $preventredirect = null,
+): void {
     global $COURSE, $PAGE, $USER;
 
-    if (!bootstrap_config::plugin_enabled()) {
-        return '';
+    if (!local_moodlepilot_report_tracking_enabled()) {
+        return;
     }
     if ((defined('CLI_SCRIPT') && CLI_SCRIPT) || (defined('AJAX_SCRIPT') && AJAX_SCRIPT) || (defined('WS_SERVER') && WS_SERVER)) {
-        return '';
+        return;
     }
-    if (!isloggedin() || isguestuser() || empty($USER->id) || empty($PAGE) || empty($PAGE->context) || empty($PAGE->url)) {
-        return '';
+    if (empty($USER->id) || empty($PAGE)) {
+        return;
     }
 
-    $url = '';
-    try {
-        $url = $PAGE->url->out_as_local_url(false);
-    } catch (\Throwable $exception) {
-        $url = '';
+    $requesturi = trim((string)($_SERVER['REQUEST_URI'] ?? ''));
+    if ($requesturi !== '' && strpos($requesturi, '/login/') !== false) {
+        return;
     }
-    if ($url !== '' && strpos($url, '/login/') !== false) {
-        return '';
+
+    try {
+        $pagecontext = $PAGE->context;
+        $requires = $PAGE->requires;
+    } catch (Throwable $exception) {
+        return;
     }
 
     $courseid = 0;
@@ -48,22 +60,37 @@ function local_moodlepilot_report_before_standard_top_of_body_html(): string {
 
     $pagetype = 'site';
     $pageinstance = 0;
-    $contextlevel = (int)($PAGE->context->contextlevel ?? 0);
-    if ($contextlevel === CONTEXT_MODULE) {
+    $contextlevel = (int)($pagecontext->contextlevel ?? 0);
+    $contextinstanceid = (int)($pagecontext->instanceid ?? 0);
+    $pagepagetype = (string)($PAGE->pagetype ?? '');
+    $issitelevelpage = str_starts_with($pagepagetype, 'my-') || str_starts_with($pagepagetype, 'site-');
+    if ($issitelevelpage) {
+        $courseid = 0;
+    } else if ($contextlevel === CONTEXT_MODULE && !empty($cm->id)) {
         $pagetype = 'module';
-        $pageinstance = (int)($PAGE->context->instanceid ?? 0);
-    } else if ($contextlevel === CONTEXT_COURSE || $courseid > 0) {
+        $pageinstance = (int)$cm->id;
+    } else if ($courseid > 0) {
         $pagetype = 'course';
-        $pageinstance = $courseid > 0 ? $courseid : (int)($PAGE->context->instanceid ?? 0);
-        $courseid = $pageinstance;
+        $pageinstance = $courseid;
+    } else if ($contextlevel === CONTEXT_COURSE && $contextinstanceid > 0 && $contextinstanceid !== SITEID) {
+        $pagetype = 'course';
+        $pageinstance = $contextinstanceid;
+        $courseid = $contextinstanceid;
     }
 
-    $pagelabel = trim(strip_tags((string)($PAGE->heading ?? $PAGE->title ?? '')));
+    $pagelabel = '';
+    foreach ([$PAGE->heading ?? '', $PAGE->title ?? '', $PAGE->pagetype ?? ''] as $candidate) {
+        $candidate = trim(strip_tags((string)$candidate));
+        if ($candidate !== '') {
+            $pagelabel = $candidate;
+            break;
+        }
+    }
     if ($pagelabel === '') {
         $pagelabel = $pagetype;
     }
 
-    $PAGE->requires->js_call_amd('local_moodlepilot_report/tracking', 'init', [[
+    $requires->js_call_amd('local_moodlepilot_report/tracking', 'init', [[
         'pageType' => $pagetype,
         'pageInstance' => max(0, $pageinstance),
         'courseId' => max(0, $courseid),
@@ -71,6 +98,8 @@ function local_moodlepilot_report_before_standard_top_of_body_html(): string {
         'intervalSeconds' => bootstrap_config::tracking_interval_seconds(),
         'inactivitySeconds' => bootstrap_config::tracking_inactivity_seconds(),
     ]]);
+}
 
+function local_moodlepilot_report_before_standard_top_of_body_html(): string {
     return '';
 }

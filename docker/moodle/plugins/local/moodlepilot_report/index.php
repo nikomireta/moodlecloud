@@ -17,167 +17,234 @@
 require_once(__DIR__ . '/../../config.php');
 
 use local_moodlepilot_report\local\bootstrap_config;
-use local_moodlepilot_report\local\report_snapshot_builder;
 use local_moodlepilot_report\local\tracking_repository;
 
 require_login();
 
+if (isguestuser()) {
+    throw new moodle_exception('noguest');
+}
+
 $systemcontext = context_system::instance();
 require_capability('moodle/site:config', $systemcontext);
 
-admin_externalpage_setup('local_moodlepilot_report_dashboard');
-
 $PAGE->set_context($systemcontext);
 $PAGE->set_url(new moodle_url('/local/moodlepilot_report/index.php'));
+$PAGE->set_pagelayout('standard');
 $PAGE->set_title(get_string('dashboard:page_title', 'local_moodlepilot_report'));
 $PAGE->set_heading(get_string('dashboard:page_heading', 'local_moodlepilot_report'));
+$PAGE->navbar->add(get_string('dashboard:page_title', 'local_moodlepilot_report'));
 
-$snapshot = report_snapshot_builder::build_last_7_days();
-$payload = $snapshot['payload'] ?? [];
-
-$formatdatetime = static function(string $value): string {
-    $value = trim($value);
-    if ($value === '') {
-        return '-';
-    }
-    $timestamp = strtotime($value);
-    if ($timestamp === false) {
-        return s($value);
-    }
-    return userdate($timestamp, get_string('strftimedatetime'));
-};
-
-$rendertable = static function(array $headers, array $rows): string {
+$renderpairs = static function(array $rows): string {
     if (empty($rows)) {
         return html_writer::tag('p', get_string('dashboard:empty', 'local_moodlepilot_report'));
     }
 
     $table = new html_table();
-    $table->head = $headers;
-    $table->data = $rows;
+    $table->head = ['Item', 'Value'];
+    $table->data = array_map(static function(array $row): array {
+        return [s((string)$row[0]), s((string)$row[1])];
+    }, $rows);
     $table->attributes['class'] = 'generaltable';
+
     return html_writer::table($table);
 };
 
-$summaryrows = [
-    [s('Period start'), $formatdatetime((string)($snapshot['period_start'] ?? ''))],
-    [s('Period end'), $formatdatetime((string)($snapshot['period_end'] ?? ''))],
-    [s('Logins'), (int)(($payload['summary_metrics']['login_count'] ?? 0))],
-    [s('Active users'), (int)(($payload['summary_metrics']['active_users'] ?? 0))],
-    [s('Submissions'), (int)(($payload['summary_metrics']['submissions'] ?? 0))],
-    [s('Average session'), s((string)($payload['summary_metrics']['avg_online_label'] ?? '0 m'))],
-];
+$rendersection = static function(string $title, string $description, string $body): string {
+    $heading = html_writer::tag('h3', s($title));
+    $intro = html_writer::tag('p', s($description));
+    return html_writer::div($heading . $intro . $body, 'local-moodlepilot-report-section');
+};
+
+$renderlist = static function(array $items): string {
+    if (empty($items)) {
+        return html_writer::tag('p', get_string('dashboard:empty', 'local_moodlepilot_report'));
+    }
+
+    $safeitems = array_map(static function(string $item): string {
+        return s($item);
+    }, $items);
+
+    return html_writer::alist($safeitems);
+};
+
+$enabledlabel = static function(bool $enabled): string {
+    return $enabled ? 'enabled' : 'disabled';
+};
 
 $connectionrows = [
-    [s('Bootstrap state'), s(bootstrap_config::bootstrap_state())],
-    [s('Manual connect state'), s(bootstrap_config::manual_connect_state())],
-    [s('Registration state'), s(bootstrap_config::registration_state())],
-    [s('Connection mode'), s(bootstrap_config::display_value(bootstrap_config::connection_mode()))],
-    [s('API base URL'), s(bootstrap_config::display_value(bootstrap_config::api_base_url()))],
-    [s('Connect endpoint'), s(bootstrap_config::display_value(bootstrap_config::connect_endpoint()))],
-    [s('Ingest URL'), s(bootstrap_config::display_value(bootstrap_config::ingest_url()))],
-    [s('Manual site ID'), s(bootstrap_config::display_value(bootstrap_config::manual_site_id()))],
-    [s('Tracking mode'), s(bootstrap_config::display_value(bootstrap_config::tracking_mode()))],
-    [s('Last tracking seen'), s(bootstrap_config::display_value(bootstrap_config::last_tracking_seen_at()))],
-    [s('Last rollup at'), s(bootstrap_config::display_value(bootstrap_config::last_rollup_at()))],
-    [s('Registered at'), s(bootstrap_config::display_value(bootstrap_config::registered_at()))],
-    [s('Last report push'), s(bootstrap_config::display_value(bootstrap_config::last_report_push_at()))],
-    [s('Last bootstrap error'), s(bootstrap_config::display_value(bootstrap_config::last_bootstrap_error()))],
-    [s('Last ingest error'), s(bootstrap_config::display_value(bootstrap_config::last_ingest_error()))],
+    [
+        get_string('connection:state_label', 'local_moodlepilot_report'),
+        get_string('connection:state:' . bootstrap_config::registration_state(), 'local_moodlepilot_report'),
+    ],
+    [
+        get_string('connection:mode_label', 'local_moodlepilot_report'),
+        bootstrap_config::display_value(bootstrap_config::connection_mode()),
+    ],
+    [
+        get_string('bootstrap:site_id_label', 'local_moodlepilot_report'),
+        bootstrap_config::display_value(bootstrap_config::site_id()),
+    ],
+    [
+        get_string('bootstrap:api_base_url_label', 'local_moodlepilot_report'),
+        bootstrap_config::display_value(bootstrap_config::api_base_url()),
+    ],
+    [
+        get_string('connection:bootstrap_endpoint_label', 'local_moodlepilot_report'),
+        bootstrap_config::display_value(bootstrap_config::bootstrap_endpoint()),
+    ],
+    [
+        get_string('connection:connect_endpoint_label', 'local_moodlepilot_report'),
+        bootstrap_config::display_value(bootstrap_config::connect_endpoint()),
+    ],
+    [
+        get_string('connection:ingest_url_label', 'local_moodlepilot_report'),
+        bootstrap_config::display_value(bootstrap_config::ingest_url()),
+    ],
+    [
+        'Plugin version',
+        bootstrap_config::display_value(bootstrap_config::plugin_version()),
+    ],
+    [
+        'Moodle version',
+        bootstrap_config::display_value(bootstrap_config::moodle_version()),
+    ],
+    [
+        get_string('connection:registered_at_label', 'local_moodlepilot_report'),
+        bootstrap_config::display_value(bootstrap_config::registered_at()),
+    ],
+    [
+        get_string('connection:last_push_at_label', 'local_moodlepilot_report'),
+        bootstrap_config::display_value(bootstrap_config::last_report_push_at()),
+    ],
+    [
+        get_string('connection:last_error_label', 'local_moodlepilot_report'),
+        bootstrap_config::display_value(bootstrap_config::last_bootstrap_error()),
+    ],
+    [
+        get_string('connection:last_ingest_error_label', 'local_moodlepilot_report'),
+        bootstrap_config::display_value(bootstrap_config::last_ingest_error()),
+    ],
+];
+
+$bootstraprows = [
+    [
+        get_string('bootstrap:state_label', 'local_moodlepilot_report'),
+        get_string('bootstrap:state:' . bootstrap_config::bootstrap_state(), 'local_moodlepilot_report'),
+    ],
+    [
+        get_string('bootstrap:site_id_label', 'local_moodlepilot_report'),
+        bootstrap_config::display_value(bootstrap_config::provisioned_site_id()),
+    ],
+    [
+        get_string('bootstrap:auto_authorize_label', 'local_moodlepilot_report'),
+        bootstrap_config::display_value($enabledlabel(bootstrap_config::auto_authorize_enabled())),
+    ],
+    [
+        get_string('bootstrap:api_base_url_label', 'local_moodlepilot_report'),
+        bootstrap_config::display_value(bootstrap_config::provisioned_api_base_url()),
+    ],
+    [
+        get_string('bootstrap:token_label', 'local_moodlepilot_report'),
+        bootstrap_config::display_value(bootstrap_config::bootstrap_token_present() ? 'configured' : ''),
+    ],
+];
+
+$manualrows = [
+    [
+        get_string('manual:state_label', 'local_moodlepilot_report'),
+        get_string('manual:state:' . bootstrap_config::manual_connect_state(), 'local_moodlepilot_report'),
+    ],
+    [
+        get_string('manual:site_id_label', 'local_moodlepilot_report'),
+        bootstrap_config::display_value(bootstrap_config::manual_site_id()),
+    ],
+    [
+        get_string('manual:api_base_url_label', 'local_moodlepilot_report'),
+        bootstrap_config::display_value(bootstrap_config::manual_api_base_url()),
+    ],
+    [
+        get_string('manual:token_label', 'local_moodlepilot_report'),
+        bootstrap_config::display_value(bootstrap_config::manual_registration_token() !== '' ? 'configured' : ''),
+    ],
+    [
+        get_string('manual:reconnect_label', 'local_moodlepilot_report'),
+        bootstrap_config::display_value($enabledlabel(bootstrap_config::manual_reconnect_requested())),
+    ],
 ];
 
 $pipelinerows = [
-    [s('Tracking interval'), bootstrap_config::tracking_interval_seconds() . ' s'],
-    [s('Inactivity timeout'), bootstrap_config::tracking_inactivity_seconds() . ' s'],
-    [s('Pending detail rows'), tracking_repository::pending_detail_count()],
+    [
+        'Tracking mode',
+        bootstrap_config::display_value(bootstrap_config::tracking_mode()),
+    ],
+    [
+        'Tracking interval',
+        bootstrap_config::tracking_interval_seconds() . ' s',
+    ],
+    [
+        'Inactivity timeout',
+        bootstrap_config::tracking_inactivity_seconds() . ' s',
+    ],
+    [
+        'Last tracking seen',
+        bootstrap_config::display_value(bootstrap_config::last_tracking_seen_at()),
+    ],
+    [
+        'Last rollup at',
+        bootstrap_config::display_value(bootstrap_config::last_rollup_at()),
+    ],
+    [
+        'Pending detail rows',
+        (string)tracking_repository::pending_detail_count(),
+    ],
 ];
 
-$userstatusrows = [];
-foreach (($payload['user_status'] ?? []) as $row) {
-    $userstatusrows[] = [
-        s((string)($row['user_name'] ?? '-')),
-        s((string)($row['username'] ?? '-')),
-        s((string)($row['email'] ?? '-')),
-        s((string)($row['role_label'] ?? '-')),
-        s((string)($row['course_name'] ?? '-')),
-        s((string)($row['enrolment_method_label'] ?? $row['enrolment_method'] ?? '-')),
-        $formatdatetime((string)($row['enrolled_on'] ?? '')),
-        s((string)($row['status_label'] ?? '-')),
-        format_float((float)($row['average_grade'] ?? 0), 1),
-        $formatdatetime((string)($row['last_action_at'] ?? '')),
-    ];
-}
-
-$activityrows = [];
-foreach (($payload['activity_stats_summary'] ?? []) as $row) {
-    $activityrows[] = [
-        s((string)($row['course_name'] ?? '-')),
-        s((string)($row['module_type'] ?? '-')),
-        s((string)($row['component_name'] ?? '-')),
-        s((string)($row['activity_label'] ?? '-')),
-        (int)($row['visits'] ?? 0),
-        s((string)($row['time_spent_label'] ?? '0 m')),
-        $formatdatetime((string)($row['first_access_at'] ?? '')),
-        $formatdatetime((string)($row['created_at'] ?? '')),
-        (int)($row['num_completed'] ?? 0),
-        (int)($row['total_events'] ?? 0),
-        (int)($row['unique_users'] ?? 0),
-        $formatdatetime((string)($row['last_activity_at'] ?? '')),
-    ];
-}
-
-$quizrows = [];
-foreach (($payload['quiz_activity_detail'] ?? []) as $row) {
-    $quizrows[] = [
-        s((string)($row['quiz_name'] ?? '-')),
-        s((string)($row['course_name'] ?? '-')),
-        s((string)($row['user_name'] ?? '-')),
-        s((string)($row['email'] ?? '-')),
-        (int)($row['attempts'] ?? 0),
-        (int)($row['finished_attempts'] ?? 0),
-        format_float((float)($row['best_score'] ?? 0), 1),
-        format_float((float)($row['average_score'] ?? 0), 1),
-        format_float((float)($row['lowest_score'] ?? 0), 1),
-        s((string)($row['time_spent_label'] ?? '0 m')),
-        s((string)($row['status_label'] ?? '-')),
-        $formatdatetime((string)($row['completion_at'] ?? '')),
-        $formatdatetime((string)($row['last_attempt_at'] ?? '')),
-    ];
-}
-
-$recentactivityrows = [];
-foreach (($payload['recent_activity'] ?? []) as $row) {
-    $recentactivityrows[] = [
-        s((string)($row['user_name'] ?? '-')),
-        s((string)($row['action'] ?? '-')),
-        $formatdatetime((string)($row['occurred_at'] ?? '')),
-        s((string)($row['ip_address'] ?? '-')),
-    ];
-}
+$notes = [
+    get_string('dashboard:report_surface_note', 'local_moodlepilot_report'),
+    'Tracking, rollup, and snapshot ingest remain active in Moodle. This page is for connection status and troubleshooting only.',
+    'End-user reporting is available from the Moodlepilot tenant dashboard in the application, not from this Moodle plugin page.',
+];
 
 echo $OUTPUT->header();
 echo $OUTPUT->heading(get_string('dashboard:page_heading', 'local_moodlepilot_report'));
 echo html_writer::tag('p', get_string('dashboard:page_intro', 'local_moodlepilot_report'));
+echo $OUTPUT->notification(get_string('dashboard:report_surface_note', 'local_moodlepilot_report'), 'info');
 
-echo $OUTPUT->heading(get_string('dashboard:section_connection', 'local_moodlepilot_report'), 3);
-echo $rendertable(['Field', 'Value'], $connectionrows);
+echo $rendersection(
+    get_string('dashboard:section_connection', 'local_moodlepilot_report'),
+    get_string('connection:description', 'local_moodlepilot_report'),
+    $renderpairs($connectionrows)
+);
 
-echo $OUTPUT->heading(get_string('dashboard:section_pipeline', 'local_moodlepilot_report'), 3);
-echo $rendertable(['Field', 'Value'], $pipelinerows);
+echo $rendersection(
+    get_string('bootstrap:heading', 'local_moodlepilot_report'),
+    get_string('bootstrap:description', 'local_moodlepilot_report'),
+    $renderpairs($bootstraprows)
+);
 
-echo $OUTPUT->heading(get_string('dashboard:section_summary', 'local_moodlepilot_report'), 3);
-echo $rendertable(['Metric', 'Value'], $summaryrows);
+echo $rendersection(
+    get_string('manual:heading', 'local_moodlepilot_report'),
+    get_string('manual:description', 'local_moodlepilot_report'),
+    $renderpairs($manualrows)
+);
 
-echo $OUTPUT->heading(get_string('dashboard:section_user_status', 'local_moodlepilot_report'), 3);
-echo $rendertable(['User', 'Username', 'Email', 'Role', 'Course', 'Enrolment', 'Enrolled On', 'Status', 'Avg Grade', 'Last Action'], $userstatusrows);
+echo $rendersection(
+    get_string('dashboard:section_pipeline', 'local_moodlepilot_report'),
+    'Technical health for browser heartbeat collection, rollup processing, and snapshot preparation.',
+    $renderpairs($pipelinerows)
+);
 
-echo $OUTPUT->heading(get_string('dashboard:section_activity_stats', 'local_moodlepilot_report'), 3);
-echo $rendertable(['Course', 'Module', 'Component', 'Activity', 'Visits', 'Time Spent', 'First Access', 'Created', 'Completed', 'Events', 'Users', 'Last Activity'], $activityrows);
+echo $rendersection(
+    get_string('dashboard:section_capabilities', 'local_moodlepilot_report'),
+    'Capabilities currently advertised by the plugin to the Moodlepilot dashboard ingestion pipeline.',
+    $renderlist(bootstrap_config::capabilities())
+);
 
-echo $OUTPUT->heading(get_string('dashboard:section_quiz_detail', 'local_moodlepilot_report'), 3);
-echo $rendertable(['Quiz', 'Course', 'User', 'Email', 'Attempts', 'Finished', 'Best', 'Average', 'Lowest', 'Time Spent', 'Status', 'Completed At', 'Last Attempt'], $quizrows);
-
-echo $OUTPUT->heading(get_string('dashboard:section_recent_activity', 'local_moodlepilot_report'), 3);
-echo $rendertable(['User', 'Action', 'When', 'IP'], $recentactivityrows);
+echo $rendersection(
+    get_string('dashboard:section_notes', 'local_moodlepilot_report'),
+    'Operational notes for admins maintaining the Moodle connector.',
+    $renderlist($notes)
+);
 
 echo $OUTPUT->footer();

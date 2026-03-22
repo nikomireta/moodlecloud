@@ -75,6 +75,21 @@ Because admins may upgrade the plugin directly in Moodle, the plugin must be
 upgrade-safe through `db/upgrade.php` and should not rely on container access
 for normal recovery.
 
+## Local runtime sync note
+
+For local Docker smoke testing, the tenant web server serves Moodle from
+`/var/www/html/public`, while CLI tasks still run from `/var/www/html`.
+
+If you are syncing a changed plugin into an already running tenant container,
+sync both paths or use the helper:
+
+```bash
+./docker/moodle/scripts/sync-local-report-plugin.sh <tenant-fragment>
+```
+
+This prevents a false mismatch where CLI checks and copied files look updated
+but the browser still serves the older plugin code from `public/`.
+
 The intended release model is:
 
 - same source code builds the Moodlepilot image bundle

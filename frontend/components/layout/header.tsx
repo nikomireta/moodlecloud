@@ -88,9 +88,9 @@ export function Header() {
         const response = await api.listNotifications()
         if (!active) return
         setNotifications(response.notifications)
-      } catch (error) {
+      } catch {
         if (!active) return
-        console.error("failed to load notification count", error)
+        setNotifications([])
       }
     }
 

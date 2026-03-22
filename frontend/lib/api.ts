@@ -210,8 +210,21 @@ export type SiteReportSummaryMetrics = {
   login_count: number
   active_users: number
   submissions: number
+  completions: number
+  session_count: number
   avg_online_seconds: number
   avg_online_label: string
+}
+
+export type SiteReportDailyTrendItem = {
+  day_bucket: number
+  day_label: string
+  login_count: number
+  active_users: number
+  submission_count: number
+  completion_count: number
+  session_time_seconds: number
+  session_time_label: string
 }
 
 export type SiteReportRecentActivityItem = {
@@ -231,19 +244,71 @@ export type SiteReportCourseCompletionItem = {
   completion_rate: number
 }
 
+export type SiteReportAssignmentSubmissionItem = {
+  assignment_id: number
+  activity_id: number
+  grade_item_id: number
+  course_id: number
+  course_name: string
+  assignment_name: string
+  user_id: number
+  user_name: string
+  email: string
+  due_at: string
+  submitted_at: string
+  status_key: string
+  status_label: string
+  grade: number | null
+  graded_at: string
+  missing_grade: boolean
+  late_by_seconds: number
+  late_by_label: string
+}
+
+export type SiteReportForumEngagementItem = {
+  forum_id: number
+  activity_id: number
+  course_id: number
+  course_name: string
+  forum_name: string
+  discussion_count: number
+  post_count: number
+  active_participants: number
+  latest_post_at: string
+}
+
 export type SiteReportGradeRecapItem = {
   course_id: number
   course_name: string
-  average_grade: number
-  highest_grade: number
-  lowest_grade: number
+  average_grade: number | null
+  highest_grade: number | null
+  lowest_grade: number | null
+  graded_count: number
+  missing_grade_count: number
   passed: number
   failed: number
+}
+
+export type SiteReportGradebookDetailItem = {
+  course_id: number
+  course_name: string
+  user_id: number
+  user_name: string
+  email: string
+  grade_item_id: number
+  grade_item_name: string
+  item_module: string
+  item_instance: number
+  final_grade: number | null
+  pass_fail: string
+  graded_at: string
+  missing_grade: boolean
 }
 
 export type SiteReportUserActivityItem = {
   user_id: number
   user_name: string
+  email: string
   role_label: string
   sessions: number
   total_online_seconds: number
@@ -266,8 +331,20 @@ export type SiteReportUserStatusItem = {
   enrolled_on: string
   status_key: string
   status_label: string
-  average_grade: number
+  average_grade: number | null
   last_action_at: string
+}
+
+export type SiteReportAtRiskUserItem = {
+  user_name: string
+  email: string
+  role_label: string
+  course_name: string
+  status_label: string
+  average_grade: number | null
+  last_action_at: string
+  risk_score: number
+  risk_reason: string
 }
 
 export type SiteReportActivityStatsItem = {
@@ -286,6 +363,23 @@ export type SiteReportActivityStatsItem = {
   total_events: number
   unique_users: number
   last_activity_at: string
+}
+
+export type SiteReportActivityCompletionItem = {
+  course_id: number
+  course_name: string
+  activity_id: number
+  activity_name: string
+  module_type: string
+  component_name: string
+  user_id: number
+  user_name: string
+  email: string
+  completion_state: number
+  completion_state_key: string
+  completion_state_label: string
+  completion_at: string
+  last_action_at: string
 }
 
 export type SiteReportQuizActivityItem = {
@@ -308,25 +402,147 @@ export type SiteReportQuizActivityItem = {
   last_attempt_at: string
 }
 
-export type SiteReportSnapshotPayload = {
-  summary_metrics: SiteReportSummaryMetrics
-  recent_activity: SiteReportRecentActivityItem[]
-  course_completion_summary: SiteReportCourseCompletionItem[]
-  grade_recap_per_course: SiteReportGradeRecapItem[]
-  user_activity_summary: SiteReportUserActivityItem[]
-  user_status: SiteReportUserStatusItem[]
-  activity_stats_summary: SiteReportActivityStatsItem[]
-  quiz_activity_detail: SiteReportQuizActivityItem[]
+export type SiteReportQuizQuestionAnalysisItem = {
+  quiz_id: number
+  quiz_name: string
+  course_id: number
+  course_name: string
+  question_id: number
+  question_name: string
+  question_type: string
+  attempts: number
+  correct_rate: number
+  average_score: number
+  last_attempt_at: string
 }
 
-export type SiteReportSnapshot = {
+export type SiteReportSectionCounts = {
+  daily_trend: number
+  recent_activity: number
+  course_completion_summary: number
+  assignment_submission_detail: number
+  forum_engagement_summary: number
+  grade_recap_per_course: number
+  gradebook_detail: number
+  user_activity_summary: number
+  user_status: number
+  at_risk_users: number
+  activity_stats_summary: number
+  activity_completion_detail: number
+  quiz_activity_detail: number
+  quiz_question_analysis: number
+}
+
+export type SiteReportUserStatusDistributionItem = {
+  status_key: string
+  status_label: string
+  total: number
+}
+
+export type SiteReportSummaryPayload = {
+  summary_metrics: SiteReportSummaryMetrics
+  daily_trend: SiteReportDailyTrendItem[]
+  section_counts: SiteReportSectionCounts
+  user_status_distribution: SiteReportUserStatusDistributionItem[]
+  course_completion_summary: SiteReportCourseCompletionItem[]
+  assignment_submission_detail: SiteReportAssignmentSubmissionItem[]
+  forum_engagement_summary: SiteReportForumEngagementItem[]
+  at_risk_users: SiteReportAtRiskUserItem[]
+  activity_stats_summary: SiteReportActivityStatsItem[]
+  quiz_question_analysis: SiteReportQuizQuestionAnalysisItem[]
+}
+
+export type SiteReportFullPayload = {
+  summary_metrics: SiteReportSummaryMetrics
+  daily_trend: SiteReportDailyTrendItem[]
+  section_counts: SiteReportSectionCounts
+  selected_course_id?: number
+  available_courses: SiteReportDetailCourseItem[]
+  course_filter_scope_note?: string
+  user_status_distribution: SiteReportUserStatusDistributionItem[]
+  course_completion_summary: SiteReportCourseCompletionItem[]
+  grade_recap_per_course: SiteReportGradeRecapItem[]
+  at_risk_users: SiteReportAtRiskUserItem[]
+  assignment_submission_detail: SiteReportAssignmentSubmissionItem[]
+  forum_engagement_summary: SiteReportForumEngagementItem[]
+  activity_stats_summary: SiteReportActivityStatsItem[]
+  quiz_activity_detail: SiteReportQuizActivityItem[]
+  quiz_question_analysis: SiteReportQuizQuestionAnalysisItem[]
+}
+
+export type SiteReportDetailCourseItem = {
+  course_id: number
+  course_name: string
+}
+
+export type SiteReportDetailRows =
+  | SiteReportAtRiskUserItem[]
+  | SiteReportUserActivityItem[]
+  | SiteReportCourseCompletionItem[]
+  | SiteReportAssignmentSubmissionItem[]
+  | SiteReportForumEngagementItem[]
+  | SiteReportGradebookDetailItem[]
+  | SiteReportActivityCompletionItem[]
+  | SiteReportQuizActivityItem[]
+  | SiteReportQuizQuestionAnalysisItem[]
+  | SiteReportRecentActivityItem[]
+  | SiteReportGradeRecapItem[]
+  | SiteReportActivityStatsItem[]
+  | SiteReportUserStatusItem[]
+
+export type SiteReportDetailPayload = {
+  section: string
+  section_title: string
+  section_description: string
+  page: number
+  page_size: number
+  total_count: number
+  total_pages: number
+  selected_course_id?: number
+  available_courses: SiteReportDetailCourseItem[]
+  rows: SiteReportDetailRows
+}
+
+export type SiteReportSummarySnapshot = {
   id: string
   site_id: string
   snapshot_key: string
   period_key: string
   period_start: string
   period_end: string
-  payload: SiteReportSnapshotPayload
+  payload: SiteReportSummaryPayload
+  plugin_version: string
+  moodle_version: string
+  generated_at: string
+  received_at: string
+  created_at: string
+  updated_at: string
+}
+
+export type SiteReportFullSnapshot = {
+  id: string
+  site_id: string
+  snapshot_key: string
+  period_key: string
+  period_start: string
+  period_end: string
+  payload: SiteReportFullPayload
+  plugin_version: string
+  moodle_version: string
+  generated_at: string
+  received_at: string
+  created_at: string
+  updated_at: string
+}
+
+export type SiteReportDetailSnapshot = {
+  id: string
+  site_id: string
+  snapshot_key: string
+  period_key: string
+  period_start: string
+  period_end: string
+  payload: SiteReportDetailPayload
   plugin_version: string
   moodle_version: string
   generated_at: string
@@ -384,13 +600,19 @@ export type SiteReportHighlight = {
 
 export type SiteReportSummaryResponse = {
   connection: SiteReportConnectionStatus
-  snapshot?: SiteReportSnapshot | null
+  snapshot?: SiteReportSummarySnapshot | null
   highlight: SiteReportHighlight
 }
 
 export type SiteReportFullResponse = {
   connection: SiteReportConnectionStatus
-  snapshot?: SiteReportSnapshot | null
+  snapshot?: SiteReportFullSnapshot | null
+  highlight: SiteReportHighlight
+}
+
+export type SiteReportDetailResponse = {
+  connection: SiteReportConnectionStatus
+  snapshot?: SiteReportDetailSnapshot | null
   highlight: SiteReportHighlight
 }
 
@@ -503,7 +725,7 @@ type SiteBackupSettingsMutationResponse = MessageResponse & {
 }
 
 type SiteReportSnapshotResponse = {
-  snapshot: SiteReportSnapshot
+  snapshot: SiteReportFullSnapshot
 }
 
 type SiteReportConnectionResponse = {
@@ -775,7 +997,7 @@ export const api = {
     return apiFetch<SiteReportSummaryResponse>(`/sites/${encodeURIComponent(siteID)}/reports/summary${suffix}`)
   },
 
-  getSiteFullReport(siteID: string, input?: { snapshotKey?: string; periodKey?: string }) {
+  getSiteFullReport(siteID: string, input?: { snapshotKey?: string; periodKey?: string; courseID?: number }) {
     const search = new URLSearchParams()
     if (input?.snapshotKey) {
       search.set("snapshot_key", input.snapshotKey)
@@ -783,8 +1005,51 @@ export const api = {
     if (input?.periodKey) {
       search.set("period_key", input.periodKey)
     }
+    if (typeof input?.courseID === "number" && Number.isFinite(input.courseID) && input.courseID > 0) {
+      search.set("course_id", String(input.courseID))
+    }
     const suffix = search.size > 0 ? `?${search.toString()}` : ""
     return apiFetch<SiteReportFullResponse>(`/sites/${encodeURIComponent(siteID)}/reports/full${suffix}`)
+  },
+
+  getSiteReportDetail(
+    siteID: string,
+    input: { section: string; snapshotKey?: string; periodKey?: string; courseID?: number; page?: number },
+  ) {
+    const search = new URLSearchParams()
+    search.set("section", input.section)
+    if (input.snapshotKey) {
+      search.set("snapshot_key", input.snapshotKey)
+    }
+    if (input.periodKey) {
+      search.set("period_key", input.periodKey)
+    }
+    if (typeof input.courseID === "number" && Number.isFinite(input.courseID) && input.courseID > 0) {
+      search.set("course_id", String(input.courseID))
+    }
+    if (typeof input.page === "number" && Number.isFinite(input.page) && input.page > 0) {
+      search.set("page", String(input.page))
+    }
+    return apiFetch<SiteReportDetailResponse>(`/sites/${encodeURIComponent(siteID)}/reports/detail?${search.toString()}`)
+  },
+
+  downloadSiteReportDetailCSV(
+    siteID: string,
+    input: { section: string; snapshotKey?: string; periodKey?: string; courseID?: number },
+  ) {
+    const search = new URLSearchParams()
+    search.set("section", input.section)
+    search.set("export", "csv")
+    if (input.snapshotKey) {
+      search.set("snapshot_key", input.snapshotKey)
+    }
+    if (input.periodKey) {
+      search.set("period_key", input.periodKey)
+    }
+    if (typeof input.courseID === "number" && Number.isFinite(input.courseID) && input.courseID > 0) {
+      search.set("course_id", String(input.courseID))
+    }
+    return apiFetchBlob(`/sites/${encodeURIComponent(siteID)}/reports/detail?${search.toString()}`)
   },
 
   getLatestSiteReportSnapshot(siteID: string, input?: { snapshotKey?: string; periodKey?: string }) {

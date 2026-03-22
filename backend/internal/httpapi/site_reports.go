@@ -16,7 +16,7 @@ import (
 )
 
 type siteReportSnapshotResponse struct {
-	Snapshot store.SiteReportSnapshot `json:"snapshot"`
+	Snapshot *siteReportFullSnapshot `json:"snapshot"`
 }
 
 func (s *Server) handleIngestSiteReportSnapshot(w http.ResponseWriter, r *http.Request) {
@@ -248,7 +248,11 @@ func (s *Server) handleGetLatestSiteReportSnapshot(w http.ResponseWriter, r *htt
 		return
 	}
 
-	writeJSON(w, http.StatusOK, siteReportSnapshotResponse{Snapshot: snapshot})
+	payload := decodeReportSnapshotPayload(&snapshot)
+
+	writeJSON(w, http.StatusOK, siteReportSnapshotResponse{
+		Snapshot: buildSiteReportFullSnapshot(&snapshot, payload, nil, buildSiteReportAvailableCourses(payload)),
+	})
 }
 
 func reportIngestTokenFromRequest(r *http.Request) string {
@@ -276,7 +280,7 @@ func normalizeReportSnapshotKey(value string) string {
 func normalizeReportPeriodKey(value string) string {
 	value = strings.ToLower(strings.TrimSpace(value))
 	switch value {
-	case "last_30_days", "this_month", "last_month":
+	case "today", "last_30_days", "this_month", "last_month":
 		return value
 	case "", "last_7_days":
 		return "last_7_days"

@@ -1,0 +1,32 @@
+{
+  "visitedUsers": [
+    "tool_generator_000001",
+    "tool_generator_000002",
+    "tool_generator_000003",
+    "tool_generator_000004",
+    "tool_generator_000005",
+    "tool_generator_000006",
+    "tool_generator_000007",
+    "tool_generator_000008",
+    "tool_generator_000009",
+    "tool_generator_000010"
+  ],
+  "assignmentSubmissions": [
+    "tool_generator_000001",
+    "tool_generator_000002"
+  ],
+  "quizAttempts": [
+    "tool_generator_000001",
+    "tool_generator_000002",
+    "tool_generator_000003",
+    "tool_generator_000004",
+    "tool_generator_000005"
+  ],
+  "courseUrl": "http://freshtrack1773881806.lvh.me/course/view.php?id=6",
+  "moduleUrls": [
+    "http://freshtrack1773881806.lvh.me/mod/page/view.php?id=1552",
+    "http://freshtrack1773881806.lvh.me/mod/forum/view.php?id=1553",
+    "http://freshtrack1773881806.lvh.me/mod/assign/view.php?id=1554",
+    "http://freshtrack1773881806.lvh.me/mod/quiz/view.php?id=1555"
+  ]
+}

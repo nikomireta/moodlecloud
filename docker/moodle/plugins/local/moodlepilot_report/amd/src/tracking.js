@@ -2,6 +2,7 @@ define(["core/ajax"], function(Ajax) {
     var heartbeatHandle = null;
     var lastInteractionAt = Date.now();
     var mediaActive = false;
+    var listenersInstalled = false;
 
     function nowSeconds() {
         return Math.floor(Date.now() / 1000);
@@ -32,6 +33,10 @@ define(["core/ajax"], function(Ajax) {
     }
 
     function installInteractionListeners() {
+        if (listenersInstalled) {
+            return;
+        }
+
         ["mousemove", "mousedown", "keydown", "scroll", "touchstart", "visibilitychange"].forEach(function(eventName) {
             document.addEventListener(eventName, function() {
                 if (eventName !== "visibilitychange" || !document.hidden) {
@@ -56,6 +61,8 @@ define(["core/ajax"], function(Ajax) {
                 }
             }, true);
         });
+
+        listenersInstalled = true;
     }
 
     function startHeartbeat(config) {

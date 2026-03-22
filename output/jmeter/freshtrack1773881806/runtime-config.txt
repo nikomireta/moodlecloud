@@ -1,0 +1,4 @@
+debug=32767
+debugdisplay=1
+enablecompletion=1
+tool_generator_users_password=JMeterGen123!

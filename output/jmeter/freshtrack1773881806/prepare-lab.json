@@ -1,0 +1,277 @@
+{
+    "site_url": "http://freshtrack1773881806.lvh.me",
+    "course": {
+        "id": 6,
+        "shortname": "RPTJM_M_20260322",
+        "fullname": "Reporting JMeter M 2026-03-22",
+        "url": "http://freshtrack1773881806.lvh.me/course/view.php?id=6"
+    },
+    "special_modules": {
+        "page": {
+            "name": "Report Lab Page",
+            "instance_id": 1005,
+            "cmid": 1552,
+            "url": "http://freshtrack1773881806.lvh.me/mod/page/view.php?id=1552"
+        },
+        "forum": {
+            "name": "Report Lab Forum",
+            "instance_id": 10,
+            "cmid": 1553,
+            "url": "http://freshtrack1773881806.lvh.me/mod/forum/view.php?id=1553"
+        },
+        "assignment": {
+            "name": "Report Lab Assignment",
+            "instance_id": 505,
+            "cmid": 1554,
+            "url": "http://freshtrack1773881806.lvh.me/mod/assign/view.php?id=1554"
+        },
+        "quiz": {
+            "name": "Report Lab Quiz",
+            "instance_id": 5,
+            "cmid": 1555,
+            "url": "http://freshtrack1773881806.lvh.me/mod/quiz/view.php?id=1555"
+        }
+    },
+    "questions": [
+        {
+            "id": 16,
+            "name": "Report Lab Q1",
+            "slot": 1
+        },
+        {
+            "id": 17,
+            "name": "Report Lab Q2",
+            "slot": 2
+        },
+        {
+            "id": 18,
+            "name": "Report Lab Q3",
+            "slot": 3
+        },
+        {
+            "id": 19,
+            "name": "Report Lab Q4",
+            "slot": 4
+        },
+        {
+            "id": 20,
+            "name": "Report Lab Q5",
+            "slot": 5
+        }
+    ],
+    "actors": {
+        "browser_users": [
+            {
+                "id": 3,
+                "username": "tool_generator_000001",
+                "name": "Lena Wagner",
+                "email": "tool_generator_000001@example.com"
+            },
+            {
+                "id": 4,
+                "username": "tool_generator_000002",
+                "name": "\u98af\u592a \u7530\u4e2d",
+                "email": "tool_generator_000002@example.com"
+            },
+            {
+                "id": 5,
+                "username": "tool_generator_000003",
+                "name": "Karol\u00edna Hor\u00e1kov\u00e1",
+                "email": "tool_generator_000003@example.com"
+            },
+            {
+                "id": 6,
+                "username": "tool_generator_000004",
+                "name": "\u7f8e\u7fbd \u5c71\u672c",
+                "email": "tool_generator_000004@example.com"
+            },
+            {
+                "id": 7,
+                "username": "tool_generator_000005",
+                "name": "Timm M\u00fcller",
+                "email": "tool_generator_000005@example.com"
+            },
+            {
+                "id": 8,
+                "username": "tool_generator_000006",
+                "name": "\u4f1f \u5218",
+                "email": "tool_generator_000006@example.com"
+            },
+            {
+                "id": 9,
+                "username": "tool_generator_000007",
+                "name": "Karol\u00edna Vesel\u00e1",
+                "email": "tool_generator_000007@example.com"
+            },
+            {
+                "id": 10,
+                "username": "tool_generator_000008",
+                "name": "Timm M\u00fcller",
+                "email": "tool_generator_000008@example.com"
+            },
+            {
+                "id": 11,
+                "username": "tool_generator_000009",
+                "name": "Michael Smith",
+                "email": "tool_generator_000009@example.com"
+            },
+            {
+                "id": 12,
+                "username": "tool_generator_000010",
+                "name": "\u82b3 \u674e",
+                "email": "tool_generator_000010@example.com"
+            }
+        ],
+        "assignment_submitters": [
+            {
+                "id": 3,
+                "username": "tool_generator_000001",
+                "name": "Lena Wagner",
+                "email": "tool_generator_000001@example.com"
+            },
+            {
+                "id": 4,
+                "username": "tool_generator_000002",
+                "name": "\u98af\u592a \u7530\u4e2d",
+                "email": "tool_generator_000002@example.com"
+            },
+            {
+                "id": 5,
+                "username": "tool_generator_000003",
+                "name": "Karol\u00edna Hor\u00e1kov\u00e1",
+                "email": "tool_generator_000003@example.com"
+            },
+            {
+                "id": 6,
+                "username": "tool_generator_000004",
+                "name": "\u7f8e\u7fbd \u5c71\u672c",
+                "email": "tool_generator_000004@example.com"
+            }
+        ],
+        "assignment_graded": [
+            {
+                "id": 3,
+                "username": "tool_generator_000001",
+                "name": "Lena Wagner",
+                "email": "tool_generator_000001@example.com"
+            },
+            {
+                "id": 4,
+                "username": "tool_generator_000002",
+                "name": "\u98af\u592a \u7530\u4e2d",
+                "email": "tool_generator_000002@example.com"
+            }
+        ],
+        "forum_authors": [
+            {
+                "id": 3,
+                "username": "tool_generator_000001",
+                "name": "Lena Wagner",
+                "email": "tool_generator_000001@example.com"
+            },
+            {
+                "id": 4,
+                "username": "tool_generator_000002",
+                "name": "\u98af\u592a \u7530\u4e2d",
+                "email": "tool_generator_000002@example.com"
+            },
+            {
+                "id": 5,
+                "username": "tool_generator_000003",
+                "name": "Karol\u00edna Hor\u00e1kov\u00e1",
+                "email": "tool_generator_000003@example.com"
+            }
+        ],
+        "quiz_attempt_users": [
+            {
+                "id": 3,
+                "username": "tool_generator_000001",
+                "name": "Lena Wagner",
+                "email": "tool_generator_000001@example.com"
+            },
+            {
+                "id": 4,
+                "username": "tool_generator_000002",
+                "name": "\u98af\u592a \u7530\u4e2d",
+                "email": "tool_generator_000002@example.com"
+            },
+            {
+                "id": 5,
+                "username": "tool_generator_000003",
+                "name": "Karol\u00edna Hor\u00e1kov\u00e1",
+                "email": "tool_generator_000003@example.com"
+            },
+            {
+                "id": 6,
+                "username": "tool_generator_000004",
+                "name": "\u7f8e\u7fbd \u5c71\u672c",
+                "email": "tool_generator_000004@example.com"
+            },
+            {
+                "id": 7,
+                "username": "tool_generator_000005",
+                "name": "Timm M\u00fcller",
+                "email": "tool_generator_000005@example.com"
+            }
+        ]
+    },
+    "quiz_response_patterns": [
+        {
+            "username": "tool_generator_000001",
+            "responses": [
+                "True",
+                "True",
+                "True",
+                "True",
+                "True"
+            ]
+        },
+        {
+            "username": "tool_generator_000002",
+            "responses": [
+                "True",
+                "True",
+                "False",
+                "True",
+                "False"
+            ]
+        },
+        {
+            "username": "tool_generator_000003",
+            "responses": [
+                "False",
+                "True",
+                "False",
+                "True",
+                "True"
+            ]
+        },
+        {
+            "username": "tool_generator_000004",
+            "responses": [
+                "False",
+                "False",
+                "False",
+                "True",
+                "False"
+            ]
+        },
+        {
+            "username": "tool_generator_000005",
+            "responses": [
+                "True",
+                "False",
+                "True",
+                "False",
+                "True"
+            ]
+        }
+    ],
+    "pruned_generated_assignments": 100,
+    "jmeter_artifacts": {
+        "jmx": "/tmp/report-lab-freshtrack1773881806/testplan_202603221513_1550.jmx",
+        "users_csv": "/tmp/report-lab-freshtrack1773881806/users_202603221513_1876.csv",
+        "jmx_filename": "testplan_202603221513_1550.jmx",
+        "users_filename": "users_202603221513_1876.csv"
+    }
+}

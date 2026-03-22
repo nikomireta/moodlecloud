@@ -2,12 +2,14 @@
 
 import Link from "next/link"
 import { use, useCallback, useEffect, useState } from "react"
-import { Header } from "@/components/layout/header"
+import { useRouter, useSearchParams } from "next/navigation"
 import { Footer } from "@/components/layout/footer"
+import { Header } from "@/components/layout/header"
 import { ProtectedRoute } from "@/components/auth/protected-route"
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
 import {
   Select,
   SelectContent,
@@ -16,23 +18,16 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
-import {
   Activity,
   AlertCircle,
+  AlertTriangle,
   ArrowLeft,
   BarChart3,
   BookOpen,
   CheckCircle2,
   Clock,
   FileText,
-  GraduationCap,
+  HelpCircle,
   Info,
   Loader2,
   RefreshCw,
@@ -44,16 +39,58 @@ import {
   type SiteReportFullResponse,
   type SiteSummary,
 } from "@/lib/api"
+import {
+  SiteReportActivityTrendChart,
+  SiteReportCourseCompletionChart,
+  SiteReportUserStatusDistributionChart,
+} from "@/components/dashboard/site-report-charts"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import {
+  buildSiteFullReportHref,
+  buildSiteReportDetailHref,
+  normalizeSiteReportInsightKey,
+  type SiteReportInsightKey,
+} from "@/lib/site-report-sections"
 
 const REPORT_SNAPSHOT_KEY = "reports_summary_v1"
 const DEFAULT_PERIOD_KEY = "last_7_days"
-
 const PERIOD_OPTIONS = [
+  { value: "today", label: "Hari Ini" },
   { value: "last_7_days", label: "7 Hari Terakhir" },
   { value: "last_30_days", label: "30 Hari Terakhir" },
   { value: "this_month", label: "Bulan Ini" },
   { value: "last_month", label: "Bulan Lalu" },
 ]
+
+const DEFAULT_INSIGHT_CATEGORY: SiteReportInsightKey = "tasks"
+
+function periodUsageHint(periodKey: string): string {
+  switch (periodKey) {
+    case "today":
+      return "Cocok untuk monitoring ujian, kelas live, atau deadline yang sedang berjalan hari ini."
+    case "last_30_days":
+      return "Cocok untuk melihat tren belajar yang lebih panjang dan perubahan perilaku tenant."
+    case "this_month":
+      return "Cocok untuk memantau performa bulan berjalan tanpa menunggu bulan selesai."
+    case "last_month":
+      return "Cocok untuk evaluasi bulanan dan perbandingan dengan kondisi saat ini."
+    default:
+      return "Pilihan paling stabil untuk overview tenant karena tidak terlalu sempit dan tidak terlalu panjang."
+  }
+}
+
+function normalizePeriodKey(value?: string | null) {
+  return PERIOD_OPTIONS.some((option) => option.value === value) ? value! : DEFAULT_PERIOD_KEY
+}
+
+function normalizeCourseID(value?: string | null) {
+  if (!value) {
+    return null
+  }
+  const parsed = Number.parseInt(value, 10)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null
+}
 
 function formatReportClock(isoStr?: string | null): string {
   if (!isoStr) return "-"
@@ -83,6 +120,18 @@ function formatRelativeTime(isoStr?: string | null): string {
   if (hours < 24) return `${hours} jam lalu`
   const days = Math.floor(hours / 24)
   return `${days} hari lalu`
+}
+
+function formatGradeValue(value?: number | null): string {
+  return typeof value === "number" ? value.toFixed(1) : "-"
+}
+
+function formatPercentageValue(value?: number | null): string {
+  return typeof value === "number" ? `${value.toFixed(1)}%` : "-"
+}
+
+function formatCount(value: number): string {
+  return value.toLocaleString("id-ID")
 }
 
 function connectionBadge(connection: SiteReportConnectionStatus) {
@@ -134,17 +183,226 @@ function highlightCardStyle(tone: SiteReportFullResponse["highlight"]["tone"]) {
   }
 }
 
-function EmptyTableMessage() {
-  return <p className="text-sm text-muted-foreground">Belum ada data untuk periode ini.</p>
+function shouldExpandDiagnostics(connection?: SiteReportConnectionStatus | null) {
+  if (!connection) {
+    return false
+  }
+
+  switch (connection.state) {
+    case "synced":
+    case "tracking_active":
+    case "synced_no_activity":
+      return false
+    default:
+      return true
+  }
+}
+
+function riskBadgeClass(score: number) {
+  if (score >= 80) {
+    return "border-red-600/40 bg-red-500/10 text-red-700"
+  }
+  if (score >= 50) {
+    return "border-amber-600/40 bg-amber-500/10 text-amber-700"
+  }
+  return "border-blue-600/40 bg-blue-500/10 text-blue-700"
+}
+
+function assignmentStatusBadgeClass(statusKey: string) {
+  switch (statusKey) {
+    case "missing":
+      return "border-red-600/40 bg-red-500/10 text-red-700"
+    case "late":
+      return "border-amber-600/40 bg-amber-500/10 text-amber-700"
+    case "graded":
+      return "border-green-600/40 bg-green-500/10 text-green-700"
+    case "submitted":
+      return "border-blue-600/40 bg-blue-500/10 text-blue-700"
+    default:
+      return "border-slate-600/40 bg-slate-500/10 text-slate-700"
+  }
+}
+
+function ReportEmptyState({
+  state,
+  connection,
+  periodLabel,
+}: {
+  state: "no_snapshot" | "no_activity"
+  connection: SiteReportConnectionStatus
+  periodLabel: string
+}) {
+  const configs = {
+    no_snapshot: {
+      icon: connection.state === "not_connected" ? AlertCircle : Clock,
+      title: connection.state === "not_connected" ? "Plugin laporan belum terhubung" : "Snapshot laporan belum tersedia",
+      description: connection.state_message,
+      color: connection.state === "not_connected" ? "text-amber-500" : "text-blue-500",
+    },
+    no_activity: {
+      icon: Info,
+      title: "Belum Ada Aktivitas",
+      description: `Sinkronisasi berhasil, tetapi belum ada aktivitas terukur pada ${periodLabel.toLowerCase()}. Halaman overview akan lebih informatif ketika tenant mulai aktif digunakan.`,
+      color: "text-muted-foreground",
+    },
+  }
+
+  const config = configs[state]
+  const Icon = config.icon
+
+  return (
+    <div className="flex flex-col items-center justify-center py-16 text-center">
+      <div className={`mb-4 rounded-full bg-muted p-4 ${config.color}`}>
+        <Icon className="h-8 w-8" />
+      </div>
+      <h3 className="text-lg font-semibold">{config.title}</h3>
+      <p className="mt-2 max-w-xl text-sm text-muted-foreground">{config.description}</p>
+    </div>
+  )
+}
+
+function MetricCard({
+  icon: Icon,
+  iconClassName,
+  iconWrapperClassName,
+  value,
+  label,
+  helperText,
+}: {
+  icon: typeof Users
+  iconClassName: string
+  iconWrapperClassName: string
+  value: string | number
+  label: string
+  helperText: string
+}) {
+  return (
+    <Card>
+      <CardContent className="flex items-center gap-3 p-4">
+        <div className={`rounded-lg p-2 ${iconWrapperClassName}`}>
+          <Icon className={`h-5 w-5 ${iconClassName}`} />
+        </div>
+        <div>
+          <p className="text-2xl font-bold">{value}</p>
+          <div className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
+            <p>{label}</p>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button type="button" className="inline-flex items-center rounded-sm text-muted-foreground transition-colors hover:text-foreground" aria-label={`Penjelasan ${label}`}>
+                  <HelpCircle className="h-3.5 w-3.5" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="top" sideOffset={8} className="max-w-56">
+                {helperText}
+              </TooltipContent>
+            </Tooltip>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+function PreviewHeader({
+  title,
+  description,
+  href,
+}: {
+  title: string
+  description: string
+  href: string
+}) {
+  return (
+    <CardHeader>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <CardTitle className="text-base">{title}</CardTitle>
+          <CardDescription>{description}</CardDescription>
+        </div>
+        <Button asChild variant="link" size="sm" className="h-auto px-0 text-xs">
+          <Link href={href} aria-label={`Lihat detail ${title}`}>
+            Lihat detail
+          </Link>
+        </Button>
+      </div>
+    </CardHeader>
+  )
+}
+
+function OperationalCountCard({
+  label,
+  count,
+  href,
+}: {
+  label: string
+  count: number
+  href: string
+}) {
+  return (
+    <Card>
+      <CardContent className="flex items-center justify-between gap-4 p-4">
+        <div>
+          <p className="text-xs uppercase tracking-wide text-muted-foreground">{label}</p>
+          <p className="mt-1 text-2xl font-bold">{formatCount(count)}</p>
+        </div>
+        <Button asChild variant="outline" size="sm">
+          <Link href={href}>Buka detail</Link>
+        </Button>
+      </CardContent>
+    </Card>
+  )
+}
+
+function CompactDetailLink({
+  label,
+  count,
+  href,
+}: {
+  label: string
+  count: number
+  href: string
+}) {
+  return (
+    <Link
+      href={href}
+      className="flex items-center justify-between rounded-lg border bg-muted/20 px-3 py-2 text-sm transition-colors hover:bg-muted/40"
+    >
+      <span className="text-muted-foreground">{label}</span>
+      <span className="font-semibold text-foreground">{formatCount(count)}</span>
+    </Link>
+  )
 }
 
 export default function SiteFullReportPage({ params }: { params: Promise<{ subdomain: string }> }) {
   const { subdomain } = use(params)
+  const router = useRouter()
+  const searchParams = useSearchParams()
   const [site, setSite] = useState<SiteSummary | null>(null)
   const [report, setReport] = useState<SiteReportFullResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [periodKey, setPeriodKey] = useState(DEFAULT_PERIOD_KEY)
+  const [periodKey, setPeriodKey] = useState(() => normalizePeriodKey(searchParams.get("period_key")))
+  const [courseID, setCourseID] = useState<number | null>(() => normalizeCourseID(searchParams.get("course_id")))
+  const [activeInsight, setActiveInsight] = useState<SiteReportInsightKey>(
+    () => normalizeSiteReportInsightKey(searchParams.get("insight"), DEFAULT_INSIGHT_CATEGORY) ?? DEFAULT_INSIGHT_CATEGORY,
+  )
+  const [diagnosticsOpen, setDiagnosticsOpen] = useState(false)
+
+  useEffect(() => {
+    const nextPeriodKey = normalizePeriodKey(searchParams.get("period_key"))
+    setPeriodKey((current) => (current === nextPeriodKey ? current : nextPeriodKey))
+    const nextCourseID = normalizeCourseID(searchParams.get("course_id"))
+    setCourseID((current) => (current === nextCourseID ? current : nextCourseID))
+    const nextInsight = normalizeSiteReportInsightKey(searchParams.get("insight"), DEFAULT_INSIGHT_CATEGORY) ?? DEFAULT_INSIGHT_CATEGORY
+    setActiveInsight((current) => (current === nextInsight ? current : nextInsight))
+  }, [searchParams])
+
+  useEffect(() => {
+    if (searchParams.get("insight")) {
+      return
+    }
+    router.replace(buildSiteFullReportHref(subdomain, periodKey, courseID, activeInsight), { scroll: false })
+  }, [activeInsight, courseID, periodKey, router, searchParams, subdomain])
 
   const loadReport = useCallback(async () => {
     setLoading(true)
@@ -154,6 +412,7 @@ export default function SiteFullReportPage({ params }: { params: Promise<{ subdo
       const reportResponse = await api.getSiteFullReport(siteResponse.site.id, {
         snapshotKey: REPORT_SNAPSHOT_KEY,
         periodKey,
+        courseID: courseID ?? undefined,
       })
       setSite(siteResponse.site)
       setReport(reportResponse)
@@ -162,11 +421,25 @@ export default function SiteFullReportPage({ params }: { params: Promise<{ subdo
     } finally {
       setLoading(false)
     }
-  }, [periodKey, subdomain])
+  }, [courseID, periodKey, subdomain])
+
+  const updateFilters = useCallback((next: { periodKey?: string; courseID?: number | null; insight?: SiteReportInsightKey | null }) => {
+    const nextPeriodKey = next.periodKey ?? periodKey
+    const nextCourseID = next.courseID === undefined ? courseID : next.courseID
+    const nextInsight = next.insight === undefined ? activeInsight : (next.insight ?? DEFAULT_INSIGHT_CATEGORY)
+    setPeriodKey(nextPeriodKey)
+    setCourseID(nextCourseID)
+    setActiveInsight(nextInsight)
+    router.replace(buildSiteFullReportHref(subdomain, nextPeriodKey, nextCourseID, nextInsight), { scroll: false })
+  }, [activeInsight, courseID, periodKey, router, subdomain])
 
   useEffect(() => {
     void loadReport()
   }, [loadReport])
+
+  const handlePeriodChange = useCallback((value: string) => {
+    updateFilters({ periodKey: normalizePeriodKey(value) })
+  }, [updateFilters])
 
   const connection = report?.connection ?? null
   const snapshot = report?.snapshot ?? null
@@ -174,6 +447,14 @@ export default function SiteFullReportPage({ params }: { params: Promise<{ subdo
   const badgeConfig = connection ? connectionBadge(connection) : null
   const BadgeIcon = badgeConfig?.icon
   const activePeriodOption = PERIOD_OPTIONS.find((option) => option.value === periodKey) ?? PERIOD_OPTIONS[0]
+  const availableCourses = payload?.available_courses ?? []
+  const selectedCourseID = payload?.selected_course_id ?? courseID
+  const selectedCourseValue = selectedCourseID ? String(selectedCourseID) : "all"
+  const selectedCourse = availableCourses.find((course) => course.course_id === selectedCourseID) ?? null
+
+  useEffect(() => {
+    setDiagnosticsOpen(shouldExpandDiagnostics(connection))
+  }, [connection?.state])
 
   return (
     <ProtectedRoute>
@@ -191,14 +472,14 @@ export default function SiteFullReportPage({ params }: { params: Promise<{ subdo
                     </Link>
                   </Button>
                   <div>
-                    <h1 className="text-2xl font-bold tracking-tight">Laporan Lengkap Situs</h1>
+                    <h1 className="text-2xl font-bold tracking-tight">Laporan Tenant</h1>
                     <p className="text-sm text-muted-foreground">
-                      {site?.name ?? subdomain} · dashboard analytics milik Moodlepilot untuk tenant ini
+                      {site?.name ?? subdomain} · dashboard keputusan untuk melihat kesehatan tenant, tren belajar, dan area yang paling perlu tindakan.
                     </p>
                   </div>
                 </div>
                 <div className="flex flex-wrap items-center gap-3">
-                  <Select value={periodKey} onValueChange={(value) => setPeriodKey(value)}>
+                  <Select value={periodKey} onValueChange={handlePeriodChange}>
                     <SelectTrigger className="w-[180px]">
                       <SelectValue />
                     </SelectTrigger>
@@ -210,11 +491,32 @@ export default function SiteFullReportPage({ params }: { params: Promise<{ subdo
                       ))}
                     </SelectContent>
                   </Select>
+                  {availableCourses.length > 0 ? (
+                    <Select value={selectedCourseValue} onValueChange={(value) => updateFilters({ courseID: value === "all" ? null : Number(value) })}>
+                      <SelectTrigger className="w-[220px]">
+                        <SelectValue placeholder="Semua kursus" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Semua kursus</SelectItem>
+                        {availableCourses.map((course) => (
+                          <SelectItem key={course.course_id} value={String(course.course_id)}>
+                            {course.course_name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : null}
                   <Button variant="outline" onClick={() => void loadReport()} disabled={loading}>
                     {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
                     Refresh
                   </Button>
                 </div>
+              </div>
+              <div className="flex items-start gap-2 rounded-lg border bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
+                <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                <p>
+                  <span className="font-medium text-foreground">{activePeriodOption.label}:</span> {periodUsageHint(periodKey)}
+                </p>
               </div>
 
               {loading && (
@@ -246,433 +548,428 @@ export default function SiteFullReportPage({ params }: { params: Promise<{ subdo
                         {connection.state_label}
                       </Badge>
                     )}
-                    {connection.plugin_version ? <Badge variant="outline">Plugin v{connection.plugin_version}</Badge> : null}
                     <Badge variant="outline">{activePeriodOption.label}</Badge>
-                    <span>Last seen: {formatRelativeTime(connection.last_seen_at)}</span>
-                    <span>Tracking: {connection.tracking_state_label}</span>
-                    <span>Last tracking: {formatRelativeTime(connection.tracking_last_seen_at)}</span>
-                    <span>Last sync: {formatRelativeTime(connection.last_sync_at)}</span>
+                    {selectedCourse ? <Badge variant="outline">Kursus: {selectedCourse.course_name}</Badge> : null}
+                    <span>Data diperbarui: {formatRelativeTime(connection.last_sync_at)}</span>
+                    <span>Aktivitas terlacak: {connection.tracking_state_label}</span>
                   </div>
 
-                  <div className="grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
-                    <Card>
-                      <CardHeader>
-                        <CardTitle className="flex items-center gap-2 text-base">
-                          <Activity className="h-4 w-4" />
-                          Health Koneksi Plugin
-                        </CardTitle>
-                        <CardDescription>{connection.state_message}</CardDescription>
-                      </CardHeader>
-                      <CardContent className="grid gap-3 sm:grid-cols-2 text-sm">
-                        <div className="rounded-lg border bg-muted/20 p-3">
-                          <p className="text-xs text-muted-foreground">Site URL Snapshot</p>
-                          <p className="mt-1 break-all font-medium">{connection.site_url_snapshot || "-"}</p>
-                        </div>
-                        <div className="rounded-lg border bg-muted/20 p-3">
-                          <p className="text-xs text-muted-foreground">Capabilities</p>
-                          <p className="mt-1 font-medium">{connection.capabilities.join(", ") || "-"}</p>
-                        </div>
-                        <div className="rounded-lg border bg-muted/20 p-3">
-                          <p className="text-xs text-muted-foreground">Tracking Status</p>
-                          <p className="mt-1 font-medium">{connection.tracking_state_label}</p>
-                        </div>
-                        <div className="rounded-lg border bg-muted/20 p-3">
-                          <p className="text-xs text-muted-foreground">Tracking Terakhir</p>
-                          <p className="mt-1 font-medium">{formatReportClock(connection.tracking_last_seen_at)}</p>
-                        </div>
-                        <div className="rounded-lg border bg-muted/20 p-3">
-                          <p className="text-xs text-muted-foreground">Registered</p>
-                          <p className="mt-1 font-medium">{formatReportClock(connection.registered_at)}</p>
-                        </div>
-                        <div className="rounded-lg border bg-muted/20 p-3">
-                          <p className="text-xs text-muted-foreground">Snapshot Terakhir</p>
-                          <p className="mt-1 font-medium">{formatReportClock(connection.last_sync_at)}</p>
-                        </div>
-                      </CardContent>
-                    </Card>
+                  {selectedCourse && payload?.course_filter_scope_note ? (
+                    <p className="text-sm text-muted-foreground">
+                      Filter kursus aktif: <span className="font-medium text-foreground">{selectedCourse.course_name}</span>.{" "}
+                      {payload.course_filter_scope_note}
+                    </p>
+                  ) : null}
 
-                    <Card className={highlightCardStyle(report.highlight.tone)}>
-                      <CardHeader>
-                        <CardTitle className="flex items-center gap-2 text-base">
-                          <BarChart3 className="h-4 w-4" />
-                          Highlight
-                        </CardTitle>
-                        <CardDescription>Insight utama untuk permukaan laporan penuh</CardDescription>
-                      </CardHeader>
-                      <CardContent>
-                        <p className="font-medium">{report.highlight.title}</p>
-                        <p className="mt-2 text-sm text-muted-foreground">{report.highlight.message}</p>
-                        <div className="mt-4 rounded-lg border bg-muted/20 p-3 text-sm">
-                          <p className="text-xs text-muted-foreground">Tracking Mode</p>
-                          <p className="mt-1 font-medium">{connection.tracking_mode || "-"}</p>
-                          <p className="mt-1 text-xs text-muted-foreground">{connection.tracking_state_message}</p>
-                        </div>
-                        {connection.last_error ? (
-                          <div className="mt-4 rounded-lg border border-red-600/20 bg-red-500/5 p-3 text-sm text-red-700">
-                            <p className="font-medium">Last error</p>
-                            <p className="mt-1">{connection.last_error}</p>
-                          </div>
-                        ) : null}
-                      </CardContent>
-                    </Card>
-                  </div>
+                  <Card className={highlightCardStyle(report.highlight.tone)}>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2 text-base">
+                        <BarChart3 className="h-4 w-4" />
+                        Prioritas Saat Ini
+                      </CardTitle>
+                      <CardDescription>Ringkasan paling penting untuk dibaca lebih dulu</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <p className="font-medium">{report.highlight.title}</p>
+                      <p className="mt-2 text-sm text-muted-foreground">{report.highlight.message}</p>
+                    </CardContent>
+                  </Card>
 
                   {!snapshot ? (
-                    <Card>
-                      <CardContent className="flex flex-col items-center justify-center py-16 text-center">
-                        <Clock className="mb-4 h-8 w-8 text-blue-500" />
-                        <h3 className="text-lg font-semibold">Snapshot laporan belum tersedia</h3>
-                        <p className="mt-2 max-w-xl text-sm text-muted-foreground">{connection.state_message}</p>
-                      </CardContent>
-                    </Card>
+                    <ReportEmptyState state="no_snapshot" connection={connection} periodLabel={activePeriodOption.label} />
                   ) : (
                     <>
-                      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                        <Card>
-                          <CardContent className="flex items-center gap-3 p-4">
-                            <div className="rounded-lg bg-blue-500/10 p-2">
-                              <Users className="h-5 w-5 text-blue-600" />
-                            </div>
-                            <div>
-                              <p className="text-2xl font-bold">{payload?.summary_metrics?.login_count ?? 0}</p>
-                              <p className="text-xs text-muted-foreground">Total Login</p>
-                            </div>
-                          </CardContent>
-                        </Card>
-                        <Card>
-                          <CardContent className="flex items-center gap-3 p-4">
-                            <div className="rounded-lg bg-green-500/10 p-2">
-                              <Activity className="h-5 w-5 text-green-600" />
-                            </div>
-                            <div>
-                              <p className="text-2xl font-bold">{payload?.summary_metrics?.active_users ?? 0}</p>
-                              <p className="text-xs text-muted-foreground">Pengguna Aktif</p>
-                            </div>
-                          </CardContent>
-                        </Card>
-                        <Card>
-                          <CardContent className="flex items-center gap-3 p-4">
-                            <div className="rounded-lg bg-purple-500/10 p-2">
-                              <FileText className="h-5 w-5 text-purple-600" />
-                            </div>
-                            <div>
-                              <p className="text-2xl font-bold">{payload?.summary_metrics?.submissions ?? 0}</p>
-                              <p className="text-xs text-muted-foreground">Submissions</p>
-                            </div>
-                          </CardContent>
-                        </Card>
-                        <Card>
-                          <CardContent className="flex items-center gap-3 p-4">
-                            <div className="rounded-lg bg-amber-500/10 p-2">
-                              <Clock className="h-5 w-5 text-amber-600" />
-                            </div>
-                            <div>
-                              <p className="text-2xl font-bold">{payload?.summary_metrics?.avg_online_label ?? "0 m"}</p>
-                              <p className="text-xs text-muted-foreground">Rata-rata Sesi</p>
-                            </div>
-                          </CardContent>
-                        </Card>
+                      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
+                        <MetricCard icon={Users} iconClassName="text-blue-600" iconWrapperClassName="bg-blue-500/10" value={payload?.summary_metrics?.login_count ?? 0} label="Total Login" helperText="Jumlah login yang tercatat selama periode yang dipilih." />
+                        <MetricCard icon={Activity} iconClassName="text-green-600" iconWrapperClassName="bg-green-500/10" value={payload?.summary_metrics?.active_users ?? 0} label="Pengguna Aktif" helperText="Jumlah pengguna unik yang melakukan aktivitas terlacak pada periode ini." />
+                        <MetricCard icon={FileText} iconClassName="text-violet-600" iconWrapperClassName="bg-violet-500/10" value={payload?.summary_metrics?.submissions ?? 0} label="Pengumpulan Tugas" helperText="Jumlah submission tugas yang tercatat pada periode ini." />
+                        <MetricCard icon={CheckCircle2} iconClassName="text-emerald-600" iconWrapperClassName="bg-emerald-500/10" value={payload?.summary_metrics?.completions ?? 0} label="Penyelesaian" helperText="Jumlah aktivitas atau progres belajar yang tercatat selesai." />
+                        <MetricCard icon={Clock} iconClassName="text-amber-600" iconWrapperClassName="bg-amber-500/10" value={payload?.summary_metrics?.session_count ?? 0} label="Total Sesi" helperText="Jumlah sesi aktif yang berhasil terlacak selama periode ini." />
+                        <MetricCard icon={BarChart3} iconClassName="text-sky-600" iconWrapperClassName="bg-sky-500/10" value={payload?.summary_metrics?.avg_online_label ?? "0 m"} label="Rata-rata Sesi" helperText="Rata-rata durasi satu sesi aktif yang berhasil terlacak." />
                       </div>
 
-                      <Card>
-                        <CardHeader>
-                          <CardTitle className="flex items-center gap-2 text-base">
-                            <Users className="h-4 w-4" />
-                            User Status
-                          </CardTitle>
-                          <CardDescription>Ringkasan status pengguna per enrollments, completion, dan grade</CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                          {(payload?.user_status?.length ?? 0) > 0 ? (
-                            <Table>
-                              <TableHeader>
-                                <TableRow>
-                                  <TableHead>Pengguna</TableHead>
-                                  <TableHead>Username</TableHead>
-                                  <TableHead>Email</TableHead>
-                                  <TableHead>Role</TableHead>
-                                  <TableHead>Kursus</TableHead>
-                                  <TableHead>Enrolment</TableHead>
-                                  <TableHead>Enrolled On</TableHead>
-                                  <TableHead>Status</TableHead>
-                                  <TableHead className="text-right">Avg Grade</TableHead>
-                                  <TableHead>Last Action</TableHead>
-                                </TableRow>
-                              </TableHeader>
-                              <TableBody>
-                                {payload!.user_status.map((row, index) => (
-                                  <TableRow key={`${row.user_id}-${row.course_id}-${index}`}>
-                                    <TableCell className="font-medium">{row.user_name}</TableCell>
-                                    <TableCell>{row.username || "-"}</TableCell>
-                                    <TableCell>{row.email || "-"}</TableCell>
-                                    <TableCell>{row.role_label}</TableCell>
-                                    <TableCell>{row.course_name}</TableCell>
-                                    <TableCell>{row.enrolment_method_label}</TableCell>
-                                    <TableCell>{formatReportClock(row.enrolled_on)}</TableCell>
-                                    <TableCell>{row.status_label}</TableCell>
-                                    <TableCell className="text-right">{row.average_grade.toFixed(1)}</TableCell>
-                                    <TableCell>{formatReportClock(row.last_action_at)}</TableCell>
-                                  </TableRow>
-                                ))}
-                              </TableBody>
-                            </Table>
-                          ) : (
-                            <EmptyTableMessage />
-                          )}
-                        </CardContent>
-                      </Card>
+                      {!connection.has_activity ? (
+                        <ReportEmptyState state="no_activity" connection={connection} periodLabel={activePeriodOption.label} />
+                      ) : (
+                        <>
+                          <div className="grid gap-4 xl:grid-cols-2">
+                            <Card>
+                              <CardHeader>
+                                <CardTitle className="flex items-center gap-2 text-base">
+                                  <Activity className="h-4 w-4" />
+                                  Trend Aktivitas Harian
+                                </CardTitle>
+                                <CardDescription>Perubahan login, pengguna aktif, submissions, dan completions selama periode aktif</CardDescription>
+                              </CardHeader>
+                              <CardContent>
+                                {(payload?.daily_trend?.length ?? 0) > 0 ? (
+                                  <SiteReportActivityTrendChart rows={payload?.daily_trend ?? []} />
+                                ) : (
+                                  <p className="text-sm text-muted-foreground">Belum ada trend aktivitas harian.</p>
+                                )}
+                              </CardContent>
+                            </Card>
+
+                            <Card>
+                              <CardHeader>
+                                <CardTitle className="flex items-center gap-2 text-base">
+                                  <BookOpen className="h-4 w-4" />
+                                  Progres Per Kursus
+                                </CardTitle>
+                                <CardDescription>Distribusi progres kursus yang paling penting untuk dipantau</CardDescription>
+                              </CardHeader>
+                              <CardContent>
+                                {(payload?.course_completion_summary?.length ?? 0) > 0 ? (
+                                  <SiteReportCourseCompletionChart rows={payload?.course_completion_summary ?? []} limit={5} />
+                                ) : (
+                                  <p className="text-sm text-muted-foreground">Belum ada data completion kursus.</p>
+                                )}
+                              </CardContent>
+                            </Card>
+                          </div>
+
+                          <Card>
+                            <CardHeader>
+                              <CardTitle className="text-base">Fokus Insight</CardTitle>
+                              <CardDescription>Pilih kategori yang ingin dibaca lebih dalam tanpa membuka semua preview sekaligus.</CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                              <Tabs
+                                value={activeInsight}
+                                onValueChange={(value) =>
+                                  updateFilters({
+                                    insight:
+                                      normalizeSiteReportInsightKey(value, DEFAULT_INSIGHT_CATEGORY) ?? DEFAULT_INSIGHT_CATEGORY,
+                                  })
+                                }
+                                className="space-y-4"
+                              >
+                                <TabsList className="grid h-auto w-full grid-cols-2 lg:grid-cols-4">
+                                  <TabsTrigger value="people">Orang</TabsTrigger>
+                                  <TabsTrigger value="tasks">Tugas</TabsTrigger>
+                                  <TabsTrigger value="courses">Kursus</TabsTrigger>
+                                  <TabsTrigger value="engagement">Engagement</TabsTrigger>
+                                </TabsList>
+
+                                <TabsContent value="people" className="space-y-4">
+                                  <div className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+                                    <Card>
+                                      <PreviewHeader
+                                        title="Peserta Perlu Perhatian"
+                                        description="Peserta dengan sinyal risiko tertinggi pada periode aktif."
+                                        href={buildSiteReportDetailHref(subdomain, periodKey, { section: "at-risk-users", courseId: selectedCourseID, insight: "people" })}
+                                      />
+                                      <CardContent>
+                                        {(payload?.at_risk_users?.length ?? 0) > 0 ? (
+                                          <div className="space-y-3 text-sm">
+                                            {payload!.at_risk_users.slice(0, 5).map((row, index) => (
+                                              <div key={`${row.email}-${index}`} className="rounded-lg border bg-muted/20 p-3">
+                                                <div className="flex items-start justify-between gap-3">
+                                                  <div>
+                                                    <p className="font-medium">{row.user_name}</p>
+                                                    <p className="text-xs text-muted-foreground">{row.course_name || "Tanpa kursus"}</p>
+                                                  </div>
+                                                  <Badge variant="outline" className={riskBadgeClass(row.risk_score)}>
+                                                    Risiko {row.risk_score}
+                                                  </Badge>
+                                                </div>
+                                                <p className="mt-2 text-xs text-muted-foreground">{row.risk_reason}</p>
+                                              </div>
+                                            ))}
+                                          </div>
+                                        ) : (
+                                          <p className="text-sm text-muted-foreground">Belum ada peserta berisiko pada periode ini.</p>
+                                        )}
+                                      </CardContent>
+                                    </Card>
+
+                                    <Card>
+                                      <PreviewHeader
+                                        title="Distribusi Status Peserta"
+                                        description="Komposisi progres peserta dan akses cepat ke detail orang."
+                                        href={buildSiteReportDetailHref(subdomain, periodKey, { section: "user-status", courseId: selectedCourseID, insight: "people" })}
+                                      />
+                                      <CardContent className="space-y-4">
+                                        {(payload?.user_status_distribution?.length ?? 0) > 0 ? (
+                                          <SiteReportUserStatusDistributionChart rows={payload?.user_status_distribution ?? []} />
+                                        ) : (
+                                          <p className="text-sm text-muted-foreground">Belum ada distribusi status peserta.</p>
+                                        )}
+                                        <div className="space-y-2">
+                                          <CompactDetailLink
+                                            label="Status peserta"
+                                            count={payload?.section_counts?.user_status ?? 0}
+                                            href={buildSiteReportDetailHref(subdomain, periodKey, { section: "user-status", courseId: selectedCourseID, insight: "people" })}
+                                          />
+                                          <CompactDetailLink
+                                            label="Aktivitas pengguna"
+                                            count={payload?.section_counts?.user_activity_summary ?? 0}
+                                            href={buildSiteReportDetailHref(subdomain, periodKey, { section: "user-activity-summary", courseId: selectedCourseID, insight: "people" })}
+                                          />
+                                        </div>
+                                      </CardContent>
+                                    </Card>
+                                  </div>
+                                </TabsContent>
+
+                                <TabsContent value="tasks" className="space-y-4">
+                                  <Card>
+                                    <PreviewHeader
+                                      title="Tugas Perlu Tindak Lanjut"
+                                      description="Pengumpulan tugas yang terlambat, kosong, atau perlu tindak lanjut."
+                                      href={buildSiteReportDetailHref(subdomain, periodKey, { section: "assignment-submission-detail", courseId: selectedCourseID, insight: "tasks" })}
+                                    />
+                                    <CardContent>
+                                      {(payload?.assignment_submission_detail?.length ?? 0) > 0 ? (
+                                        <div className="space-y-3 text-sm">
+                                          {payload!.assignment_submission_detail.slice(0, 5).map((row, index) => (
+                                            <div key={`${row.assignment_id}-${row.user_id}-${index}`} className="rounded-lg border bg-muted/20 p-3">
+                                              <div className="flex items-start justify-between gap-3">
+                                                <div>
+                                                  <p className="font-medium">{row.assignment_name}</p>
+                                                  <p className="text-xs text-muted-foreground">{row.user_name} · {row.course_name}</p>
+                                                </div>
+                                                <Badge variant="outline" className={assignmentStatusBadgeClass(row.status_key)}>
+                                                  {row.status_label}
+                                                </Badge>
+                                              </div>
+                                              <div className="mt-2 flex flex-wrap gap-3 text-xs text-muted-foreground">
+                                                <span>Due: {formatReportClock(row.due_at)}</span>
+                                                <span>Submit: {formatReportClock(row.submitted_at)}</span>
+                                                <span>Nilai: {formatGradeValue(row.grade)}</span>
+                                              </div>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      ) : (
+                                        <p className="text-sm text-muted-foreground">Belum ada assignment yang perlu ditindaklanjuti.</p>
+                                      )}
+                                    </CardContent>
+                                  </Card>
+                                </TabsContent>
+
+                                <TabsContent value="courses" className="space-y-4">
+                                  <div className="grid gap-4 xl:grid-cols-2">
+                                    <Card>
+                                      <PreviewHeader
+                                        title="Kesehatan Kursus"
+                                        description="Kursus dengan progres yang paling perlu dipantau."
+                                        href={buildSiteReportDetailHref(subdomain, periodKey, { section: "course-completion-summary", courseId: selectedCourseID, insight: "courses" })}
+                                      />
+                                      <CardContent>
+                                        {(payload?.course_completion_summary?.length ?? 0) > 0 ? (
+                                          <div className="space-y-3 text-sm">
+                                            {payload!.course_completion_summary.slice(0, 5).map((row) => (
+                                              <div key={row.course_id} className="rounded-lg border bg-muted/20 p-3">
+                                                <div className="flex items-center justify-between gap-3">
+                                                  <p className="font-medium">{row.course_name}</p>
+                                                  <Badge variant="outline">{row.completion_rate}%</Badge>
+                                                </div>
+                                                <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+                                                  <span>Enrolled: {row.enrolled}</span>
+                                                  <span>Completed: {row.completed}</span>
+                                                  <span>In progress: {row.in_progress}</span>
+                                                  <span>Belum mulai: {row.not_started}</span>
+                                                </div>
+                                              </div>
+                                            ))}
+                                          </div>
+                                        ) : (
+                                          <p className="text-sm text-muted-foreground">Belum ada data course health.</p>
+                                        )}
+                                      </CardContent>
+                                    </Card>
+
+                                    <Card>
+                                      <PreviewHeader
+                                        title="Aktivitas Terpadat"
+                                        description="Aktivitas dengan traffic dan event tertinggi."
+                                        href={buildSiteReportDetailHref(subdomain, periodKey, { section: "activity-stats-summary", courseId: selectedCourseID, insight: "courses" })}
+                                      />
+                                      <CardContent>
+                                        {(payload?.activity_stats_summary?.length ?? 0) > 0 ? (
+                                          <div className="space-y-3 text-sm">
+                                            {payload!.activity_stats_summary.slice(0, 5).map((row, index) => (
+                                              <div key={`${row.activity_id}-${index}`} className="rounded-lg border bg-muted/20 p-3">
+                                                <p className="font-medium">{row.activity_label}</p>
+                                                <p className="text-xs text-muted-foreground">{row.course_name || "Situs"}</p>
+                                                <div className="mt-2 flex flex-wrap gap-3 text-xs text-muted-foreground">
+                                                  <span>Visits: {row.visits}</span>
+                                                  <span>Events: {row.total_events}</span>
+                                                  <span>Users: {row.unique_users}</span>
+                                                </div>
+                                              </div>
+                                            ))}
+                                          </div>
+                                        ) : (
+                                          <p className="text-sm text-muted-foreground">Belum ada hotspot aktivitas pada periode ini.</p>
+                                        )}
+                                      </CardContent>
+                                    </Card>
+                                  </div>
+                                </TabsContent>
+
+                                <TabsContent value="engagement" className="space-y-4">
+                                  <div className="grid gap-4 xl:grid-cols-2">
+                                    <Card>
+                                      <PreviewHeader
+                                        title="Percakapan Forum"
+                                        description="Forum dengan interaksi paling aktif pada periode ini."
+                                        href={buildSiteReportDetailHref(subdomain, periodKey, { section: "forum-engagement-summary", courseId: selectedCourseID, insight: "engagement" })}
+                                      />
+                                      <CardContent>
+                                        {(payload?.forum_engagement_summary?.length ?? 0) > 0 ? (
+                                          <div className="space-y-3 text-sm">
+                                            {payload!.forum_engagement_summary.slice(0, 5).map((row, index) => (
+                                              <div key={`${row.forum_id}-${index}`} className="rounded-lg border bg-muted/20 p-3">
+                                                <p className="font-medium">{row.forum_name}</p>
+                                                <p className="text-xs text-muted-foreground">{row.course_name || "Tanpa kursus"}</p>
+                                                <div className="mt-2 flex flex-wrap gap-3 text-xs text-muted-foreground">
+                                                  <span>Diskusi: {row.discussion_count}</span>
+                                                  <span>Post: {row.post_count}</span>
+                                                  <span>Peserta aktif: {row.active_participants}</span>
+                                                </div>
+                                              </div>
+                                            ))}
+                                          </div>
+                                        ) : (
+                                          <p className="text-sm text-muted-foreground">Belum ada insight forum pada periode ini.</p>
+                                        )}
+                                      </CardContent>
+                                    </Card>
+
+                                    <Card>
+                                      <PreviewHeader
+                                        title="Kualitas Quiz"
+                                        description="Pertanyaan quiz yang paling menonjol dan akses cepat ke detail attempt."
+                                        href={buildSiteReportDetailHref(subdomain, periodKey, { section: "quiz-question-analysis", courseId: selectedCourseID, insight: "engagement" })}
+                                      />
+                                      <CardContent className="space-y-4">
+                                        {(payload?.quiz_question_analysis?.length ?? 0) > 0 ? (
+                                          <div className="space-y-3 text-sm">
+                                            {payload!.quiz_question_analysis.slice(0, 5).map((row, index) => (
+                                              <div key={`${row.quiz_id}-${row.question_id}-${index}`} className="rounded-lg border bg-muted/20 p-3">
+                                                <p className="font-medium">{row.question_name}</p>
+                                                <p className="text-xs text-muted-foreground">{row.quiz_name} · {row.course_name}</p>
+                                                <div className="mt-2 flex flex-wrap gap-3 text-xs text-muted-foreground">
+                                                  <span>Attempts: {row.attempts}</span>
+                                                  <span>Correct rate: {formatPercentageValue(row.correct_rate)}</span>
+                                                  <span>Average: {formatPercentageValue(row.average_score)}</span>
+                                                </div>
+                                              </div>
+                                            ))}
+                                          </div>
+                                        ) : (
+                                          <p className="text-sm text-muted-foreground">Belum ada insight quiz pada periode ini.</p>
+                                        )}
+                                        <CompactDetailLink
+                                          label="Aktivitas quiz"
+                                          count={payload?.section_counts?.quiz_activity_detail ?? 0}
+                                          href={buildSiteReportDetailHref(subdomain, periodKey, { section: "quiz-activity-detail", courseId: selectedCourseID, insight: "engagement" })}
+                                        />
+                                      </CardContent>
+                                    </Card>
+                                  </div>
+                                </TabsContent>
+                              </Tabs>
+                            </CardContent>
+                          </Card>
+
+                          <div className="space-y-3">
+                            <div className="flex items-center gap-2 text-sm font-medium">
+                              <AlertTriangle className="h-4 w-4 text-amber-600" />
+                              Detail Operasional
+                            </div>
+                            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+                              <OperationalCountCard label="Aktivitas Pengguna" count={payload?.section_counts?.user_activity_summary ?? 0} href={buildSiteReportDetailHref(subdomain, periodKey, { section: "user-activity-summary", courseId: selectedCourseID, insight: activeInsight })} />
+                              <OperationalCountCard label="Detail Nilai" count={payload?.section_counts?.gradebook_detail ?? 0} href={buildSiteReportDetailHref(subdomain, periodKey, { section: "gradebook-detail", courseId: selectedCourseID, insight: activeInsight })} />
+                              <OperationalCountCard label="Penyelesaian Aktivitas" count={payload?.section_counts?.activity_completion_detail ?? 0} href={buildSiteReportDetailHref(subdomain, periodKey, { section: "activity-completion-detail", courseId: selectedCourseID, insight: activeInsight })} />
+                              <OperationalCountCard label="Aktivitas Quiz" count={payload?.section_counts?.quiz_activity_detail ?? 0} href={buildSiteReportDetailHref(subdomain, periodKey, { section: "quiz-activity-detail", courseId: selectedCourseID, insight: activeInsight })} />
+                              <OperationalCountCard label="Aktivitas Terbaru" count={payload?.section_counts?.recent_activity ?? 0} href={buildSiteReportDetailHref(subdomain, periodKey, { section: "recent-activity", courseId: selectedCourseID, insight: activeInsight })} />
+                            </div>
+                          </div>
+                        </>
+                      )}
 
                       <Card>
-                        <CardHeader>
-                          <CardTitle className="flex items-center gap-2 text-base">
-                            <BookOpen className="h-4 w-4" />
-                            Activity Stats Summary
-                          </CardTitle>
-                          <CardDescription>Agregasi aktivitas tenant per kursus dan komponen</CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                          {(payload?.activity_stats_summary?.length ?? 0) > 0 ? (
-                            <Table>
-                              <TableHeader>
-                                <TableRow>
-                                  <TableHead>Kursus</TableHead>
-                                  <TableHead>Module</TableHead>
-                                  <TableHead>Komponen</TableHead>
-                                  <TableHead>Aktivitas</TableHead>
-                                  <TableHead className="text-right">Visits</TableHead>
-                                  <TableHead className="text-right">Time Spent</TableHead>
-                                  <TableHead>First Access</TableHead>
-                                  <TableHead>Created</TableHead>
-                                  <TableHead className="text-right">Completed</TableHead>
-                                  <TableHead className="text-right">Events</TableHead>
-                                  <TableHead className="text-right">Users</TableHead>
-                                  <TableHead>Last Activity</TableHead>
-                                </TableRow>
-                              </TableHeader>
-                              <TableBody>
-                                {payload!.activity_stats_summary.map((row, index) => (
-                                  <TableRow key={`${row.course_id}-${row.activity_label}-${index}`}>
-                                    <TableCell className="font-medium">{row.course_name || "Situs"}</TableCell>
-                                    <TableCell>{row.module_type || "-"}</TableCell>
-                                    <TableCell>{row.component_name}</TableCell>
-                                    <TableCell>{row.activity_label}</TableCell>
-                                    <TableCell className="text-right">{row.visits}</TableCell>
-                                    <TableCell className="text-right">{row.time_spent_label}</TableCell>
-                                    <TableCell>{formatReportClock(row.first_access_at)}</TableCell>
-                                    <TableCell>{formatReportClock(row.created_at)}</TableCell>
-                                    <TableCell className="text-right">{row.num_completed}</TableCell>
-                                    <TableCell className="text-right">{row.total_events}</TableCell>
-                                    <TableCell className="text-right">{row.unique_users}</TableCell>
-                                    <TableCell>{formatReportClock(row.last_activity_at)}</TableCell>
-                                  </TableRow>
-                                ))}
-                              </TableBody>
-                            </Table>
-                          ) : (
-                            <EmptyTableMessage />
-                          )}
-                        </CardContent>
+                        <Accordion
+                          type="single"
+                          collapsible
+                          value={diagnosticsOpen ? "diagnostics" : ""}
+                          onValueChange={(value) => setDiagnosticsOpen(value === "diagnostics")}
+                          className="w-full"
+                        >
+                          <AccordionItem value="diagnostics" className="border-b-0">
+                            <AccordionTrigger className="px-6 hover:no-underline">
+                              <div className="space-y-1">
+                                <p className="text-base font-semibold">Status Sinkronisasi & Diagnostik</p>
+                                <p className="text-sm font-normal text-muted-foreground">
+                                  Detail teknis untuk memeriksa koneksi plugin, tracking, dan sinkronisasi data laporan.
+                                </p>
+                              </div>
+                            </AccordionTrigger>
+                            <AccordionContent className="px-6">
+                              <div className="space-y-4 text-sm">
+                                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                                  <div className="rounded-lg border bg-muted/20 p-3">
+                                    <p className="text-xs text-muted-foreground">Versi plugin</p>
+                                    <p className="mt-1 font-medium">{connection.plugin_version ? `v${connection.plugin_version}` : "-"}</p>
+                                  </div>
+                                  <div className="rounded-lg border bg-muted/20 p-3">
+                                    <p className="text-xs text-muted-foreground">Status sinkronisasi</p>
+                                    <p className="mt-1 font-medium">{connection.state_label}</p>
+                                  </div>
+                                  <div className="rounded-lg border bg-muted/20 p-3">
+                                    <p className="text-xs text-muted-foreground">Aktivitas terlacak</p>
+                                    <p className="mt-1 font-medium">{connection.tracking_state_label}</p>
+                                  </div>
+                                  <div className="rounded-lg border bg-muted/20 p-3">
+                                    <p className="text-xs text-muted-foreground">Data diperbarui</p>
+                                    <p className="mt-1 font-medium">{formatReportClock(connection.last_sync_at)}</p>
+                                  </div>
+                                  <div className="rounded-lg border bg-muted/20 p-3">
+                                    <p className="text-xs text-muted-foreground">Data laporan dibuat</p>
+                                    <p className="mt-1 font-medium">{formatReportClock(snapshot?.generated_at)}</p>
+                                  </div>
+                                  <div className="rounded-lg border bg-muted/20 p-3">
+                                    <p className="text-xs text-muted-foreground">Aktivitas terakhir</p>
+                                    <p className="mt-1 font-medium">{formatReportClock(connection.tracking_last_seen_at)}</p>
+                                  </div>
+                                  <div className="rounded-lg border bg-muted/20 p-3">
+                                    <p className="text-xs text-muted-foreground">Data diterima</p>
+                                    <p className="mt-1 font-medium">{formatReportClock(snapshot?.received_at)}</p>
+                                  </div>
+                                  <div className="rounded-lg border bg-muted/20 p-3">
+                                    <p className="text-xs text-muted-foreground">Data laporan</p>
+                                    <p className="mt-1 font-medium">{connection.state_message}</p>
+                                  </div>
+                                  <div className="rounded-lg border bg-muted/20 p-3 sm:col-span-2 xl:col-span-3">
+                                    <p className="text-xs text-muted-foreground">Site snapshot URL</p>
+                                    <p className="mt-1 break-all font-medium">{connection.site_url_snapshot || "-"}</p>
+                                  </div>
+                                </div>
+                                {connection.state === "not_connected" ? (
+                                  <div className="rounded-lg border border-amber-600/20 bg-amber-500/5 p-3">
+                                    <p className="font-medium text-amber-800">Plugin laporan belum terhubung</p>
+                                    <p className="mt-1 text-sm text-amber-700">
+                                      Buka tab detail situs untuk melanjutkan setup koneksi dan mengambil connect token.
+                                    </p>
+                                    <Button asChild variant="outline" size="sm" className="mt-3">
+                                      <Link href={`/situs/${subdomain}?tab=laporan`}>Buka Detail Situs</Link>
+                                    </Button>
+                                  </div>
+                                ) : null}
+                                {connection.last_error ? (
+                                  <div className="rounded-lg border border-red-600/20 bg-red-500/5 p-3 text-sm text-red-700">
+                                    <p className="font-medium">Error sinkronisasi terakhir</p>
+                                    <p className="mt-1">{connection.last_error}</p>
+                                  </div>
+                                ) : null}
+                              </div>
+                            </AccordionContent>
+                          </AccordionItem>
+                        </Accordion>
                       </Card>
-
-                      <Card>
-                        <CardHeader>
-                          <CardTitle className="flex items-center gap-2 text-base">
-                            <GraduationCap className="h-4 w-4" />
-                            Quiz Activity Detail
-                          </CardTitle>
-                          <CardDescription>Detail attempt quiz per pengguna pada periode aktif</CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                          {(payload?.quiz_activity_detail?.length ?? 0) > 0 ? (
-                            <Table>
-                              <TableHeader>
-                                <TableRow>
-                                  <TableHead>Quiz</TableHead>
-                                  <TableHead>Kursus</TableHead>
-                                  <TableHead>Pengguna</TableHead>
-                                  <TableHead>Email</TableHead>
-                                  <TableHead className="text-right">Attempts</TableHead>
-                                  <TableHead className="text-right">Finished</TableHead>
-                                  <TableHead className="text-right">Best</TableHead>
-                                  <TableHead className="text-right">Average</TableHead>
-                                  <TableHead className="text-right">Lowest</TableHead>
-                                  <TableHead className="text-right">Time Spent</TableHead>
-                                  <TableHead>Status</TableHead>
-                                  <TableHead>Completed At</TableHead>
-                                  <TableHead>Last Attempt</TableHead>
-                                </TableRow>
-                              </TableHeader>
-                              <TableBody>
-                                {payload!.quiz_activity_detail.map((row, index) => (
-                                  <TableRow key={`${row.quiz_id}-${row.user_id}-${index}`}>
-                                    <TableCell className="font-medium">{row.quiz_name}</TableCell>
-                                    <TableCell>{row.course_name}</TableCell>
-                                    <TableCell>{row.user_name}</TableCell>
-                                    <TableCell>{row.email || "-"}</TableCell>
-                                    <TableCell className="text-right">{row.attempts}</TableCell>
-                                    <TableCell className="text-right">{row.finished_attempts}</TableCell>
-                                    <TableCell className="text-right">{Number(row.best_score ?? 0).toFixed(1)}</TableCell>
-                                    <TableCell className="text-right">{Number(row.average_score ?? 0).toFixed(1)}</TableCell>
-                                    <TableCell className="text-right">{Number(row.lowest_score ?? 0).toFixed(1)}</TableCell>
-                                    <TableCell className="text-right">{row.time_spent_label || "0 m"}</TableCell>
-                                    <TableCell>{row.status_label}</TableCell>
-                                    <TableCell>{formatReportClock(row.completion_at)}</TableCell>
-                                    <TableCell>{formatReportClock(row.last_attempt_at)}</TableCell>
-                                  </TableRow>
-                                ))}
-                              </TableBody>
-                            </Table>
-                          ) : (
-                            <EmptyTableMessage />
-                          )}
-                        </CardContent>
-                      </Card>
-
-                      <div className="grid gap-4 xl:grid-cols-2">
-                        <Card>
-                          <CardHeader>
-                            <CardTitle className="text-base">Course Completion Summary</CardTitle>
-                            <CardDescription>Progres penyelesaian per kursus</CardDescription>
-                          </CardHeader>
-                          <CardContent>
-                            {(payload?.course_completion_summary?.length ?? 0) > 0 ? (
-                              <Table>
-                                <TableHeader>
-                                  <TableRow>
-                                    <TableHead>Kursus</TableHead>
-                                    <TableHead className="text-right">Enrolled</TableHead>
-                                    <TableHead className="text-right">Completed</TableHead>
-                                    <TableHead className="text-right">In Progress</TableHead>
-                                    <TableHead className="text-right">Belum Mulai</TableHead>
-                                    <TableHead className="text-right">Rate</TableHead>
-                                  </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                  {payload!.course_completion_summary.map((row) => (
-                                    <TableRow key={row.course_id}>
-                                      <TableCell className="font-medium">{row.course_name}</TableCell>
-                                      <TableCell className="text-right">{row.enrolled}</TableCell>
-                                      <TableCell className="text-right">{row.completed}</TableCell>
-                                      <TableCell className="text-right">{row.in_progress}</TableCell>
-                                      <TableCell className="text-right">{row.not_started}</TableCell>
-                                      <TableCell className="text-right">{row.completion_rate}%</TableCell>
-                                    </TableRow>
-                                  ))}
-                                </TableBody>
-                              </Table>
-                            ) : (
-                              <EmptyTableMessage />
-                            )}
-                          </CardContent>
-                        </Card>
-
-                        <Card>
-                          <CardHeader>
-                            <CardTitle className="text-base">Grade Recap</CardTitle>
-                            <CardDescription>Rekap nilai per kursus</CardDescription>
-                          </CardHeader>
-                          <CardContent>
-                            {(payload?.grade_recap_per_course?.length ?? 0) > 0 ? (
-                              <Table>
-                                <TableHeader>
-                                  <TableRow>
-                                    <TableHead>Kursus</TableHead>
-                                    <TableHead className="text-right">Rata-rata</TableHead>
-                                    <TableHead className="text-right">Tertinggi</TableHead>
-                                    <TableHead className="text-right">Terendah</TableHead>
-                                    <TableHead className="text-right">Lulus</TableHead>
-                                    <TableHead className="text-right">Gagal</TableHead>
-                                  </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                  {payload!.grade_recap_per_course.map((row) => (
-                                    <TableRow key={row.course_id}>
-                                      <TableCell className="font-medium">{row.course_name}</TableCell>
-                                      <TableCell className="text-right">{row.average_grade.toFixed(1)}</TableCell>
-                                      <TableCell className="text-right">{row.highest_grade.toFixed(1)}</TableCell>
-                                      <TableCell className="text-right">{row.lowest_grade.toFixed(1)}</TableCell>
-                                      <TableCell className="text-right">{row.passed}</TableCell>
-                                      <TableCell className="text-right">{row.failed}</TableCell>
-                                    </TableRow>
-                                  ))}
-                                </TableBody>
-                              </Table>
-                            ) : (
-                              <EmptyTableMessage />
-                            )}
-                          </CardContent>
-                        </Card>
-
-                        <Card>
-                          <CardHeader>
-                            <CardTitle className="text-base">User Activity Summary</CardTitle>
-                            <CardDescription>Ringkasan aktivitas per pengguna</CardDescription>
-                          </CardHeader>
-                          <CardContent>
-                            {(payload?.user_activity_summary?.length ?? 0) > 0 ? (
-                              <Table>
-                                <TableHeader>
-                                  <TableRow>
-                                    <TableHead>Pengguna</TableHead>
-                                    <TableHead>Role</TableHead>
-                                    <TableHead className="text-right">Sesi</TableHead>
-                                    <TableHead className="text-right">Online</TableHead>
-                                    <TableHead className="text-right">Submissions</TableHead>
-                                    <TableHead>Last Action</TableHead>
-                                  </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                  {payload!.user_activity_summary.map((row) => (
-                                    <TableRow key={row.user_id}>
-                                      <TableCell className="font-medium">{row.user_name}</TableCell>
-                                      <TableCell>{row.role_label}</TableCell>
-                                      <TableCell className="text-right">{row.sessions}</TableCell>
-                                      <TableCell className="text-right">{row.total_online_label}</TableCell>
-                                      <TableCell className="text-right">{row.submissions}</TableCell>
-                                      <TableCell>{formatReportClock(row.last_action_at)}</TableCell>
-                                    </TableRow>
-                                  ))}
-                                </TableBody>
-                              </Table>
-                            ) : (
-                              <EmptyTableMessage />
-                            )}
-                          </CardContent>
-                        </Card>
-
-                        <Card>
-                          <CardHeader>
-                            <CardTitle className="text-base">Recent Activity</CardTitle>
-                            <CardDescription>Log aktivitas terbaru dari snapshot tenant</CardDescription>
-                          </CardHeader>
-                          <CardContent>
-                            {(payload?.recent_activity?.length ?? 0) > 0 ? (
-                              <Table>
-                                <TableHeader>
-                                  <TableRow>
-                                    <TableHead>Pengguna</TableHead>
-                                    <TableHead>Aksi</TableHead>
-                                    <TableHead>Waktu</TableHead>
-                                    <TableHead>IP</TableHead>
-                                  </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                  {payload!.recent_activity.map((row, index) => (
-                                    <TableRow key={`${row.user_name}-${row.occurred_at}-${index}`}>
-                                      <TableCell className="font-medium">{row.user_name}</TableCell>
-                                      <TableCell>{row.action}</TableCell>
-                                      <TableCell>{formatReportClock(row.occurred_at)}</TableCell>
-                                      <TableCell>{row.ip_address || "-"}</TableCell>
-                                    </TableRow>
-                                  ))}
-                                </TableBody>
-                              </Table>
-                            ) : (
-                              <EmptyTableMessage />
-                            )}
-                          </CardContent>
-                        </Card>
-                      </div>
                     </>
                   )}
                 </>

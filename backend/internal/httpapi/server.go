@@ -122,6 +122,7 @@ func (s *Server) Router() http.Handler {
 			r.Post("/sites/{siteID}/report-connection/connect-token", s.handleIssueSiteReportConnectToken)
 			r.Get("/sites/{siteID}/reports/summary", s.handleGetSiteReportSummary)
 			r.Get("/sites/{siteID}/reports/full", s.handleGetSiteFullReport)
+			r.Get("/sites/{siteID}/reports/detail", s.handleGetSiteReportDetail)
 			r.Get("/sites/{siteID}/reports/latest", s.handleGetLatestSiteReportSnapshot)
 			r.Get("/sites/{siteID}/backups", s.handleGetSiteBackups)
 			r.Post("/sites/{siteID}/backups", s.handleCreateSiteBackup)
