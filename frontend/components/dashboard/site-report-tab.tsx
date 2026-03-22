@@ -2,10 +2,8 @@
 
 import Link from "next/link"
 import { useCallback, useEffect, useState } from "react"
-import { useRouter, useSearchParams } from "next/navigation"
 import { toast } from "sonner"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import {
@@ -37,18 +35,11 @@ import {
   type SiteReportHighlight,
   type SiteReportSummaryResponse,
 } from "@/lib/api"
-import {
-  SiteReportActivityTrendChart,
-  SiteReportCourseCompletionChart,
-} from "@/components/dashboard/site-report-charts"
+import { SiteReportActivityTrendChart } from "@/components/dashboard/site-report-charts"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   buildSiteFullReportHref,
-  buildSiteReportTabHref,
   buildSiteReportDetailHref,
-  normalizeSiteReportInsightKey,
-  type SiteReportInsightKey,
 } from "@/lib/site-report-sections"
 
 interface SiteReportTabProps {
@@ -71,8 +62,6 @@ const PERIOD_OPTIONS: PeriodOption[] = [
   { value: "this_month", label: "Bulan Ini" },
   { value: "last_month", label: "Bulan Lalu" },
 ]
-const DEFAULT_INSIGHT_CATEGORY: SiteReportInsightKey = "people"
-
 function periodUsageHint(periodKey: string): string {
   switch (periodKey) {
     case "today":
@@ -104,76 +93,8 @@ function formatReportClock(isoStr?: string | null): string {
   }
 }
 
-function formatRelativeTime(isoStr?: string | null): string {
-  if (!isoStr) return "-"
-  const now = new Date()
-  const d = new Date(isoStr)
-  const diffMs = now.getTime() - d.getTime()
-  const mins = Math.floor(diffMs / 60000)
-  if (mins < 1) return "Baru saja"
-  if (mins < 60) return `${mins} menit lalu`
-  const hours = Math.floor(mins / 60)
-  if (hours < 24) return `${hours} jam lalu`
-  const days = Math.floor(hours / 24)
-  return `${days} hari lalu`
-}
-
-function formatGradeValue(value?: number | null): string {
-  return typeof value === "number" ? value.toFixed(1) : "-"
-}
-
-function formatPercentageValue(value?: number | null): string {
-  return typeof value === "number" ? `${value.toFixed(1)}%` : "-"
-}
-
-function formatCapabilities(connection: SiteReportConnectionStatus): string {
-  if (connection.capabilities.length === 0) {
-    return "Belum ada capability yang dilaporkan"
-  }
-  if (connection.capabilities.length <= 3) {
-    return connection.capabilities.join(", ")
-  }
-  return `${connection.capabilities.slice(0, 3).join(", ")} +${connection.capabilities.length - 3} lainnya`
-}
-
 function formatCount(value: number): string {
   return value.toLocaleString("id-ID")
-}
-
-function connectionBadge(connection: SiteReportConnectionStatus) {
-  switch (connection.state) {
-    case "tracking_active":
-    case "synced":
-      return {
-        className: "text-green-600 border-green-600/50 bg-green-500/10",
-        icon: CheckCircle2,
-      }
-    case "tracking_stale":
-      return {
-        className: "text-amber-600 border-amber-600/50 bg-amber-500/10",
-        icon: AlertCircle,
-      }
-    case "synced_no_activity":
-      return {
-        className: "text-blue-600 border-blue-600/50 bg-blue-500/10",
-        icon: Info,
-      }
-    case "connected_waiting_sync":
-      return {
-        className: "text-amber-600 border-amber-600/50 bg-amber-500/10",
-        icon: Clock,
-      }
-    case "sync_error":
-      return {
-        className: "text-red-600 border-red-600/50 bg-red-500/10",
-        icon: AlertCircle,
-      }
-    default:
-      return {
-        className: "text-slate-600 border-slate-600/50 bg-slate-500/10",
-        icon: Info,
-      }
-  }
 }
 
 function highlightCardStyle(highlight: SiteReportHighlight) {
@@ -201,31 +122,6 @@ function shouldExpandDiagnostics(connection?: SiteReportConnectionStatus | null)
       return false
     default:
       return true
-  }
-}
-
-function riskBadgeClass(score: number) {
-  if (score >= 80) {
-    return "border-red-600/40 bg-red-500/10 text-red-700"
-  }
-  if (score >= 50) {
-    return "border-amber-600/40 bg-amber-500/10 text-amber-700"
-  }
-  return "border-blue-600/40 bg-blue-500/10 text-blue-700"
-}
-
-function assignmentStatusBadgeClass(statusKey: string) {
-  switch (statusKey) {
-    case "missing":
-      return "border-red-600/40 bg-red-500/10 text-red-700"
-    case "late":
-      return "border-amber-600/40 bg-amber-500/10 text-amber-700"
-    case "graded":
-      return "border-green-600/40 bg-green-500/10 text-green-700"
-    case "submitted":
-      return "border-blue-600/40 bg-blue-500/10 text-blue-700"
-    default:
-      return "border-slate-600/40 bg-slate-500/10 text-slate-700"
   }
 }
 
@@ -309,61 +205,43 @@ function MetricCard({
   )
 }
 
-function PreviewHeader({
+function CompactInsightCard({
   title,
-  description,
+  count,
+  summary,
   href,
 }: {
   title: string
-  description: string
-  href: string
-}) {
-  return (
-    <CardHeader>
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <CardTitle className="text-base">{title}</CardTitle>
-          <CardDescription>{description}</CardDescription>
-        </div>
-        <Button asChild variant="link" size="sm" className="h-auto px-0 text-xs">
-          <Link href={href} aria-label={`Lihat detail ${title}`}>
-            <ExternalLink className="h-3.5 w-3.5" />
-            Lihat detail
-          </Link>
-        </Button>
-      </div>
-    </CardHeader>
-  )
-}
-
-function CompactDetailLink({
-  label,
-  count,
-  href,
-}: {
-  label: string
   count: number
+  summary: string
   href: string
 }) {
   return (
-    <Link
-      href={href}
-      className="flex items-center justify-between rounded-lg border bg-muted/20 px-3 py-2 text-sm transition-colors hover:bg-muted/40"
-    >
-      <span className="text-muted-foreground">{label}</span>
-      <span className="font-semibold text-foreground">{formatCount(count)}</span>
-    </Link>
+    <Card>
+      <CardContent className="flex h-full flex-col gap-4 p-4">
+        <div className="space-y-2">
+          <p className="text-sm font-medium">{title}</p>
+          <p className="text-3xl font-bold">{formatCount(count)}</p>
+          <p className="text-sm text-muted-foreground">{summary}</p>
+        </div>
+        <div className="pt-1">
+          <Button asChild variant="link" size="sm" className="h-auto px-0 text-xs">
+            <Link href={href} aria-label={`Lihat detail ${title}`}>
+              <ExternalLink className="h-3.5 w-3.5" />
+              Lihat detail
+            </Link>
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
   )
 }
 
 export function SiteReportTab({ siteID, siteName, siteSubdomain }: SiteReportTabProps) {
-  const router = useRouter()
-  const searchParams = useSearchParams()
   const [summary, setSummary] = useState<SiteReportSummaryResponse | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [periodKey, setPeriodKey] = useState(DEFAULT_PERIOD_KEY)
-  const [activeInsight, setActiveInsight] = useState<SiteReportInsightKey>(DEFAULT_INSIGHT_CATEGORY)
   const [diagnosticsOpen, setDiagnosticsOpen] = useState(false)
   const [connectToken, setConnectToken] = useState("")
   const [connectTokenLoading, setConnectTokenLoading] = useState(false)
@@ -421,35 +299,44 @@ export function SiteReportTab({ siteID, siteName, siteSubdomain }: SiteReportTab
   const connection = summary?.connection ?? null
   const snapshot = summary?.snapshot ?? null
   const payload = snapshot?.payload
-  const badgeConfig = connection ? connectionBadge(connection) : null
-  const BadgeIcon = badgeConfig?.icon
   const showManualConnect = connection?.state === "not_connected"
   const activePeriodOption = PERIOD_OPTIONS.find((option) => option.value === periodKey) ?? PERIOD_OPTIONS[0]
-  const fullReportHref = buildSiteFullReportHref(siteSubdomain, periodKey, null, activeInsight)
+  const fullReportHref = buildSiteFullReportHref(siteSubdomain, periodKey)
 
   useEffect(() => {
     setDiagnosticsOpen(shouldExpandDiagnostics(connection))
   }, [connection?.state])
 
-  useEffect(() => {
-    const nextInsight = normalizeSiteReportInsightKey(searchParams.get("insight"), DEFAULT_INSIGHT_CATEGORY)
-    if (nextInsight && nextInsight !== activeInsight) {
-      setActiveInsight(nextInsight)
+  const atRiskCount = payload?.section_counts?.at_risk_users ?? 0
+  const topRiskUser = payload?.at_risk_users?.reduce((highest, row) => {
+    if (!highest || row.risk_score > highest.risk_score) {
+      return row
     }
-  }, [activeInsight, searchParams])
+    return highest
+  }, payload?.at_risk_users?.[0] ?? null)
+  const atRiskSummary = topRiskUser
+    ? `${topRiskUser.user_name} paling perlu ditindaklanjuti. ${topRiskUser.risk_reason}`
+    : "Belum ada data yang cukup untuk insight ini."
 
-  useEffect(() => {
-    if (searchParams.get("tab") !== "laporan" || searchParams.get("insight")) {
-      return
+  const actionableAssignment =
+    payload?.assignment_submission_detail?.find((row) => row.status_key === "missing" || row.status_key === "late")
+      ?? payload?.assignment_submission_detail?.[0]
+      ?? null
+  const assignmentCount = payload?.section_counts?.assignment_submission_detail ?? 0
+  const assignmentSummary = actionableAssignment
+    ? `${actionableAssignment.assignment_name} untuk ${actionableAssignment.user_name} berstatus ${actionableAssignment.status_label.toLowerCase()}.`
+    : "Belum ada data yang cukup untuk insight ini."
+
+  const weakestCourse = payload?.course_completion_summary?.reduce((lowest, row) => {
+    if (!lowest || row.completion_rate < lowest.completion_rate) {
+      return row
     }
-    router.replace(buildSiteReportTabHref(siteSubdomain, activeInsight), { scroll: false })
-  }, [activeInsight, router, searchParams, siteSubdomain])
-
-  const handleInsightChange = useCallback((value: string) => {
-    const nextInsight = normalizeSiteReportInsightKey(value, DEFAULT_INSIGHT_CATEGORY) ?? DEFAULT_INSIGHT_CATEGORY
-    setActiveInsight(nextInsight)
-    router.replace(buildSiteReportTabHref(siteSubdomain, nextInsight), { scroll: false })
-  }, [router, siteSubdomain])
+    return lowest
+  }, payload?.course_completion_summary?.[0] ?? null)
+  const courseCount = payload?.section_counts?.course_completion_summary ?? 0
+  const courseSummary = weakestCourse
+    ? `${weakestCourse.course_name} baru mencapai ${weakestCourse.completion_rate}% completion.`
+    : "Belum ada data yang cukup untuk insight ini."
 
   return (
     <div className="space-y-6">
@@ -507,18 +394,6 @@ export function SiteReportTab({ siteID, siteName, siteSubdomain }: SiteReportTab
 
       {summary && connection && (
         <>
-          <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-            {BadgeIcon && (
-              <Badge variant="outline" className={`gap-1 ${badgeConfig?.className ?? ""}`}>
-                <BadgeIcon className="h-3 w-3" />
-                {connection.state_label}
-              </Badge>
-            )}
-            <Badge variant="outline">{activePeriodOption.label}</Badge>
-            <span>Data diperbarui: {formatRelativeTime(connection.last_sync_at)}</span>
-            <span>Aktivitas terlacak: {connection.tracking_state_label}</span>
-          </div>
-
           <Card className={highlightCardStyle(summary.highlight)}>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-base">
@@ -567,240 +442,30 @@ export function SiteReportTab({ siteID, siteName, siteSubdomain }: SiteReportTab
 
                   <Card>
                     <CardHeader>
-                      <CardTitle className="text-base">Fokus Insight</CardTitle>
-                      <CardDescription>Pilih area yang ingin dibaca lebih dalam tanpa menampilkan semua section sekaligus.</CardDescription>
+                      <CardTitle className="text-base">Yang Perlu Dicek</CardTitle>
+                      <CardDescription>Tiga area tindakan yang paling cepat membantu membaca kondisi tenant.</CardDescription>
                     </CardHeader>
                     <CardContent>
-                      <Tabs value={activeInsight} onValueChange={handleInsightChange} className="space-y-4">
-                        <TabsList className="grid h-auto w-full grid-cols-2 lg:grid-cols-4">
-                          <TabsTrigger value="people">Orang</TabsTrigger>
-                          <TabsTrigger value="tasks">Tugas</TabsTrigger>
-                          <TabsTrigger value="courses">Kursus</TabsTrigger>
-                          <TabsTrigger value="engagement">Engagement</TabsTrigger>
-                        </TabsList>
-
-                        <TabsContent value="people" className="space-y-4">
-                          <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
-                            <Card>
-                              <PreviewHeader
-                                title="Peserta Perlu Perhatian"
-                                description="Peserta dengan sinyal risiko tertinggi pada periode aktif"
-                                href={buildSiteReportDetailHref(siteSubdomain, periodKey, { section: "at-risk-users", insight: "people" })}
-                              />
-                              <CardContent>
-                                {(payload?.at_risk_users?.length ?? 0) > 0 ? (
-                                  <div className="space-y-3 text-sm">
-                                    {payload!.at_risk_users.slice(0, 3).map((row, index) => (
-                                      <div key={`${row.email}-${index}`} className="rounded-lg border bg-muted/20 p-3">
-                                        <div className="flex items-start justify-between gap-3">
-                                          <div>
-                                            <p className="font-medium">{row.user_name}</p>
-                                            <p className="text-xs text-muted-foreground">{row.course_name || "Tanpa kursus"}</p>
-                                          </div>
-                                          <Badge variant="outline" className={riskBadgeClass(row.risk_score)}>
-                                            Risiko {row.risk_score}
-                                          </Badge>
-                                        </div>
-                                        <p className="mt-2 text-xs text-muted-foreground">{row.risk_reason}</p>
-                                      </div>
-                                    ))}
-                                  </div>
-                                ) : (
-                                  <p className="text-sm text-muted-foreground">Belum ada peserta berisiko pada periode ini.</p>
-                                )}
-                              </CardContent>
-                            </Card>
-
-                            <Card>
-                              <PreviewHeader
-                                title="Status Peserta"
-                                description="Komposisi progres peserta dan pintasan ke detail operasional."
-                                href={buildSiteReportDetailHref(siteSubdomain, periodKey, { section: "user-status", insight: "people" })}
-                              />
-                              <CardContent className="space-y-4">
-                                {(payload?.user_status_distribution?.length ?? 0) > 0 ? (
-                                  <div className="space-y-2 text-sm">
-                                    {payload!.user_status_distribution.slice(0, 3).map((row) => (
-                                      <div key={row.status_key} className="flex items-center justify-between rounded-lg border bg-muted/20 px-3 py-2">
-                                        <span>{row.status_label}</span>
-                                        <span className="font-semibold">{formatCount(row.total)}</span>
-                                      </div>
-                                    ))}
-                                  </div>
-                                ) : (
-                                  <p className="text-sm text-muted-foreground">Belum ada distribusi status peserta.</p>
-                                )}
-                                <div className="space-y-2">
-                                  <CompactDetailLink
-                                    label="Status peserta"
-                                    count={payload?.section_counts?.user_status ?? 0}
-                                    href={buildSiteReportDetailHref(siteSubdomain, periodKey, { section: "user-status", insight: "people" })}
-                                  />
-                                  <CompactDetailLink
-                                    label="Aktivitas pengguna"
-                                    count={payload?.section_counts?.user_activity_summary ?? 0}
-                                    href={buildSiteReportDetailHref(siteSubdomain, periodKey, { section: "user-activity-summary", insight: "people" })}
-                                  />
-                                </div>
-                              </CardContent>
-                            </Card>
-                          </div>
-                        </TabsContent>
-
-                        <TabsContent value="tasks" className="space-y-4">
-                          <Card>
-                            <PreviewHeader
-                              title="Tugas Perlu Tindak Lanjut"
-                              description="Submission yang terlambat, kosong, atau perlu dicek lebih lanjut."
-                              href={buildSiteReportDetailHref(siteSubdomain, periodKey, { section: "assignment-submission-detail", insight: "tasks" })}
-                            />
-                            <CardContent>
-                              {(payload?.assignment_submission_detail?.length ?? 0) > 0 ? (
-                                <div className="space-y-3 text-sm">
-                                  {payload!.assignment_submission_detail.slice(0, 4).map((row, index) => (
-                                    <div key={`${row.assignment_id}-${row.user_id}-${index}`} className="rounded-lg border bg-muted/20 p-3">
-                                      <div className="flex items-start justify-between gap-3">
-                                        <div>
-                                          <p className="font-medium">{row.assignment_name}</p>
-                                          <p className="text-xs text-muted-foreground">{row.user_name} · {row.course_name}</p>
-                                        </div>
-                                        <Badge variant="outline" className={assignmentStatusBadgeClass(row.status_key)}>
-                                          {row.status_label}
-                                        </Badge>
-                                      </div>
-                                      <div className="mt-2 flex flex-wrap gap-3 text-xs text-muted-foreground">
-                                        <span>Due: {formatReportClock(row.due_at)}</span>
-                                        <span>Nilai: {formatGradeValue(row.grade)}</span>
-                                        {row.late_by_seconds > 0 ? <span>Terlambat: {row.late_by_label}</span> : null}
-                                      </div>
-                                    </div>
-                                  ))}
-                                </div>
-                              ) : (
-                                <p className="text-sm text-muted-foreground">Belum ada assignment yang perlu ditindaklanjuti.</p>
-                              )}
-                            </CardContent>
-                          </Card>
-                        </TabsContent>
-
-                        <TabsContent value="courses" className="space-y-4">
-                          <div className="grid gap-4 xl:grid-cols-2">
-                            <Card>
-                              <PreviewHeader
-                                title="Kesehatan Kursus"
-                                description="Kursus dengan progres yang paling perlu dipantau."
-                                href={buildSiteReportDetailHref(siteSubdomain, periodKey, { section: "course-completion-summary", insight: "courses" })}
-                              />
-                              <CardContent>
-                                {(payload?.course_completion_summary?.length ?? 0) > 0 ? (
-                                  <div className="space-y-3 text-sm">
-                                    {payload!.course_completion_summary.slice(0, 3).map((row) => (
-                                      <div key={row.course_id} className="rounded-lg border bg-muted/20 p-3">
-                                        <div className="flex items-center justify-between gap-3">
-                                          <p className="font-medium">{row.course_name}</p>
-                                          <Badge variant="outline">{row.completion_rate}%</Badge>
-                                        </div>
-                                        <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-muted-foreground">
-                                          <span>Enrolled: {row.enrolled}</span>
-                                          <span>Completed: {row.completed}</span>
-                                          <span>In progress: {row.in_progress}</span>
-                                          <span>Belum mulai: {row.not_started}</span>
-                                        </div>
-                                      </div>
-                                    ))}
-                                  </div>
-                                ) : (
-                                  <p className="text-sm text-muted-foreground">Belum ada ringkasan course health.</p>
-                                )}
-                              </CardContent>
-                            </Card>
-
-                            <Card>
-                              <PreviewHeader
-                                title="Aktivitas Terpadat"
-                                description="Aktivitas dengan traffic dan event tertinggi."
-                                href={buildSiteReportDetailHref(siteSubdomain, periodKey, { section: "activity-stats-summary", insight: "courses" })}
-                              />
-                              <CardContent>
-                                {(payload?.activity_stats_summary?.length ?? 0) > 0 ? (
-                                  <div className="space-y-3 text-sm">
-                                    {payload!.activity_stats_summary.slice(0, 3).map((row, index) => (
-                                      <div key={`${row.activity_id}-${index}`} className="rounded-lg border bg-muted/20 p-3">
-                                        <p className="font-medium">{row.activity_label}</p>
-                                        <p className="mt-1 text-xs text-muted-foreground">{row.course_name || "Situs"} · {row.total_events} event · {row.unique_users} pengguna</p>
-                                      </div>
-                                    ))}
-                                  </div>
-                                ) : (
-                                  <p className="text-sm text-muted-foreground">Belum ada aktivitas yang menonjol.</p>
-                                )}
-                              </CardContent>
-                            </Card>
-                          </div>
-                        </TabsContent>
-
-                        <TabsContent value="engagement" className="space-y-4">
-                          <div className="grid gap-4 xl:grid-cols-2">
-                            <Card>
-                              <PreviewHeader
-                                title="Percakapan Forum"
-                                description="Forum dengan interaksi paling aktif pada periode ini."
-                                href={buildSiteReportDetailHref(siteSubdomain, periodKey, { section: "forum-engagement-summary", insight: "engagement" })}
-                              />
-                              <CardContent>
-                                {(payload?.forum_engagement_summary?.length ?? 0) > 0 ? (
-                                  <div className="space-y-3 text-sm">
-                                    {payload!.forum_engagement_summary.slice(0, 3).map((row, index) => (
-                                      <div key={`${row.forum_id}-${index}`} className="rounded-lg border bg-muted/20 p-3">
-                                        <p className="font-medium">{row.forum_name}</p>
-                                        <p className="text-xs text-muted-foreground">{row.course_name || "Tanpa kursus"}</p>
-                                        <div className="mt-2 flex flex-wrap gap-3 text-xs text-muted-foreground">
-                                          <span>Diskusi: {row.discussion_count}</span>
-                                          <span>Post: {row.post_count}</span>
-                                          <span>Peserta aktif: {row.active_participants}</span>
-                                        </div>
-                                      </div>
-                                    ))}
-                                  </div>
-                                ) : (
-                                  <p className="text-sm text-muted-foreground">Belum ada insight forum pada periode ini.</p>
-                                )}
-                              </CardContent>
-                            </Card>
-
-                            <Card>
-                              <PreviewHeader
-                                title="Kualitas Quiz"
-                                description="Pertanyaan quiz yang paling menonjol dan akses cepat ke detail attempt."
-                                href={buildSiteReportDetailHref(siteSubdomain, periodKey, { section: "quiz-question-analysis", insight: "engagement" })}
-                              />
-                              <CardContent className="space-y-4">
-                                {(payload?.quiz_question_analysis?.length ?? 0) > 0 ? (
-                                  <div className="space-y-3 text-sm">
-                                    {payload!.quiz_question_analysis.slice(0, 3).map((row, index) => (
-                                      <div key={`${row.quiz_id}-${row.question_id}-${index}`} className="rounded-lg border bg-muted/20 p-3">
-                                        <p className="font-medium">{row.question_name}</p>
-                                        <p className="text-xs text-muted-foreground">{row.quiz_name}</p>
-                                        <div className="mt-2 flex flex-wrap gap-3 text-xs text-muted-foreground">
-                                          <span>Attempts: {row.attempts}</span>
-                                          <span>Correct rate: {formatPercentageValue(row.correct_rate)}</span>
-                                        </div>
-                                      </div>
-                                    ))}
-                                  </div>
-                                ) : (
-                                  <p className="text-sm text-muted-foreground">Belum ada insight quiz pada periode ini.</p>
-                                )}
-                                <CompactDetailLink
-                                  label="Aktivitas quiz"
-                                  count={payload?.section_counts?.quiz_activity_detail ?? 0}
-                                  href={buildSiteReportDetailHref(siteSubdomain, periodKey, { section: "quiz-activity-detail", insight: "engagement" })}
-                                />
-                              </CardContent>
-                            </Card>
-                          </div>
-                        </TabsContent>
-                      </Tabs>
+                      <div className="grid gap-4 xl:grid-cols-3">
+                        <CompactInsightCard
+                          title="Peserta perlu perhatian"
+                          count={atRiskCount}
+                          summary={atRiskSummary}
+                          href={buildSiteReportDetailHref(siteSubdomain, periodKey, { section: "at-risk-users" })}
+                        />
+                        <CompactInsightCard
+                          title="Tugas perlu tindak lanjut"
+                          count={assignmentCount}
+                          summary={assignmentSummary}
+                          href={buildSiteReportDetailHref(siteSubdomain, periodKey, { section: "assignment-submission-detail" })}
+                        />
+                        <CompactInsightCard
+                          title="Kursus perlu dipantau"
+                          count={courseCount}
+                          summary={courseSummary}
+                          href={buildSiteReportDetailHref(siteSubdomain, periodKey, { section: "course-completion-summary" })}
+                        />
+                      </div>
                     </CardContent>
                   </Card>
 
@@ -834,19 +499,15 @@ export function SiteReportTab({ siteID, siteName, siteSubdomain }: SiteReportTab
                   <AccordionItem value="diagnostics" className="border-b-0">
                     <AccordionTrigger className="px-6 hover:no-underline">
                       <div className="space-y-1">
-                        <p className="text-base font-semibold">Status Sinkronisasi & Diagnostik</p>
+                        <p className="text-base font-semibold">Status Data</p>
                         <p className="text-sm font-normal text-muted-foreground">
-                          Detail teknis untuk memeriksa koneksi plugin, tracking, dan sinkronisasi data laporan.
+                          Ringkasan singkat untuk memeriksa kesehatan sinkronisasi dan kesegaran data laporan.
                         </p>
                       </div>
                     </AccordionTrigger>
                     <AccordionContent className="px-6">
                       <div className="space-y-4 text-sm">
-                        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                          <div className="rounded-lg border bg-muted/20 p-3">
-                            <p className="text-xs text-muted-foreground">Versi plugin</p>
-                            <p className="mt-1 font-medium">{connection.plugin_version ? `v${connection.plugin_version}` : "-"}</p>
-                          </div>
+                        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                           <div className="rounded-lg border bg-muted/20 p-3">
                             <p className="text-xs text-muted-foreground">Status sinkronisasi</p>
                             <p className="mt-1 font-medium">{connection.state_label}</p>
@@ -860,34 +521,9 @@ export function SiteReportTab({ siteID, siteName, siteSubdomain }: SiteReportTab
                             <p className="mt-1 font-medium">{formatReportClock(connection.last_sync_at)}</p>
                           </div>
                           <div className="rounded-lg border bg-muted/20 p-3">
-                            <p className="text-xs text-muted-foreground">Data laporan dibuat</p>
-                            <p className="mt-1 font-medium">{formatReportClock(snapshot?.generated_at)}</p>
+                            <p className="text-xs text-muted-foreground">Versi plugin</p>
+                            <p className="mt-1 font-medium">{connection.plugin_version ? `v${connection.plugin_version}` : "-"}</p>
                           </div>
-                          <div className="rounded-lg border bg-muted/20 p-3">
-                            <p className="text-xs text-muted-foreground">Aktivitas terakhir</p>
-                            <p className="mt-1 font-medium">{formatReportClock(connection.tracking_last_seen_at)}</p>
-                          </div>
-                          <div className="rounded-lg border bg-muted/20 p-3">
-                            <p className="text-xs text-muted-foreground">Data diterima</p>
-                            <p className="mt-1 font-medium">{formatReportClock(snapshot?.received_at)}</p>
-                          </div>
-                          <div className="rounded-lg border bg-muted/20 p-3">
-                            <p className="text-xs text-muted-foreground">Registered</p>
-                            <p className="mt-1 font-medium">{formatReportClock(connection.registered_at)}</p>
-                          </div>
-                          <div className="rounded-lg border bg-muted/20 p-3 sm:col-span-2 xl:col-span-1">
-                            <p className="text-xs text-muted-foreground">Capabilities</p>
-                            <p className="mt-1 font-medium">{formatCapabilities(connection)}</p>
-                          </div>
-                          <div className="rounded-lg border bg-muted/20 p-3 sm:col-span-2 xl:col-span-2">
-                            <p className="text-xs text-muted-foreground">Site snapshot URL</p>
-                            <p className="mt-1 break-all font-medium">{connection.site_url_snapshot || "-"}</p>
-                          </div>
-                        </div>
-                        <div className="rounded-lg border bg-muted/20 p-3">
-                          <p className="text-xs text-muted-foreground">Mode tracking</p>
-                          <p className="mt-1 font-medium">{connection.tracking_mode || "-"}</p>
-                          <p className="mt-1 text-xs text-muted-foreground">{connection.tracking_state_message}</p>
                         </div>
                         {showManualConnect ? (
                           <div className="rounded-lg border bg-muted/20 p-3">

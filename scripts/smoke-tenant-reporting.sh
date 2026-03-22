@@ -191,6 +191,13 @@ async (page) => {
   const moodleAdminUser = ${moodle_admin_user_js};
   const moodleAdminPassword = ${moodle_admin_password_js};
   const checkMoodleAdmin = ${check_moodle_admin_js};
+  const periodLabels = {
+    today: "Hari Ini",
+    last_7_days: "7 Hari Terakhir",
+    last_30_days: "30 Hari Terakhir",
+    this_month: "Bulan Ini",
+    last_month: "Bulan Lalu",
+  };
 
   const assert = (condition, message) => {
     if (!condition) {
@@ -210,6 +217,18 @@ async (page) => {
     );
   };
 
+  const applySummaryPeriod = async () => {
+    if (periodKey === "last_7_days") {
+      return;
+    }
+
+    const label = periodLabels[periodKey];
+    assert(Boolean(label), "Unknown period key for smoke test: " + periodKey);
+    await page.getByRole("combobox").first().click();
+    await page.getByRole("option", { name: label }).click();
+    await waitForText("Prioritas Saat Ini", 20000);
+  };
+
   await page.goto(appBaseUrl + "/masuk", { waitUntil: "domcontentloaded" });
   if (!/\\/dashboard(?:\\?|$)/.test(page.url())) {
     await page.getByRole("textbox", { name: "Email" }).fill(email);
@@ -224,31 +243,43 @@ async (page) => {
   const summaryUrl = appBaseUrl + "/situs/" + subdomain + "?tab=laporan";
   await page.goto(summaryUrl, { waitUntil: "domcontentloaded" });
   await page.getByRole("heading", { name: "Ringkasan Laporan" }).waitFor({ state: "visible", timeout: 20000 });
+  await applySummaryPeriod();
   await page.getByRole("link", { name: "Buka Laporan Lengkap" }).waitFor({ state: "visible", timeout: 20000 });
-  await waitForText(/Data diperbarui:/, 20000);
-  await waitForText(/Aktivitas terlacak:/, 20000);
-  await waitForText("Fokus Insight", 20000);
+  await waitForText("Prioritas Saat Ini", 20000);
+  await waitForText("Tren Aktivitas", 20000);
+  await waitForText("Yang Perlu Dicek", 20000);
+  await waitForText("Status Data", 20000);
 
   const summaryText = await page.locator("body").textContent();
   assert(summaryText.includes("Buka Laporan Lengkap"), "Summary report page is missing the full report entry link.");
   assert(summaryText.includes("Prioritas Saat Ini"), "Summary report page is missing the report highlight card.");
-  assert(summaryText.includes("Status Sinkronisasi & Diagnostik"), "Summary report page is missing the diagnostics panel trigger.");
-  for (const sectionName of ["Orang", "Tugas", "Kursus", "Engagement"]) {
-    assert(summaryText.includes(sectionName), "Summary report page is missing insight switcher tab: " + sectionName);
+  assert(summaryText.includes("Status Data"), "Summary report page is missing the diagnostics panel trigger.");
+  assert(!summaryText.includes("Fokus Insight"), "Summary report page still shows the legacy insight switcher.");
+  for (const cardTitle of ["Peserta perlu perhatian", "Tugas perlu tindak lanjut", "Kursus perlu dipantau"]) {
+    assert(summaryText.includes(cardTitle), "Summary report page is missing compact action card: " + cardTitle);
   }
-  await waitForText("Peserta Perlu Perhatian", 20000);
-  await page.getByRole("tab", { name: "Tugas" }).click();
-  await waitForUrlPart("insight=tasks", 20000);
-  await waitForText("Tugas Perlu Tindak Lanjut", 20000);
-  assert(/insight=tasks/.test(page.url()), "Summary report page did not persist the selected insight tab to the URL.");
-  await page.getByRole("tab", { name: "Kursus" }).click();
-  await waitForUrlPart("insight=courses", 20000);
-  await waitForText("Kesehatan Kursus", 20000);
-  assert(/insight=courses/.test(page.url()), "Summary report page did not update the URL for the courses insight tab.");
-  await page.getByRole("tab", { name: "Engagement" }).click();
-  await waitForUrlPart("insight=engagement", 20000);
-  await waitForText("Kualitas Quiz", 20000);
-  assert(/insight=engagement/.test(page.url()), "Summary report page did not update the URL for the engagement insight tab.");
+  const detailLinkCount = await page.getByRole("link", { name: /^Lihat detail /i }).count();
+  assert(detailLinkCount === 3, "Summary report page should expose exactly 3 compact detail links, got: " + detailLinkCount);
+  const diagnosticsTrigger = page.getByRole("button", { name: /Status Data/i });
+  const diagnosticsExpanded = await diagnosticsTrigger.getAttribute("aria-expanded");
+  assert(diagnosticsExpanded === "false" || diagnosticsExpanded === "true", "Status Data accordion should expose a valid expanded state.");
+  if (diagnosticsExpanded === "false") {
+    assert(true, "Status Data is collapsed for a healthy tenant summary view.");
+  } else {
+    await waitForText("Status sinkronisasi", 20000);
+    await waitForText("Aktivitas terlacak", 20000);
+  }
+
+  await page.getByRole("link", { name: "Lihat detail Peserta perlu perhatian" }).click();
+  await waitForUrlPart("/laporan/detail?period_key=" + periodKey + "&section=at-risk-users", 20000);
+  await waitForText("Detail operasional", 20000);
+
+  await page.goto(summaryUrl, { waitUntil: "domcontentloaded" });
+  await applySummaryPeriod();
+  await waitForText("Yang Perlu Dicek", 20000);
+  await page.getByRole("link", { name: "Lihat detail Tugas perlu tindak lanjut" }).click();
+  await waitForUrlPart("/laporan/detail?period_key=" + periodKey + "&section=assignment-submission-detail", 20000);
+  await waitForText("Detail operasional", 20000);
 
   const fullUrl = appBaseUrl + "/situs/" + subdomain + "/laporan?period_key=" + periodKey;
   await page.goto(fullUrl, { waitUntil: "domcontentloaded" });
