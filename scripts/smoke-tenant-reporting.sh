@@ -240,8 +240,25 @@ async (page) => {
   }
   await page.getByRole("heading", { name: "Situs Moodle Saya" }).waitFor({ state: "visible", timeout: 20000 });
 
-  const summaryUrl = appBaseUrl + "/situs/" + subdomain + "?tab=laporan";
-  await page.goto(summaryUrl, { waitUntil: "domcontentloaded" });
+  const siteDetailUrl = appBaseUrl + "/situs/" + subdomain;
+  await page.goto(siteDetailUrl, { waitUntil: "domcontentloaded" });
+  await waitForText("Status Utama Situs", 20000);
+  await waitForText("Status Layanan", 20000);
+  await waitForText("Yang Perlu Dicek", 20000);
+  await waitForText("Akses & Sistem", 20000);
+  await waitForText("Info Teknis", 20000);
+  await waitForText(/Plugin laporan:/, 20000);
+
+  const siteSummaryText = await page.locator("body").textContent();
+  for (const label of ["Storage", "Pengguna Aktif", "Status Layanan"]) {
+    assert(siteSummaryText.includes(label), "Site summary tab is missing control-tower item: " + label);
+  }
+  await page.getByRole("button", { name: /Info Teknis/i }).click();
+  await waitForText("Versi Plugin Laporan", 20000);
+
+  await page.getByRole("tab", { name: "Laporan" }).click();
+  await waitForUrlPart("?tab=laporan", 20000);
+  const summaryUrl = page.url();
   await page.getByRole("heading", { name: "Ringkasan Laporan" }).waitFor({ state: "visible", timeout: 20000 });
   await applySummaryPeriod();
   await page.getByRole("link", { name: "Buka Laporan Lengkap" }).waitFor({ state: "visible", timeout: 20000 });
@@ -267,7 +284,7 @@ async (page) => {
     assert(true, "Status Data is collapsed for a healthy tenant summary view.");
   } else {
     await waitForText("Status sinkronisasi", 20000);
-    await waitForText("Aktivitas terlacak", 20000);
+    await waitForText("Pelacakan browser", 20000);
   }
 
   await page.getByRole("link", { name: "Lihat detail Peserta perlu perhatian" }).click();
@@ -284,14 +301,14 @@ async (page) => {
   const fullUrl = appBaseUrl + "/situs/" + subdomain + "/laporan?period_key=" + periodKey;
   await page.goto(fullUrl, { waitUntil: "domcontentloaded" });
   await page.getByRole("heading", { name: "Laporan Tenant" }).waitFor({ state: "visible", timeout: 20000 });
-  await waitForText(/Data diperbarui:/, 20000);
-  await waitForText(/Aktivitas terlacak:/, 20000);
+  await waitForText(/Data diperbarui/, 20000);
+  await waitForText(/Pelacakan browser/, 20000);
   await waitForText("Prioritas Saat Ini", 20000);
-  await waitForText("Trend Aktivitas Harian", 20000);
+  await waitForText("Tren Aktivitas Harian", 20000);
   await waitForText("Progres Per Kursus", 20000);
   await waitForText("Fokus Insight", 20000);
   await waitForText("Detail Operasional", 20000);
-  await waitForText("Status Sinkronisasi & Diagnostik", 20000);
+  await waitForText("Status Data & Diagnostik", 20000);
 
   const fullText = await page.locator("body").textContent();
   for (const sectionName of ["Orang", "Tugas", "Kursus", "Engagement", "Aktivitas Pengguna", "Detail Nilai", "Penyelesaian Aktivitas", "Aktivitas Quiz", "Aktivitas Terbaru"]) {
@@ -314,7 +331,7 @@ async (page) => {
   const detailUrl = appBaseUrl + "/situs/" + subdomain + "/laporan/detail?period_key=" + periodKey + "&section=gradebook-detail&insight=engagement";
   await page.goto(detailUrl, { waitUntil: "domcontentloaded" });
   await waitForText("Detail operasional", 20000);
-  await waitForText(/Total baris:/, 20000);
+  await waitForText(/Total baris/, 20000);
   await page.getByRole("button", { name: "Export CSV" }).waitFor({ state: "visible", timeout: 20000 });
   await page.getByRole("link", { name: "Kembali ke Overview Laporan" }).click();
   await waitForUrlPart("insight=engagement", 20000);

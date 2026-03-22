@@ -35,10 +35,7 @@ import {
 import {
   AlertCircle,
   ArrowLeft,
-  CheckCircle2,
-  Clock,
   Download,
-  Info,
   Loader2,
   RefreshCw,
 } from "lucide-react"
@@ -85,21 +82,6 @@ const PERIOD_OPTIONS = [
 ]
 const DEFAULT_INSIGHT_CATEGORY: SiteReportInsightKey = "tasks"
 
-function periodUsageHint(periodKey: string): string {
-  switch (periodKey) {
-    case "today":
-      return "Gunakan untuk monitoring operasional yang sedang berlangsung, misalnya ujian hari ini."
-    case "last_30_days":
-      return "Gunakan saat perlu konteks yang lebih panjang sebelum menindaklanjuti detail."
-    case "this_month":
-      return "Gunakan untuk menilai detail yang terjadi sepanjang bulan berjalan."
-    case "last_month":
-      return "Gunakan untuk audit detail periode bulan lalu."
-    default:
-      return "Pilihan paling stabil untuk tindak lanjut detail tanpa terlalu banyak noise harian."
-  }
-}
-
 function normalizePeriodKey(value?: string | null) {
   return PERIOD_OPTIONS.some((option) => option.value === value) ? value! : DEFAULT_PERIOD_KEY
 }
@@ -136,42 +118,6 @@ function formatGradeValue(value?: number | null): string {
 
 function formatPercentageValue(value?: number | null): string {
   return typeof value === "number" ? `${value.toFixed(1)}%` : "-"
-}
-
-function connectionBadge(connection: SiteReportConnectionStatus) {
-  switch (connection.state) {
-    case "tracking_active":
-    case "synced":
-      return {
-        className: "text-green-600 border-green-600/50 bg-green-500/10",
-        icon: CheckCircle2,
-      }
-    case "tracking_stale":
-      return {
-        className: "text-amber-600 border-amber-600/50 bg-amber-500/10",
-        icon: AlertCircle,
-      }
-    case "synced_no_activity":
-      return {
-        className: "text-blue-600 border-blue-600/50 bg-blue-500/10",
-        icon: Info,
-      }
-    case "connected_waiting_sync":
-      return {
-        className: "text-amber-600 border-amber-600/50 bg-amber-500/10",
-        icon: Clock,
-      }
-    case "sync_error":
-      return {
-        className: "text-red-600 border-red-600/50 bg-red-500/10",
-        icon: AlertCircle,
-      }
-    default:
-      return {
-        className: "text-slate-600 border-slate-600/50 bg-slate-500/10",
-        icon: Info,
-      }
-  }
 }
 
 function riskBadgeClass(score: number) {
@@ -557,8 +503,6 @@ export default function SiteReportDetailPage({ params }: { params: Promise<{ sub
 
   const payload = report?.snapshot?.payload
   const connection = report?.connection ?? null
-  const badgeConfig = connection ? connectionBadge(connection) : null
-  const BadgeIcon = badgeConfig?.icon
   const activePeriodOption = PERIOD_OPTIONS.find((option) => option.value === periodKey) ?? PERIOD_OPTIONS[0]
   const availableCourses = payload?.available_courses ?? []
   const selectedCourseValue = payload?.selected_course_id ? String(payload.selected_course_id) : "all"
@@ -625,7 +569,7 @@ export default function SiteReportDetailPage({ params }: { params: Promise<{ sub
                     <p className="text-sm font-medium text-muted-foreground">Detail operasional</p>
                     <h1 className="text-2xl font-bold tracking-tight">{payload?.section_title ?? "Detail Laporan"}</h1>
                     <p className="text-sm text-muted-foreground">
-                      Gunakan halaman ini saat Anda sudah tahu area yang ingin ditindaklanjuti. Filter periode dan kursus akan menjaga tabel tetap fokus.
+                      Halaman ini dipakai saat Anda sudah tahu area yang ingin ditindaklanjuti. Filter periode dan kursus akan menjaga tabel tetap fokus.
                     </p>
                   </div>
                 </div>
@@ -663,12 +607,6 @@ export default function SiteReportDetailPage({ params }: { params: Promise<{ sub
                   </Button>
                 </div>
               </div>
-              <div className="flex items-start gap-2 rounded-lg border bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
-                <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                <p>
-                  <span className="font-medium text-foreground">{activePeriodOption.label}:</span> {periodUsageHint(periodKey)}
-                </p>
-              </div>
 
               {loading && (
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -692,13 +630,21 @@ export default function SiteReportDetailPage({ params }: { params: Promise<{ sub
 
               {!loading && !error && report && connection && (
                 <>
-                  <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-                    {BadgeIcon && <Badge variant="outline" className={`gap-1 ${badgeConfig?.className ?? ""}`}><BadgeIcon className="h-3 w-3" />{connection.state_label}</Badge>}
-                    <Badge variant="outline">{activePeriodOption.label}</Badge>
-                    {selectedCourse ? <Badge variant="outline">Kursus: {selectedCourse.course_name}</Badge> : null}
-                    <span>Status sinkronisasi: {connection.state_label}</span>
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                    <span>Periode: <span className="font-medium text-foreground">{activePeriodOption.label}</span></span>
+                    <span>&bull;</span>
+                    <span>
+                      Kursus:{" "}
+                      <span className="font-medium text-foreground">
+                        {selectedCourse ? selectedCourse.course_name : "Semua kursus"}
+                      </span>
+                    </span>
+                    <span>&bull;</span>
+                    <span>Status sinkronisasi {connection.state_label.toLowerCase()}</span>
+                    <span>&bull;</span>
                     <span>Halaman {payload?.page ?? 1} / {payload?.total_pages ?? 0}</span>
-                    <span>Total baris: {payload?.total_count ?? 0}</span>
+                    <span>&bull;</span>
+                    <span>Total baris {payload?.total_count ?? 0}</span>
                   </div>
 
                   {!report.snapshot || !payload ? (

@@ -134,42 +134,6 @@ function formatCount(value: number): string {
   return value.toLocaleString("id-ID")
 }
 
-function connectionBadge(connection: SiteReportConnectionStatus) {
-  switch (connection.state) {
-    case "tracking_active":
-    case "synced":
-      return {
-        className: "text-green-600 border-green-600/50 bg-green-500/10",
-        icon: CheckCircle2,
-      }
-    case "tracking_stale":
-      return {
-        className: "text-amber-600 border-amber-600/50 bg-amber-500/10",
-        icon: AlertCircle,
-      }
-    case "synced_no_activity":
-      return {
-        className: "text-blue-600 border-blue-600/50 bg-blue-500/10",
-        icon: Info,
-      }
-    case "connected_waiting_sync":
-      return {
-        className: "text-amber-600 border-amber-600/50 bg-amber-500/10",
-        icon: Clock,
-      }
-    case "sync_error":
-      return {
-        className: "text-red-600 border-red-600/50 bg-red-500/10",
-        icon: AlertCircle,
-      }
-    default:
-      return {
-        className: "text-slate-600 border-slate-600/50 bg-slate-500/10",
-        icon: Info,
-      }
-  }
-}
-
 function highlightCardStyle(tone: SiteReportFullResponse["highlight"]["tone"]) {
   switch (tone) {
     case "success":
@@ -444,8 +408,6 @@ export default function SiteFullReportPage({ params }: { params: Promise<{ subdo
   const connection = report?.connection ?? null
   const snapshot = report?.snapshot ?? null
   const payload = snapshot?.payload
-  const badgeConfig = connection ? connectionBadge(connection) : null
-  const BadgeIcon = badgeConfig?.icon
   const activePeriodOption = PERIOD_OPTIONS.find((option) => option.value === periodKey) ?? PERIOD_OPTIONS[0]
   const availableCourses = payload?.available_courses ?? []
   const selectedCourseID = payload?.selected_course_id ?? courseID
@@ -541,21 +503,23 @@ export default function SiteFullReportPage({ params }: { params: Promise<{ subdo
 
               {!loading && !error && report && connection && (
                 <>
-                  <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-                    {BadgeIcon && (
-                      <Badge variant="outline" className={`gap-1 ${badgeConfig?.className ?? ""}`}>
-                        <BadgeIcon className="h-3 w-3" />
-                        {connection.state_label}
-                      </Badge>
-                    )}
-                    <Badge variant="outline">{activePeriodOption.label}</Badge>
-                    {selectedCourse ? <Badge variant="outline">Kursus: {selectedCourse.course_name}</Badge> : null}
-                    <span>Data diperbarui: {formatRelativeTime(connection.last_sync_at)}</span>
-                    <span>Aktivitas terlacak: {connection.tracking_state_label}</span>
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                    <span>Periode: <span className="font-medium text-foreground">{activePeriodOption.label}</span></span>
+                    <span>&bull;</span>
+                    <span>
+                      Kursus:{" "}
+                      <span className="font-medium text-foreground">
+                        {selectedCourse ? selectedCourse.course_name : "Semua kursus"}
+                      </span>
+                    </span>
+                    <span>&bull;</span>
+                    <span>Data diperbarui {formatRelativeTime(connection.last_sync_at)}</span>
+                    <span>&bull;</span>
+                    <span>Pelacakan browser {connection.tracking_state_label.toLowerCase()}</span>
                   </div>
 
                   {selectedCourse && payload?.course_filter_scope_note ? (
-                    <p className="text-sm text-muted-foreground">
+                    <p className="text-xs text-muted-foreground">
                       Filter kursus aktif: <span className="font-medium text-foreground">{selectedCourse.course_name}</span>.{" "}
                       {payload.course_filter_scope_note}
                     </p>
@@ -579,13 +543,11 @@ export default function SiteFullReportPage({ params }: { params: Promise<{ subdo
                     <ReportEmptyState state="no_snapshot" connection={connection} periodLabel={activePeriodOption.label} />
                   ) : (
                     <>
-                      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
+                      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
                         <MetricCard icon={Users} iconClassName="text-blue-600" iconWrapperClassName="bg-blue-500/10" value={payload?.summary_metrics?.login_count ?? 0} label="Total Login" helperText="Jumlah login yang tercatat selama periode yang dipilih." />
                         <MetricCard icon={Activity} iconClassName="text-green-600" iconWrapperClassName="bg-green-500/10" value={payload?.summary_metrics?.active_users ?? 0} label="Pengguna Aktif" helperText="Jumlah pengguna unik yang melakukan aktivitas terlacak pada periode ini." />
                         <MetricCard icon={FileText} iconClassName="text-violet-600" iconWrapperClassName="bg-violet-500/10" value={payload?.summary_metrics?.submissions ?? 0} label="Pengumpulan Tugas" helperText="Jumlah submission tugas yang tercatat pada periode ini." />
                         <MetricCard icon={CheckCircle2} iconClassName="text-emerald-600" iconWrapperClassName="bg-emerald-500/10" value={payload?.summary_metrics?.completions ?? 0} label="Penyelesaian" helperText="Jumlah aktivitas atau progres belajar yang tercatat selesai." />
-                        <MetricCard icon={Clock} iconClassName="text-amber-600" iconWrapperClassName="bg-amber-500/10" value={payload?.summary_metrics?.session_count ?? 0} label="Total Sesi" helperText="Jumlah sesi aktif yang berhasil terlacak selama periode ini." />
-                        <MetricCard icon={BarChart3} iconClassName="text-sky-600" iconWrapperClassName="bg-sky-500/10" value={payload?.summary_metrics?.avg_online_label ?? "0 m"} label="Rata-rata Sesi" helperText="Rata-rata durasi satu sesi aktif yang berhasil terlacak." />
                       </div>
 
                       {!connection.has_activity ? (
@@ -597,7 +559,7 @@ export default function SiteFullReportPage({ params }: { params: Promise<{ subdo
                               <CardHeader>
                                 <CardTitle className="flex items-center gap-2 text-base">
                                   <Activity className="h-4 w-4" />
-                                  Trend Aktivitas Harian
+                                  Tren Aktivitas Harian
                                 </CardTitle>
                                 <CardDescription>Perubahan login, pengguna aktif, submissions, dan completions selama periode aktif</CardDescription>
                               </CardHeader>
@@ -605,7 +567,7 @@ export default function SiteFullReportPage({ params }: { params: Promise<{ subdo
                                 {(payload?.daily_trend?.length ?? 0) > 0 ? (
                                   <SiteReportActivityTrendChart rows={payload?.daily_trend ?? []} />
                                 ) : (
-                                  <p className="text-sm text-muted-foreground">Belum ada trend aktivitas harian.</p>
+                                  <p className="text-sm text-muted-foreground">Belum ada tren aktivitas harian.</p>
                                 )}
                               </CardContent>
                             </Card>
@@ -620,7 +582,7 @@ export default function SiteFullReportPage({ params }: { params: Promise<{ subdo
                               </CardHeader>
                               <CardContent>
                                 {(payload?.course_completion_summary?.length ?? 0) > 0 ? (
-                                  <SiteReportCourseCompletionChart rows={payload?.course_completion_summary ?? []} limit={5} />
+                                  <SiteReportCourseCompletionChart rows={payload?.course_completion_summary ?? []} limit={4} />
                                 ) : (
                                   <p className="text-sm text-muted-foreground">Belum ada data completion kursus.</p>
                                 )}
@@ -662,7 +624,7 @@ export default function SiteFullReportPage({ params }: { params: Promise<{ subdo
                                       <CardContent>
                                         {(payload?.at_risk_users?.length ?? 0) > 0 ? (
                                           <div className="space-y-3 text-sm">
-                                            {payload!.at_risk_users.slice(0, 5).map((row, index) => (
+                                            {payload!.at_risk_users.slice(0, 3).map((row, index) => (
                                               <div key={`${row.email}-${index}`} className="rounded-lg border bg-muted/20 p-3">
                                                 <div className="flex items-start justify-between gap-3">
                                                   <div>
@@ -695,17 +657,22 @@ export default function SiteFullReportPage({ params }: { params: Promise<{ subdo
                                         ) : (
                                           <p className="text-sm text-muted-foreground">Belum ada distribusi status peserta.</p>
                                         )}
-                                        <div className="space-y-2">
+                                        <div className="space-y-2 border-t pt-3">
                                           <CompactDetailLink
-                                            label="Status peserta"
+                                            label="Detail status peserta"
                                             count={payload?.section_counts?.user_status ?? 0}
                                             href={buildSiteReportDetailHref(subdomain, periodKey, { section: "user-status", courseId: selectedCourseID, insight: "people" })}
                                           />
-                                          <CompactDetailLink
-                                            label="Aktivitas pengguna"
-                                            count={payload?.section_counts?.user_activity_summary ?? 0}
-                                            href={buildSiteReportDetailHref(subdomain, periodKey, { section: "user-activity-summary", courseId: selectedCourseID, insight: "people" })}
-                                          />
+                                          <p className="text-xs text-muted-foreground">
+                                            Aktivitas pengguna tersedia untuk tindak lanjut operasional:{" "}
+                                            <Link
+                                              href={buildSiteReportDetailHref(subdomain, periodKey, { section: "user-activity-summary", courseId: selectedCourseID, insight: "people" })}
+                                              className="font-medium text-foreground underline-offset-4 hover:underline"
+                                            >
+                                              {formatCount(payload?.section_counts?.user_activity_summary ?? 0)} baris aktivitas
+                                            </Link>
+                                            .
+                                          </p>
                                         </div>
                                       </CardContent>
                                     </Card>
@@ -722,7 +689,7 @@ export default function SiteFullReportPage({ params }: { params: Promise<{ subdo
                                     <CardContent>
                                       {(payload?.assignment_submission_detail?.length ?? 0) > 0 ? (
                                         <div className="space-y-3 text-sm">
-                                          {payload!.assignment_submission_detail.slice(0, 5).map((row, index) => (
+                                          {payload!.assignment_submission_detail.slice(0, 3).map((row, index) => (
                                             <div key={`${row.assignment_id}-${row.user_id}-${index}`} className="rounded-lg border bg-muted/20 p-3">
                                               <div className="flex items-start justify-between gap-3">
                                                 <div>
@@ -759,7 +726,7 @@ export default function SiteFullReportPage({ params }: { params: Promise<{ subdo
                                       <CardContent>
                                         {(payload?.course_completion_summary?.length ?? 0) > 0 ? (
                                           <div className="space-y-3 text-sm">
-                                            {payload!.course_completion_summary.slice(0, 5).map((row) => (
+                                            {payload!.course_completion_summary.slice(0, 3).map((row) => (
                                               <div key={row.course_id} className="rounded-lg border bg-muted/20 p-3">
                                                 <div className="flex items-center justify-between gap-3">
                                                   <p className="font-medium">{row.course_name}</p>
@@ -789,7 +756,7 @@ export default function SiteFullReportPage({ params }: { params: Promise<{ subdo
                                       <CardContent>
                                         {(payload?.activity_stats_summary?.length ?? 0) > 0 ? (
                                           <div className="space-y-3 text-sm">
-                                            {payload!.activity_stats_summary.slice(0, 5).map((row, index) => (
+                                            {payload!.activity_stats_summary.slice(0, 3).map((row, index) => (
                                               <div key={`${row.activity_id}-${index}`} className="rounded-lg border bg-muted/20 p-3">
                                                 <p className="font-medium">{row.activity_label}</p>
                                                 <p className="text-xs text-muted-foreground">{row.course_name || "Situs"}</p>
@@ -820,7 +787,7 @@ export default function SiteFullReportPage({ params }: { params: Promise<{ subdo
                                       <CardContent>
                                         {(payload?.forum_engagement_summary?.length ?? 0) > 0 ? (
                                           <div className="space-y-3 text-sm">
-                                            {payload!.forum_engagement_summary.slice(0, 5).map((row, index) => (
+                                            {payload!.forum_engagement_summary.slice(0, 3).map((row, index) => (
                                               <div key={`${row.forum_id}-${index}`} className="rounded-lg border bg-muted/20 p-3">
                                                 <p className="font-medium">{row.forum_name}</p>
                                                 <p className="text-xs text-muted-foreground">{row.course_name || "Tanpa kursus"}</p>
@@ -847,7 +814,7 @@ export default function SiteFullReportPage({ params }: { params: Promise<{ subdo
                                       <CardContent className="space-y-4">
                                         {(payload?.quiz_question_analysis?.length ?? 0) > 0 ? (
                                           <div className="space-y-3 text-sm">
-                                            {payload!.quiz_question_analysis.slice(0, 5).map((row, index) => (
+                                            {payload!.quiz_question_analysis.slice(0, 3).map((row, index) => (
                                               <div key={`${row.quiz_id}-${row.question_id}-${index}`} className="rounded-lg border bg-muted/20 p-3">
                                                 <p className="font-medium">{row.question_name}</p>
                                                 <p className="text-xs text-muted-foreground">{row.quiz_name} · {row.course_name}</p>
@@ -891,9 +858,9 @@ export default function SiteFullReportPage({ params }: { params: Promise<{ subdo
                         </>
                       )}
 
-                      <Card>
-                        <Accordion
-                          type="single"
+                          <Card>
+                            <Accordion
+                              type="single"
                           collapsible
                           value={diagnosticsOpen ? "diagnostics" : ""}
                           onValueChange={(value) => setDiagnosticsOpen(value === "diagnostics")}
@@ -902,31 +869,31 @@ export default function SiteFullReportPage({ params }: { params: Promise<{ subdo
                           <AccordionItem value="diagnostics" className="border-b-0">
                             <AccordionTrigger className="px-6 hover:no-underline">
                               <div className="space-y-1">
-                                <p className="text-base font-semibold">Status Sinkronisasi & Diagnostik</p>
-                                <p className="text-sm font-normal text-muted-foreground">
-                                  Detail teknis untuk memeriksa koneksi plugin, tracking, dan sinkronisasi data laporan.
-                                </p>
+                                <p className="text-base font-semibold">Status Data & Diagnostik</p>
+                                <p className="text-sm font-normal text-muted-foreground">Gunakan bagian ini saat perlu mengecek koneksi plugin dan kesegaran data laporan.</p>
                               </div>
                             </AccordionTrigger>
                             <AccordionContent className="px-6">
                               <div className="space-y-4 text-sm">
-                                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                                  <div className="rounded-lg border bg-muted/20 p-3">
-                                    <p className="text-xs text-muted-foreground">Versi plugin</p>
-                                    <p className="mt-1 font-medium">{connection.plugin_version ? `v${connection.plugin_version}` : "-"}</p>
-                                  </div>
+                                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                                   <div className="rounded-lg border bg-muted/20 p-3">
                                     <p className="text-xs text-muted-foreground">Status sinkronisasi</p>
                                     <p className="mt-1 font-medium">{connection.state_label}</p>
                                   </div>
                                   <div className="rounded-lg border bg-muted/20 p-3">
-                                    <p className="text-xs text-muted-foreground">Aktivitas terlacak</p>
+                                    <p className="text-xs text-muted-foreground">Versi plugin</p>
+                                    <p className="mt-1 font-medium">{connection.plugin_version ? `v${connection.plugin_version}` : "-"}</p>
+                                  </div>
+                                  <div className="rounded-lg border bg-muted/20 p-3">
+                                    <p className="text-xs text-muted-foreground">Pelacakan browser</p>
                                     <p className="mt-1 font-medium">{connection.tracking_state_label}</p>
                                   </div>
                                   <div className="rounded-lg border bg-muted/20 p-3">
                                     <p className="text-xs text-muted-foreground">Data diperbarui</p>
                                     <p className="mt-1 font-medium">{formatReportClock(connection.last_sync_at)}</p>
                                   </div>
+                                </div>
+                                <div className="grid gap-3 sm:grid-cols-2">
                                   <div className="rounded-lg border bg-muted/20 p-3">
                                     <p className="text-xs text-muted-foreground">Data laporan dibuat</p>
                                     <p className="mt-1 font-medium">{formatReportClock(snapshot?.generated_at)}</p>
@@ -934,18 +901,6 @@ export default function SiteFullReportPage({ params }: { params: Promise<{ subdo
                                   <div className="rounded-lg border bg-muted/20 p-3">
                                     <p className="text-xs text-muted-foreground">Aktivitas terakhir</p>
                                     <p className="mt-1 font-medium">{formatReportClock(connection.tracking_last_seen_at)}</p>
-                                  </div>
-                                  <div className="rounded-lg border bg-muted/20 p-3">
-                                    <p className="text-xs text-muted-foreground">Data diterima</p>
-                                    <p className="mt-1 font-medium">{formatReportClock(snapshot?.received_at)}</p>
-                                  </div>
-                                  <div className="rounded-lg border bg-muted/20 p-3">
-                                    <p className="text-xs text-muted-foreground">Data laporan</p>
-                                    <p className="mt-1 font-medium">{connection.state_message}</p>
-                                  </div>
-                                  <div className="rounded-lg border bg-muted/20 p-3 sm:col-span-2 xl:col-span-3">
-                                    <p className="text-xs text-muted-foreground">Site snapshot URL</p>
-                                    <p className="mt-1 break-all font-medium">{connection.site_url_snapshot || "-"}</p>
                                   </div>
                                 </div>
                                 {connection.state === "not_connected" ? (
@@ -959,6 +914,20 @@ export default function SiteFullReportPage({ params }: { params: Promise<{ subdo
                                     </Button>
                                   </div>
                                 ) : null}
+                                <div className="space-y-3 border-t pt-3">
+                                  <div className="rounded-lg border bg-muted/20 p-3">
+                                    <p className="text-xs text-muted-foreground">Ringkasan data laporan</p>
+                                    <p className="mt-1 font-medium">{connection.state_message}</p>
+                                  </div>
+                                  <div className="rounded-lg border bg-muted/20 p-3">
+                                    <p className="text-xs text-muted-foreground">Site snapshot URL</p>
+                                    <p className="mt-1 break-all font-medium">{connection.site_url_snapshot || "-"}</p>
+                                  </div>
+                                  <div className="rounded-lg border bg-muted/20 p-3">
+                                    <p className="text-xs text-muted-foreground">Data diterima</p>
+                                    <p className="mt-1 font-medium">{formatReportClock(snapshot?.received_at)}</p>
+                                  </div>
+                                </div>
                                 {connection.last_error ? (
                                   <div className="rounded-lg border border-red-600/20 bg-red-500/5 p-3 text-sm text-red-700">
                                     <p className="font-medium">Error sinkronisasi terakhir</p>

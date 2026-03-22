@@ -344,7 +344,7 @@ export function SiteReportTab({ siteID, siteName, siteSubdomain }: SiteReportTab
         <div>
           <h2 className="text-lg font-semibold">Ringkasan Laporan</h2>
           <p className="text-sm text-muted-foreground">
-            Jawaban cepat untuk kondisi tenant {siteName}: kesiapan data, angka inti, tren penggunaan, dan area yang paling perlu ditindaklanjuti.
+            Briefing tercepat untuk membaca kondisi tenant {siteName} dan menentukan area yang perlu dicek lebih dulu.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
@@ -443,7 +443,7 @@ export function SiteReportTab({ siteID, siteName, siteSubdomain }: SiteReportTab
                   <Card>
                     <CardHeader>
                       <CardTitle className="text-base">Yang Perlu Dicek</CardTitle>
-                      <CardDescription>Tiga area tindakan yang paling cepat membantu membaca kondisi tenant.</CardDescription>
+                      <CardDescription>Tiga sinyal tindakan yang paling cepat membantu membaca kondisi tenant.</CardDescription>
                     </CardHeader>
                     <CardContent>
                       <div className="grid gap-4 xl:grid-cols-3">
@@ -469,15 +469,15 @@ export function SiteReportTab({ siteID, siteName, siteSubdomain }: SiteReportTab
                     </CardContent>
                   </Card>
 
-                  <Card className="border-dashed">
-                    <CardContent className="flex flex-col gap-4 p-4 md:flex-row md:items-center md:justify-between">
+                  <Card className="border-dashed bg-muted/10">
+                    <CardContent className="flex flex-col gap-3 p-4 md:flex-row md:items-center md:justify-between">
                       <div>
                         <p className="font-medium">Butuh detail operasional yang lengkap?</p>
                         <p className="text-sm text-muted-foreground">
-                          Buka overview laporan untuk melihat filter kursus, count operasional, dan drilldown per section.
+                          Lanjut ke overview laporan untuk membaca insight yang lebih lengkap, filter kursus, dan count operasional.
                         </p>
                       </div>
-                      <Button asChild>
+                      <Button asChild size="sm">
                         <Link href={fullReportHref}>
                           <ExternalLink className="mr-2 h-4 w-4" />
                           Buka Laporan Lengkap
@@ -501,7 +501,7 @@ export function SiteReportTab({ siteID, siteName, siteSubdomain }: SiteReportTab
                       <div className="space-y-1">
                         <p className="text-base font-semibold">Status Data</p>
                         <p className="text-sm font-normal text-muted-foreground">
-                          Ringkasan singkat untuk memeriksa kesehatan sinkronisasi dan kesegaran data laporan.
+                          Ringkasan singkat untuk memeriksa koneksi plugin dan kesegaran data laporan.
                         </p>
                       </div>
                     </AccordionTrigger>
@@ -513,7 +513,7 @@ export function SiteReportTab({ siteID, siteName, siteSubdomain }: SiteReportTab
                             <p className="mt-1 font-medium">{connection.state_label}</p>
                           </div>
                           <div className="rounded-lg border bg-muted/20 p-3">
-                            <p className="text-xs text-muted-foreground">Aktivitas terlacak</p>
+                            <p className="text-xs text-muted-foreground">Pelacakan browser</p>
                             <p className="mt-1 font-medium">{connection.tracking_state_label}</p>
                           </div>
                           <div className="rounded-lg border bg-muted/20 p-3">

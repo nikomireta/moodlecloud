@@ -560,19 +560,19 @@ func deriveSiteReportConnectionStatus(siteID uuid.UUID, defaultSiteURL string, c
 	switch {
 	case connection.TrackingMode == "":
 		status.TrackingState = "disabled"
-		status.TrackingStateLabel = "Belum Aktif"
-		status.TrackingStateMessage = "Plugin belum mengirim metadata tracking browser."
+		status.TrackingStateLabel = "Belum aktif"
+		status.TrackingStateMessage = "Plugin belum mengirim metadata pelacakan browser."
 	case connection.TrackingLastSeenAt == nil:
 		status.TrackingState = "waiting"
-		status.TrackingStateLabel = "Menunggu Tracking"
-		status.TrackingStateMessage = "Tracking browser sudah didukung plugin, tetapi heartbeat pertama belum diterima."
+		status.TrackingStateLabel = "Menunggu heartbeat"
+		status.TrackingStateMessage = "Pelacakan browser sudah didukung plugin, tetapi heartbeat pertama belum diterima."
 	case now.Sub(connection.TrackingLastSeenAt.UTC()) <= reportTrackingFreshThreshold:
 		status.TrackingState = "active"
-		status.TrackingStateLabel = "Tracking Aktif"
-		status.TrackingStateMessage = "Heartbeat browser terbaru masih segar dan tracking tenant terlihat aktif."
+		status.TrackingStateLabel = "Aktif"
+		status.TrackingStateMessage = "Heartbeat browser terbaru masih segar dan pelacakan tenant terlihat aktif."
 	default:
 		status.TrackingState = "stale"
-		status.TrackingStateLabel = "Tracking Stale"
+		status.TrackingStateLabel = "Perlu dicek"
 		status.TrackingStateMessage = "Heartbeat browser tenant sudah lama tidak diterima. Periksa aktivitas pengguna atau cron tenant."
 	}
 

@@ -3,6 +3,7 @@
 import { Header } from "@/components/layout/header"
 import { Footer } from "@/components/layout/footer"
 import { SiteReportTab } from "@/components/dashboard/site-report-tab"
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -52,7 +53,6 @@ import {
   Loader2,
   Info,
   ClipboardList,
-  Target,
   Eye,
   EyeOff,
 } from "lucide-react"
@@ -72,12 +72,13 @@ import { use, useEffect, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { toast } from "sonner"
 import { ProtectedRoute } from "@/components/auth/protected-route"
-import { buildAdminURL, buildSiteURL, siteHostFromURL, SITE_BASE_DOMAIN } from "@/lib/site-url"
+import { buildSiteURL, siteHostFromURL, SITE_BASE_DOMAIN } from "@/lib/site-url"
 import {
   api,
   isAPIError,
   type SiteBackupItem,
   type SiteBackupSettings,
+  type SiteReportConnectionStatus,
   type SiteRuntimeStatus,
   type SiteSettingsResponse,
   type SiteSummary,
@@ -248,6 +249,13 @@ function formatSystemValue(value?: string | null) {
 }
 
 type CapacityState = "normal" | "warning" | "critical"
+type SummaryAttentionTone = "critical" | "warning" | "normal" | "placeholder"
+
+type SummaryAttentionItem = {
+  title: string
+  description: string
+  tone: SummaryAttentionTone
+}
 
 function formatRelativeTimestamp(value?: string | null) {
   const trimmed = value?.trim()
@@ -519,6 +527,110 @@ function buildPrimaryAlert(params: {
   }
 }
 
+function buildSummaryHealth(primaryAlertTitle: string) {
+  switch (primaryAlertTitle) {
+    case "Semua normal":
+      return {
+        label: "Normal",
+        badgeClassName: "text-green-600 border-green-600/50 bg-green-500/10",
+      }
+    case "Pemakaian sangat tinggi":
+    case "Mendekati batas paket":
+    case "Layanan belum stabil":
+    case "Layanan sedang disiapkan":
+      return {
+        label: "Perlu perhatian",
+        badgeClassName: "text-amber-600 border-amber-600/50 bg-amber-500/10",
+      }
+    default:
+      return {
+        label: "Kritis",
+        badgeClassName: "text-red-600 border-red-600/50 bg-red-500/10",
+      }
+  }
+}
+
+function buildSummaryAttentionItems(params: {
+  storageState: CapacityState | null
+  userState: CapacityState | null
+  webStatusText?: string
+  webHealthStatus?: string
+  cronStatusText?: string
+  cronHealthStatus?: string
+  customDomainStatus?: string
+  customDomainError?: string
+}) {
+  const items: SummaryAttentionItem[] = []
+
+  if (params.storageState === "critical") {
+    items.push({
+      title: "Storage perlu tindakan segera",
+      description: "Pemakaian storage sudah melewati atau hampir menyentuh batas paket.",
+      tone: "critical",
+    })
+  } else if (params.storageState === "warning") {
+    items.push({
+      title: "Storage mulai menipis",
+      description: "Pantau file lama atau siapkan upgrade paket sebelum kapasitas penuh.",
+      tone: "warning",
+    })
+  }
+
+  if (params.userState === "critical") {
+    items.push({
+      title: "Pengguna aktif melebihi paket",
+      description: "Jumlah pengguna aktif saat ini sudah melampaui atau sangat dekat dengan limit paket.",
+      tone: "critical",
+    })
+  } else if (params.userState === "warning") {
+    items.push({
+      title: "Pengguna aktif mendekati batas",
+      description: "Pantau kapasitas pengguna aktif agar tenant tetap stabil saat trafik naik.",
+      tone: "warning",
+    })
+  }
+
+  if (params.webHealthStatus !== "healthy" || (params.webStatusText && params.webStatusText !== "Berjalan")) {
+    items.push({
+      title: "Layanan web perlu diperiksa",
+      description: params.webStatusText ? `Status web saat ini: ${params.webStatusText}.` : "Layanan web belum melaporkan kondisi sehat.",
+      tone: "critical",
+    })
+  }
+
+  if (params.cronHealthStatus !== "healthy" || (params.cronStatusText && params.cronStatusText !== "Berjalan")) {
+    items.push({
+      title: "Cron belum sehat",
+      description: params.cronStatusText ? `Status cron saat ini: ${params.cronStatusText}.` : "Cron belum melaporkan kondisi sehat.",
+      tone: "warning",
+    })
+  }
+
+  if (params.customDomainStatus === "failed") {
+    items.push({
+      title: "Custom domain bermasalah",
+      description: params.customDomainError?.trim() || "Aktivasi custom domain gagal dan perlu pengecekan DNS atau SSL.",
+      tone: "critical",
+    })
+  } else if (params.customDomainStatus === "pending_dns" || params.customDomainStatus === "pending_tls") {
+    items.push({
+      title: "Custom domain belum selesai",
+      description: params.customDomainStatus === "pending_dns" ? "DNS masih menunggu propagasi." : "Sertifikat SSL masih dalam proses penerbitan.",
+      tone: "warning",
+    })
+  }
+
+  if (items.length === 0) {
+    items.push({
+      title: "Semua indikator utama aman",
+      description: "Kapasitas dan layanan inti saat ini tidak menunjukkan masalah yang perlu ditindaklanjuti segera.",
+      tone: "normal",
+    })
+  }
+
+  return items.slice(0, 4)
+}
+
 
 
 function isRuntimeControllable(runtimeStatus: SiteRuntimeStatus | null) {
@@ -534,6 +646,7 @@ export default function SiteDetailPage({ params }: { params: Promise<{ subdomain
   const [siteSettings, setSiteSettings] = useState<SiteSettingsResponse | null>(null)
   const [runtimeStatus, setRuntimeStatus] = useState<SiteRuntimeStatus | null>(null)
   const [siteUsage, setSiteUsage] = useState<SiteUsageSnapshot | null>(null)
+  const [reportConnection, setReportConnection] = useState<SiteReportConnectionStatus | null>(null)
   const [runtimeError, setRuntimeError] = useState("")
   const [runtimeAction, setRuntimeAction] = useState<"start" | "restart" | "stop" | null>(null)
   const [activeTab, setActiveTab] = useState("ringkasan")
@@ -589,6 +702,34 @@ export default function SiteDetailPage({ params }: { params: Promise<{ subdomain
       setSiteUsage(context.usageResult.value.usage)
     }
   }
+
+  useEffect(() => {
+    if (!siteData) {
+      setReportConnection(null)
+      return
+    }
+
+    let cancelled = false
+
+    const loadReportConnection = async () => {
+      try {
+        const response = await api.getSiteReportConnection(siteData.id)
+        if (!cancelled) {
+          setReportConnection(response.connection)
+        }
+      } catch {
+        if (!cancelled) {
+          setReportConnection(null)
+        }
+      }
+    }
+
+    void loadReportConnection()
+
+    return () => {
+      cancelled = true
+    }
+  }, [siteData?.id])
 
   const loadBackupContext = async (siteID: string, options?: { silent?: boolean }) => {
     setLoadingBackups(true)
@@ -666,7 +807,6 @@ export default function SiteDetailPage({ params }: { params: Promise<{ subdomain
   }, [activeTab, backupLoaded, hasActiveBackup, siteData])
 
   const siteUrl = siteData?.site_url ?? buildSiteURL(subdomain)
-  const adminUrl = siteData?.admin_url ?? buildAdminURL(subdomain)
   const siteHost = siteHostFromURL(siteUrl, subdomain)
   const siteName = siteData?.name ?? mockSite.name
   const runtimeBadge = runtimeStatusBadge(runtimeStatus?.overall_status ?? "unknown")
@@ -706,7 +846,23 @@ export default function SiteDetailPage({ params }: { params: Promise<{ subdomain
     warningLevel: siteUsage?.warning_level,
     overLimit: siteUsage?.over_limit,
   })
-  const statusSubtitle = primaryAlert.title === "Semua normal" ? lastCheckedText : primaryAlert.message
+  const summaryHealth = buildSummaryHealth(primaryAlert.title)
+  const summaryAttentionItems = buildSummaryAttentionItems({
+    storageState: storageCapacityState,
+    userState: userCapacityState,
+    webStatusText: webService?.status_text,
+    webHealthStatus: webService?.health_status,
+    cronStatusText: cronService?.status_text,
+    cronHealthStatus: cronService?.health_status,
+    customDomainStatus: customDomain?.status,
+    customDomainError: customDomain?.last_error,
+  })
+  const reportPluginStatusLabel = reportConnection?.state_label ?? "Belum tersedia"
+  const reportPluginSummary = reportConnection
+    ? reportConnection.state === "not_connected"
+      ? "Plugin laporan belum terhubung ke Moodlepilot."
+      : reportConnection.state_message
+    : "Status plugin laporan belum tersedia."
   const deleteConfirmationMatches = deleteConfirmation.trim() === subdomain
   const canControlRuntime = isRuntimeControllable(runtimeStatus)
   const effectiveBackupSettings = backupSettings ?? createDefaultBackupSettings(siteData?.id)
@@ -752,8 +908,22 @@ export default function SiteDetailPage({ params }: { params: Promise<{ subdomain
     }
   }
 
+  const handleCopyText = async (value: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(value)
+      toast.success(`${label} disalin`)
+    } catch {
+      toast.error(`Gagal menyalin ${label.toLowerCase()}`)
+    }
+  }
+
   const handleCopyUrl = () => {
-    navigator.clipboard.writeText(siteUrl)
+    void handleCopyText(siteUrl, "URL situs")
+  }
+
+  const handleSiteTabChange = (tab: string) => {
+    setActiveTab(tab)
+    router.replace(`/situs/${subdomain}?tab=${tab}`, { scroll: false })
   }
 
   const handleCreateBackup = async () => {
@@ -999,7 +1169,7 @@ export default function SiteDetailPage({ params }: { params: Promise<{ subdomain
           </div>
 
           {/* Tabs */}
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full space-y-6">
+          <Tabs value={activeTab} onValueChange={handleSiteTabChange} className="w-full space-y-6">
             <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 xl:w-auto xl:inline-grid">
               <TabsTrigger value="ringkasan">Ringkasan</TabsTrigger>
               <TabsTrigger value="laporan">Laporan</TabsTrigger>
@@ -1008,162 +1178,201 @@ export default function SiteDetailPage({ params }: { params: Promise<{ subdomain
             </TabsList>
 
             {/* Tab: Ringkasan */}
-            <TabsContent value="ringkasan" className="space-y-6">
-              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
-                <Card className="p-4 border-border">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-green-500/10">
-                      <Activity className="h-5 w-5 text-green-500" />
-                    </div>
-                    <div>
-                      <p className={`text-lg font-semibold ${runtimeBadge.className.split(" ")[0]}`}>{runtimeBadge.label}</p>
-                      <p className="text-xs text-muted-foreground line-clamp-2">{statusSubtitle}</p>
-                    </div>
+            <TabsContent value="ringkasan" className="space-y-4">
+              <Card className="border-border p-4">
+                <div className="space-y-2.5">
+                  <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                    <span className="font-medium text-foreground">Status Utama Situs</span>
+                    <Badge variant="outline" className={summaryHealth.badgeClassName}>
+                      {summaryHealth.label}
+                    </Badge>
+                    <span className="hidden sm:inline">•</span>
+                    <span>{lastCheckedText}</span>
                   </div>
+                  <p className="text-sm break-words">
+                    <span className="font-medium text-foreground">{primaryAlert.title}.</span>{" "}
+                    <span className="text-muted-foreground">{primaryAlert.message}</span>
+                  </p>
+                </div>
+              </Card>
+
+              <div className="grid gap-4 md:grid-cols-3">
+                <Card className="border-border p-4">
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Storage</p>
+                  <p className="mt-2 text-lg font-semibold">{storageSummary}</p>
+                  <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-muted">
+                    <div
+                      className={`h-full rounded-full transition-all ${storageCapacityTone.progressClassName}`}
+                      style={{ width: formatPercentage(storagePercent) }}
+                    />
+                  </div>
+                  <p className={`mt-2 text-xs font-medium ${storageCapacityTone.textClassName}`}>{storageCapacityTone.label}</p>
                 </Card>
-                <Card className="p-4 border-border">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-purple-500/10">
-                      <HardDrive className="h-5 w-5 text-purple-500" />
-                    </div>
-                    <div>
-                      <p className="text-lg font-semibold">{storageSummary}</p>
-                      <p className={`text-xs ${storageCapacityTone.textClassName}`}>
-                        Storage {storageCapacityTone.label}
+
+                <Card className="border-border p-4">
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Pengguna Aktif</p>
+                  <p className="mt-2 text-lg font-semibold">{activeUsersSummary}</p>
+                  <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-muted">
+                    <div
+                      className={`h-full rounded-full transition-all ${userCapacityTone.progressClassName}`}
+                      style={{ width: formatPercentage(activeUsersPercent) }}
+                    />
+                  </div>
+                  <p className={`mt-2 text-xs font-medium ${userCapacityTone.textClassName}`}>{userCapacityTone.label}</p>
+                </Card>
+
+                <Card className="border-border p-4">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Status Layanan</p>
+                    <span className="text-xs text-muted-foreground">Inti</span>
+                  </div>
+                  <div className="mt-3 space-y-0 divide-y divide-border">
+                    <div className="flex items-center justify-between gap-3 py-2">
+                      <p className="text-sm text-muted-foreground">Web</p>
+                      <p className={`text-sm font-medium ${webService?.health_status === "healthy" ? "text-green-600" : "text-amber-600"}`}>
+                        {webService?.status_text ?? "Belum tersedia"}
                       </p>
                     </div>
-                  </div>
-                </Card>
-                <Card className="p-4 border-border">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-orange-500/10">
-                      <Users className="h-5 w-5 text-orange-500" />
+                    <div className="flex items-center justify-between gap-3 py-2">
+                      <p className="text-sm text-muted-foreground">Cron</p>
+                      <p className={`text-sm font-medium ${cronService?.health_status === "healthy" ? "text-green-600" : "text-amber-600"}`}>
+                        {cronService?.status_text ?? "Belum tersedia"}
+                      </p>
                     </div>
-                    <div>
-                      <p className="text-lg font-semibold">{activeUsersSummary}</p>
-                      <p className={`text-xs ${userCapacityTone.textClassName}`}>
-                        Pengguna aktif {userCapacityTone.label}
+                    <div className="flex items-center justify-between gap-3 py-2">
+                      <p className="text-sm text-muted-foreground">Plugin Laporan</p>
+                      <p
+                        className={`text-sm font-medium ${
+                          reportConnection?.state === "sync_error"
+                            ? "text-red-600"
+                            : reportConnection?.state === "not_connected" || reportConnection?.state === "tracking_stale"
+                              ? "text-amber-600"
+                              : "text-green-600"
+                        }`}
+                      >
+                        {reportPluginStatusLabel}
                       </p>
                     </div>
                   </div>
                 </Card>
               </div>
 
-              <div className="grid gap-6 lg:grid-cols-2">
-                <Card className="p-6 border-border">
-                  <h3 className="font-semibold mb-4">Status Layanan</h3>
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between py-2 border-b border-border">
-                      <span className="text-sm text-muted-foreground">Web</span>
-                      <Badge variant="outline" className={webService?.health_status === "healthy" ? "text-green-600 border-green-600/50 bg-green-500/10 text-xs" : "text-amber-600 border-amber-600/50 bg-amber-500/10 text-xs"}>
-                        {webService?.status_text ?? "Belum tersedia"}
-                      </Badge>
-                    </div>
-                    <div className="flex items-center justify-between py-2 border-b border-border">
-                      <span className="text-sm text-muted-foreground">Cron</span>
-                      <Badge variant="outline" className={cronService?.health_status === "healthy" ? "text-green-600 border-green-600/50 bg-green-500/10 text-xs" : "text-amber-600 border-amber-600/50 bg-amber-500/10 text-xs"}>
-                        {cronService?.status_text ?? "Belum tersedia"}
-                      </Badge>
-                    </div>
-                    {customDomain?.domain ? (
-                      <div className="flex items-center justify-between py-2 border-b border-border">
-                        <span className="text-sm text-muted-foreground">Custom Domain</span>
-                        <Badge variant="outline" className={`${customDomainState.className} text-xs`}>
-                          {customDomainState.label}
-                        </Badge>
-                      </div>
-                    ) : null}
-                    <div className={`rounded-lg border p-3 ${primaryAlert.boxClassName}`}>
-                      <p className="text-xs text-muted-foreground">{primaryAlert.title}</p>
-                      <div className="flex items-start gap-2 mt-2">
-                        <AlertTriangle className={`h-4 w-4 mt-0.5 ${primaryAlert.iconClassName}`} />
-                        <p className="text-sm font-medium break-words">
-                          {primaryAlert.message}
-                        </p>
+              <div className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
+                <Card className="h-full border-border p-4">
+                  <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                    <h3 className="font-semibold">Yang Perlu Dicek</h3>
+                    <p className="text-xs text-muted-foreground">Prioritas operasional saat ini.</p>
+                  </div>
+                  <div className="mt-4 divide-y divide-border">
+                    <div className="flex gap-3 py-3 first:pt-0">
+                      <span className={`mt-1 h-2 w-2 shrink-0 rounded-full ${reportConnection?.state === "sync_error" ? "bg-red-500" : reportConnection?.state === "not_connected" ? "bg-amber-500" : "bg-green-500"}`} />
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium">Plugin laporan: {reportPluginStatusLabel}</p>
+                        <p className="mt-1 text-xs text-muted-foreground">{reportPluginSummary}</p>
                       </div>
                     </div>
-                    <div className="pt-1">
-                      <div className="flex justify-between text-sm mb-2">
-                        <span className="text-muted-foreground">Storage</span>
-                        <span className={`font-medium ${storageCapacityTone.textClassName}`}>
-                          {storageSummary}
-                        </span>
+                    {summaryAttentionItems.map((item, index) => (
+                      <div key={`${item.title}-${index}`} className="flex gap-3 py-3">
+                        <span
+                          className={`mt-1 h-2 w-2 shrink-0 rounded-full ${
+                            item.tone === "critical"
+                              ? "bg-red-500"
+                              : item.tone === "warning"
+                                ? "bg-amber-500"
+                                : item.tone === "normal"
+                                  ? "bg-green-500"
+                                  : "bg-muted-foreground"
+                          }`}
+                        />
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium">{item.title}</p>
+                          <p className="mt-1 text-xs text-muted-foreground">{item.description}</p>
+                        </div>
                       </div>
-                      <div className="h-2 bg-muted rounded-full overflow-hidden">
-                        <div className={`h-full rounded-full transition-all ${storageCapacityTone.progressClassName}`} style={{ width: formatPercentage(storagePercent) }} />
-                      </div>
-                    </div>
-                    <div className="pt-1">
-                      <div className="flex justify-between text-sm mb-2">
-                        <span className="text-muted-foreground">Pengguna Aktif</span>
-                        <span className={`font-medium ${userCapacityTone.textClassName}`}>
-                          {activeUsersSummary}
-                        </span>
-                      </div>
-                      <div className="h-2 bg-muted rounded-full overflow-hidden">
-                        <div className={`h-full rounded-full transition-all ${userCapacityTone.progressClassName}`} style={{ width: formatPercentage(activeUsersPercent) }} />
-                      </div>
+                    ))}
+                    <div className="pt-3">
+                      <p className="text-xs font-medium">Insight tambahan segera hadir</p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Backup, SSL/domain, sinkronisasi laporan, dan aktivitas tenant terbaru akan muncul di sini.
+                      </p>
                     </div>
                   </div>
                 </Card>
 
-                <Card className="p-6 border-border">
-                  <h3 className="font-semibold mb-4">Akses & Sistem</h3>
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between py-2 border-b border-border">
-                      <div className="flex items-center gap-2">
-                        <Settings className="h-4 w-4 text-muted-foreground" />
-                        <span className="text-sm text-muted-foreground">Moodle Version</span>
+                <Card className="h-full border-border p-4">
+                  <div className="space-y-4">
+                    <div className="space-y-2.5">
+                      <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                        <h3 className="font-semibold">Akses & Sistem</h3>
+                        <p className="text-xs text-muted-foreground">Konteks tenant untuk pengecekan cepat.</p>
                       </div>
-                      <span className="text-sm font-medium">{formatSystemValue(systemSummary?.moodle_version)}</span>
-                    </div>
-                    <div className="flex items-center justify-between py-2 border-b border-border">
-                      <div className="flex items-center gap-2">
-                        <Zap className="h-4 w-4 text-muted-foreground" />
-                        <span className="text-sm text-muted-foreground">PHP Version</span>
+                      <div className="divide-y divide-border">
+                        <div className="flex items-center justify-between gap-4 py-3">
+                          <span className="text-sm text-muted-foreground">Domain Aktif</span>
+                          <span className="text-sm font-medium break-all text-right">{currentDomainHost}</span>
+                        </div>
+                        <div className="flex items-center justify-between gap-4 py-3">
+                          <span className="text-sm text-muted-foreground">Paket</span>
+                          <span className="text-sm font-medium">{formatLabel(siteData?.plan_code)}</span>
+                        </div>
+                        <div className="flex items-center justify-between gap-4 py-3">
+                          <span className="text-sm text-muted-foreground">Region</span>
+                          <span className="text-sm font-medium">{formatLabel(siteData?.region)}</span>
+                        </div>
                       </div>
-                      <span className="text-sm font-medium">{formatSystemValue(systemSummary?.php_version)}</span>
                     </div>
-                    <div className="flex items-center justify-between py-2 border-b border-border">
-                      <div className="flex items-center gap-2">
-                        <Database className="h-4 w-4 text-muted-foreground" />
-                        <span className="text-sm text-muted-foreground">Database</span>
-                      </div>
-                      <span className="text-sm font-medium">{formatSystemValue(systemSummary?.database_label)}</span>
-                    </div>
-                    <div className="flex items-center justify-between py-2 border-b border-border">
-                      <div className="flex items-center gap-2">
-                        <ClipboardList className="h-4 w-4 text-muted-foreground" />
-                        <span className="text-sm text-muted-foreground">Paket</span>
-                      </div>
-                      <span className="text-sm font-medium">{formatLabel(siteData?.plan_code)}</span>
-                    </div>
-                    <div className="flex items-center justify-between py-2 border-b border-border">
-                      <div className="flex items-center gap-2">
-                        <Globe className="h-4 w-4 text-muted-foreground" />
-                        <span className="text-sm text-muted-foreground">Region</span>
-                      </div>
-                      <span className="text-sm font-medium">{formatLabel(siteData?.region)}</span>
-                    </div>
-                    <div className="flex items-center justify-between py-2 border-b border-border">
-                      <div className="flex items-center gap-2">
-                        <Mail className="h-4 w-4 text-muted-foreground" />
-                        <span className="text-sm text-muted-foreground">Admin Email</span>
-                      </div>
-                      <span className="text-sm font-medium break-all text-right">{formatSystemValue(siteData?.admin_email)}</span>
-                    </div>
-                    <div className="py-2 border-b border-border">
-                      <p className="text-sm text-muted-foreground mb-1">Domain Aktif</p>
-                      <p className="text-sm font-medium break-all">{currentDomainHost}</p>
-                    </div>
-                    <div className="py-2 border-b border-border">
-                      <p className="text-sm text-muted-foreground mb-1">URL Situs</p>
-                      <p className="text-sm font-medium break-all">{siteUrl}</p>
-                    </div>
-                    <div className="py-2">
-                      <p className="text-sm text-muted-foreground mb-1">Admin URL</p>
-                      <p className="text-sm font-medium break-all">{adminUrl}</p>
-                    </div>
+
+                    <Accordion type="single" collapsible className="w-full border-t border-border pt-3">
+                      <AccordionItem value="technical" className="border-b-0">
+                        <AccordionTrigger className="px-0 py-0 hover:no-underline">
+                          <div className="space-y-1 text-left">
+                            <p className="text-sm font-semibold">Info Teknis</p>
+                            <p className="text-xs font-normal text-muted-foreground">
+                              Buka bila perlu memeriksa versi stack dan integrasi.
+                            </p>
+                          </div>
+                        </AccordionTrigger>
+                        <AccordionContent className="px-0">
+                          <div className="divide-y divide-border pt-3">
+                            <div className="flex items-center justify-between gap-4 py-3">
+                              <div className="flex items-center gap-2">
+                                <Settings className="h-4 w-4 text-muted-foreground" />
+                                <span className="text-sm text-muted-foreground">Moodle Version</span>
+                              </div>
+                              <span className="text-sm font-medium">{formatSystemValue(systemSummary?.moodle_version)}</span>
+                            </div>
+                            <div className="flex items-center justify-between gap-4 py-3">
+                              <div className="flex items-center gap-2">
+                                <Zap className="h-4 w-4 text-muted-foreground" />
+                                <span className="text-sm text-muted-foreground">PHP Version</span>
+                              </div>
+                              <span className="text-sm font-medium">{formatSystemValue(systemSummary?.php_version)}</span>
+                            </div>
+                            <div className="flex items-center justify-between gap-4 py-3">
+                              <div className="flex items-center gap-2">
+                                <Database className="h-4 w-4 text-muted-foreground" />
+                                <span className="text-sm text-muted-foreground">Database</span>
+                              </div>
+                              <span className="text-sm font-medium">{formatSystemValue(systemSummary?.database_label)}</span>
+                            </div>
+                            <div className="flex items-center justify-between gap-4 py-3">
+                              <div className="flex items-center gap-2">
+                                <Mail className="h-4 w-4 text-muted-foreground" />
+                                <span className="text-sm text-muted-foreground">Admin Email</span>
+                              </div>
+                              <span className="text-sm font-medium break-all text-right">{formatSystemValue(siteData?.admin_email)}</span>
+                            </div>
+                            <div className="flex items-center justify-between gap-4 py-3">
+                              <div className="flex items-center gap-2">
+                                <BarChart3 className="h-4 w-4 text-muted-foreground" />
+                                <span className="text-sm text-muted-foreground">Versi Plugin Laporan</span>
+                              </div>
+                              <span className="text-sm font-medium">{reportConnection?.plugin_version ? `v${reportConnection.plugin_version}` : "Belum tersedia"}</span>
+                            </div>
+                          </div>
+                        </AccordionContent>
+                      </AccordionItem>
+                    </Accordion>
                   </div>
                 </Card>
               </div>
