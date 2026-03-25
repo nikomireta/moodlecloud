@@ -47,7 +47,8 @@ func (h Handler) HandleHealthCheckSweepTask(ctx context.Context, _ *asynq.Task) 
 		newHealth := mapOverallStatusToHealth(status.OverallStatus)
 
 		// Auto-restart stopped or crashed containers.
-		if shouldAutoRestart(status) {
+		// Abaikan auto-restart jika status sebelumnya adalah 'stopped' (dihentikan manual oleh user).
+		if shouldAutoRestart(status) && previousHealth != "stopped" {
 			log.Printf("health-check: auto-restarting site=%s overall=%s", item.Site.Subdomain, status.OverallStatus)
 			if _, restartErr := h.Runtime.StartSite(ctx, item.Site, item.Job, item.Runtime); restartErr != nil {
 				log.Printf("health-check: auto-restart failed site=%s: %v", item.Site.Subdomain, restartErr)

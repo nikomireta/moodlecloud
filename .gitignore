@@ -9,6 +9,7 @@ backend/.env
 *.exe
 *.out
 *.test
+/backend/api
 /backend/bin/
 /backend/dist/
 

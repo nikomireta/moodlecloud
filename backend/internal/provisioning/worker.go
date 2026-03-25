@@ -125,7 +125,7 @@ func (h Handler) HandleProvisionSiteTask(ctx context.Context, task *asynq.Task) 
 	}
 
 	if err := h.Mailer.SendSiteReady(site, InitialAdminPassword(h.SiteRuntimeSecret, site.ID.String())); err != nil {
-		return fmt.Errorf("send site ready mail: %w", err)
+		log.Printf("provisioning: warning: failed to send site-ready email job=%s site=%s: %v", jobID, site.Subdomain, err)
 	}
 	return nil
 }
