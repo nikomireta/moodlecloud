@@ -242,6 +242,9 @@ func (r *DockerLocalRuntime) GetRuntimeStatus(ctx context.Context, site store.Si
 	}
 
 	overallStatus := deriveOverallRuntimeStatus(site, services, routeReady)
+	if lastError == "" {
+		lastError = deriveRuntimeIssueSummary(services)
+	}
 	if overallStatus == "running" {
 		lastError = ""
 	}
@@ -859,8 +862,64 @@ func (r *DockerLocalRuntime) inspectRuntimeService(ctx context.Context, target r
 		service.FinishedAt = parseDockerTimestamp(inspect.State.FinishedAt)
 	}
 	service.StatusText = describeRuntimeService(service.State, service.HealthStatus)
+	service.DetailText = r.inspectRuntimeServiceDetail(ctx, target, inspect, service)
 
 	return service, nil
+}
+
+func (r *DockerLocalRuntime) inspectRuntimeServiceDetail(ctx context.Context, target runtimeServiceTarget, inspect container.InspectResponse, service SiteRuntimeService) string {
+	if inspect.State != nil {
+		if detail := strings.TrimSpace(inspect.State.Error); detail != "" {
+			return summarizeRuntimeDiagnostic(detail)
+		}
+		if inspect.State.Health != nil {
+			if detail := summarizeHealthLogOutput(inspect.State.Health.Log); detail != "" {
+				return detail
+			}
+		}
+	}
+
+	if service.State == "running" && isHealthyState(service.HealthStatus) {
+		return ""
+	}
+
+	if detail := r.inspectRecentContainerLogs(ctx, target.ContainerName); detail != "" {
+		return detail
+	}
+
+	return ""
+}
+
+func (r *DockerLocalRuntime) inspectRecentContainerLogs(ctx context.Context, containerName string) string {
+	reader, err := r.docker.ContainerLogs(ctx, containerName, container.LogsOptions{
+		ShowStdout: true,
+		ShowStderr: true,
+		Tail:       "40",
+	})
+	if err != nil {
+		return ""
+	}
+	defer reader.Close()
+
+	raw, err := io.ReadAll(reader)
+	if err != nil {
+		return ""
+	}
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	content := string(raw)
+	if _, err := stdcopy.StdCopy(&stdout, &stderr, bytes.NewReader(raw)); err == nil {
+		content = strings.TrimSpace(stdout.String())
+		if stderrText := strings.TrimSpace(stderr.String()); stderrText != "" {
+			if content != "" {
+				content += "\n"
+			}
+			content += stderrText
+		}
+	}
+
+	return summarizeRuntimeDiagnostic(content)
 }
 
 func (r *DockerLocalRuntime) inspectSystemSummary(ctx context.Context, metadata store.SiteRuntimeMetadata, services []SiteRuntimeService) *SiteSystemSummary {
@@ -1357,6 +1416,77 @@ func describeRuntimeService(state, healthStatus string) string {
 	default:
 		return "Status belum diketahui"
 	}
+}
+
+func deriveRuntimeIssueSummary(services []SiteRuntimeService) string {
+	for _, serviceName := range []string{"web", "cron"} {
+		service := findRuntimeService(services, serviceName)
+		if service == nil {
+			continue
+		}
+		if isRunningState(service.State) && isHealthyState(service.HealthStatus) {
+			continue
+		}
+		if detail := strings.TrimSpace(service.DetailText); detail != "" {
+			return fmt.Sprintf("%s: %s", strings.Title(service.Name), detail)
+		}
+		if text := strings.TrimSpace(service.StatusText); text != "" && text != "Berjalan" {
+			return fmt.Sprintf("%s: %s", strings.Title(service.Name), text)
+		}
+	}
+	return ""
+}
+
+func summarizeHealthLogOutput(entries []*container.HealthcheckResult) string {
+	for i := len(entries) - 1; i >= 0; i-- {
+		if entries[i] == nil {
+			continue
+		}
+		if detail := summarizeRuntimeDiagnostic(entries[i].Output); detail != "" {
+			return detail
+		}
+	}
+	return ""
+}
+
+func summarizeRuntimeDiagnostic(raw string) string {
+	lines := strings.Split(raw, "\n")
+	for i := len(lines) - 1; i >= 0; i-- {
+		line := strings.TrimSpace(lines[i])
+		if line == "" {
+			continue
+		}
+		if isGenericRuntimeNoise(line) {
+			continue
+		}
+		return trimTrailingPunctuation(line)
+	}
+	for i := len(lines) - 1; i >= 0; i-- {
+		line := strings.TrimSpace(lines[i])
+		if line == "" {
+			continue
+		}
+		return trimTrailingPunctuation(line)
+	}
+	return ""
+}
+
+func isGenericRuntimeNoise(line string) bool {
+	lowered := strings.ToLower(strings.TrimSpace(line))
+	switch {
+	case strings.Contains(lowered, "moodle cron execution failed"):
+		return true
+	case strings.Contains(lowered, "health check"):
+		return true
+	default:
+		return false
+	}
+}
+
+func trimTrailingPunctuation(value string) string {
+	value = strings.TrimSpace(value)
+	value = strings.TrimSuffix(value, ".")
+	return strings.TrimSpace(value)
 }
 
 func parseDockerTimestamp(value string) *time.Time {

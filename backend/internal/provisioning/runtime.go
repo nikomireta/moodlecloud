@@ -28,6 +28,7 @@ type SiteRuntimeService struct {
 	StartedAt     *time.Time `json:"started_at,omitempty"`
 	FinishedAt    *time.Time `json:"finished_at,omitempty"`
 	StatusText    string     `json:"status_text"`
+	DetailText    string     `json:"detail_text,omitempty"`
 }
 
 type SiteSystemSummary struct {

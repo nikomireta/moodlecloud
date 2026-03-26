@@ -25,6 +25,7 @@ interface SiteCardProps {
   siteUrl?: string
   siteHost?: string
   runtimeHealth?: string
+  runtimeHint?: string
   quotaState?: "normal" | "warning" | "critical"
   quotaLabel?: string
   activeUsersSummary?: string
@@ -64,7 +65,8 @@ function toneClasses(tone: IndicatorTone) {
 
 function runtimeIndicator(
   status: SiteCardProps["status"],
-  runtimeHealth?: string
+  runtimeHealth?: string,
+  runtimeHint?: string
 ): { label: string; hint: string; tone: IndicatorTone } {
   if (status === "gagal") {
     return {
@@ -101,7 +103,7 @@ function runtimeIndicator(
     case "degraded":
       return {
         label: "Tidak stabil",
-        hint: "Ada komponen runtime yang belum sehat penuh. Periksa detail Web dan Cron.",
+        hint: runtimeHint?.trim() || "Ada komponen runtime yang belum sehat penuh. Periksa detail Web dan Cron.",
         tone: "warning",
       }
     case "stopped":
@@ -202,6 +204,7 @@ export function SiteCard({
   siteUrl,
   siteHost,
   runtimeHealth,
+  runtimeHint,
   quotaState,
   quotaLabel,
   activeUsersSummary,
@@ -214,7 +217,7 @@ export function SiteCard({
   const router = useRouter()
   const resolvedSiteUrl = siteUrl ?? buildSiteURL(subdomain)
   const resolvedSiteHost = siteHost ?? buildSiteHost(subdomain)
-  const runtime = runtimeIndicator(status, runtimeHealth)
+  const runtime = runtimeIndicator(status, runtimeHealth, runtimeHint)
   const runtimeTone = toneClasses(runtime.tone)
   const quota = quotaIndicator(quotaState, quotaLabel)
   const isRuntimeActionPending = pendingRuntimeAction !== null

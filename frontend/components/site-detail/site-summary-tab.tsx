@@ -27,6 +27,7 @@ import {
   buildPrimaryAlert,
   buildSummaryHealth,
   buildSummaryAttentionItems,
+  buildRuntimeTroubleshootingHint,
 } from "./site-detail-helpers"
 
 interface SiteSummaryTabProps {
@@ -82,12 +83,14 @@ export function SiteSummaryTab({
     serviceError,
     overallStatus: runtimeStatus?.overall_status,
     webStatusText: webService?.status_text,
+    webDetailText: webService?.detail_text,
     cronStatusText: cronService?.status_text,
+    cronDetailText: cronService?.detail_text,
     customDomainStatus: customDomain?.status,
     customDomainError: customDomain?.last_error,
     warningLevel: siteUsage?.warning_level,
     overLimit: siteUsage?.over_limit,
-  }), [serviceError, runtimeStatus?.overall_status, webService?.status_text, cronService?.status_text, customDomain?.status, customDomain?.last_error, siteUsage?.warning_level, siteUsage?.over_limit])
+  }), [serviceError, runtimeStatus?.overall_status, webService?.status_text, webService?.detail_text, cronService?.status_text, cronService?.detail_text, customDomain?.status, customDomain?.last_error, siteUsage?.warning_level, siteUsage?.over_limit])
 
   const summaryHealth = useMemo(() => buildSummaryHealth(primaryAlert.title), [primaryAlert.title])
   const quotaNeedsAttention = siteUsage?.over_limit || ["warning", "critical", "over_limit"].includes(siteUsage?.warning_level ?? "")
@@ -96,12 +99,14 @@ export function SiteSummaryTab({
     storageState: storageCapacityState,
     userState: userCapacityState,
     webStatusText: webService?.status_text,
+    webDetailText: webService?.detail_text,
     webHealthStatus: webService?.health_status,
     cronStatusText: cronService?.status_text,
+    cronDetailText: cronService?.detail_text,
     cronHealthStatus: cronService?.health_status,
     customDomainStatus: customDomain?.status,
     customDomainError: customDomain?.last_error,
-  }), [storageCapacityState, userCapacityState, webService?.status_text, webService?.health_status, cronService?.status_text, cronService?.health_status, customDomain?.status, customDomain?.last_error])
+  }), [storageCapacityState, userCapacityState, webService?.status_text, webService?.detail_text, webService?.health_status, cronService?.status_text, cronService?.detail_text, cronService?.health_status, customDomain?.status, customDomain?.last_error])
 
   const reportPluginStatusLabel = reportConnection?.state_label ?? "Belum tersedia"
   const reportPluginSummary = reportConnection
@@ -169,14 +174,28 @@ export function SiteSummaryTab({
           </div>
           <div className="mt-3 space-y-0 divide-y divide-border">
             <div className="flex items-center justify-between gap-3 py-2">
-              <p className="text-sm text-muted-foreground">Web</p>
-              <p className={`text-sm font-medium ${webService?.health_status === "healthy" ? "text-green-600" : "text-amber-600"}`}>
+              <div className="min-w-0">
+                <p className="text-sm text-muted-foreground">Web</p>
+                {webService?.detail_text ? (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {buildRuntimeTroubleshootingHint("web", webService.detail_text, webService.status_text)}
+                  </p>
+                ) : null}
+              </div>
+              <p className={`text-right text-sm font-medium ${webService?.health_status === "healthy" ? "text-green-600" : "text-amber-600"}`}>
                 {webService?.status_text ?? "Belum tersedia"}
               </p>
             </div>
             <div className="flex items-center justify-between gap-3 py-2">
-              <p className="text-sm text-muted-foreground">Cron</p>
-              <p className={`text-sm font-medium ${cronService?.health_status === "healthy" ? "text-green-600" : "text-amber-600"}`}>
+              <div className="min-w-0">
+                <p className="text-sm text-muted-foreground">Cron</p>
+                {cronService?.detail_text ? (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {buildRuntimeTroubleshootingHint("cron", cronService.detail_text, cronService.status_text)}
+                  </p>
+                ) : null}
+              </div>
+              <p className={`text-right text-sm font-medium ${cronService?.health_status === "healthy" ? "text-green-600" : "text-amber-600"}`}>
                 {cronService?.status_text ?? "Belum tersedia"}
               </p>
             </div>

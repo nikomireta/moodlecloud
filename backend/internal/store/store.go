@@ -53,6 +53,7 @@ func (s *Store) ListSitesByOwner(ctx context.Context, ownerUserID uuid.UUID) ([]
 			s.users_active_limit, s.storage_bytes_limit, s.web_cpu_millicores, s.web_memory_mib,
 			s.cron_cpu_millicores, s.cron_memory_mib, s.activated_at, s.created_at, s.updated_at,
 			COALESCE(m.health_status, '') as runtime_health,
+			COALESCE(m.last_health_error, '') as runtime_last_error,
 			COALESCE(u.users_active_count, 0),
 			COALESCE(u.files_bytes_used, 0),
 			COALESCE(u.database_bytes_used, 0),
@@ -83,7 +84,7 @@ func (s *Store) ListSitesByOwner(ctx context.Context, ownerUserID uuid.UUID) ([]
 			&site.AdminName, &site.AdminEmail, &site.MoodleUsername, &site.ProvisioningStep, &site.LastError,
 			&site.UsersActiveLimit, &site.StorageBytesLimit, &site.WebCPUMillicores, &site.WebMemoryMiB,
 			&site.CronCPUMillicores, &site.CronMemoryMiB, &site.ActivatedAt, &site.CreatedAt, &site.UpdatedAt,
-			&site.RuntimeHealth,
+			&site.RuntimeHealth, &site.RuntimeLastError,
 			&usage.UsersActiveCount, &usage.FilesBytesUsed, &usage.DatabaseBytesUsed, &usage.StorageBytesUsed,
 			&usage.WarningLevel, &usage.OverLimit, &usage.LastError, &usage.MeasuredAt, &usage.CreatedAt, &usage.UpdatedAt,
 		); err != nil {
@@ -344,14 +345,15 @@ func (s *Store) GetSiteBySubdomainForOwner(ctx context.Context, ownerUserID uuid
 			s.admin_name, s.admin_email, s.moodle_username, s.provisioning_step, s.last_error,
 			s.users_active_limit, s.storage_bytes_limit, s.web_cpu_millicores, s.web_memory_mib,
 			s.cron_cpu_millicores, s.cron_memory_mib, s.activated_at, s.created_at, s.updated_at,
-			COALESCE(m.health_status, '') as runtime_health
+			COALESCE(m.health_status, '') as runtime_health,
+			COALESCE(m.last_health_error, '') as runtime_last_error
 		FROM sites s
 		LEFT JOIN site_runtime_metadata m ON m.site_id = s.id
 		WHERE s.owner_user_id = $1 AND s.subdomain = $2
 	`, ownerUserID, strings.ToLower(strings.TrimSpace(subdomain))).Scan(
 		&site.ID, &site.OwnerUserID, &site.Name, &site.Subdomain, &site.PlanCode, &site.Region, &site.Status, &site.SiteURL, &site.AdminURL, &site.AdminName, &site.AdminEmail, &site.MoodleUsername, &site.ProvisioningStep, &site.LastError,
 		&site.UsersActiveLimit, &site.StorageBytesLimit, &site.WebCPUMillicores, &site.WebMemoryMiB, &site.CronCPUMillicores, &site.CronMemoryMiB, &site.ActivatedAt, &site.CreatedAt, &site.UpdatedAt,
-		&site.RuntimeHealth,
+		&site.RuntimeHealth, &site.RuntimeLastError,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -370,14 +372,15 @@ func (s *Store) GetSiteByIDForOwner(ctx context.Context, ownerUserID, siteID uui
 			s.admin_name, s.admin_email, s.moodle_username, s.provisioning_step, s.last_error,
 			s.users_active_limit, s.storage_bytes_limit, s.web_cpu_millicores, s.web_memory_mib,
 			s.cron_cpu_millicores, s.cron_memory_mib, s.activated_at, s.created_at, s.updated_at,
-			COALESCE(m.health_status, '') as runtime_health
+			COALESCE(m.health_status, '') as runtime_health,
+			COALESCE(m.last_health_error, '') as runtime_last_error
 		FROM sites s
 		LEFT JOIN site_runtime_metadata m ON m.site_id = s.id
 		WHERE s.owner_user_id = $1 AND s.id = $2
 	`, ownerUserID, siteID).Scan(
 		&site.ID, &site.OwnerUserID, &site.Name, &site.Subdomain, &site.PlanCode, &site.Region, &site.Status, &site.SiteURL, &site.AdminURL, &site.AdminName, &site.AdminEmail, &site.MoodleUsername, &site.ProvisioningStep, &site.LastError,
 		&site.UsersActiveLimit, &site.StorageBytesLimit, &site.WebCPUMillicores, &site.WebMemoryMiB, &site.CronCPUMillicores, &site.CronMemoryMiB, &site.ActivatedAt, &site.CreatedAt, &site.UpdatedAt,
-		&site.RuntimeHealth,
+		&site.RuntimeHealth, &site.RuntimeLastError,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -808,7 +811,7 @@ func scanSite(row interface {
 		&site.ID, &site.OwnerUserID, &site.Name, &site.Subdomain, &site.PlanCode, &site.Region, &site.Status, &site.SiteURL, &site.AdminURL, &site.AdminName, &site.AdminEmail, &site.MoodleUsername, &site.ProvisioningStep, &site.LastError,
 		&site.UsersActiveLimit, &site.StorageBytesLimit, &site.WebCPUMillicores, &site.WebMemoryMiB, &site.CronCPUMillicores, &site.CronMemoryMiB,
 		&site.ActivatedAt, &site.CreatedAt, &site.UpdatedAt,
-		&site.RuntimeHealth,
+		&site.RuntimeHealth, &site.RuntimeLastError,
 	); err != nil {
 		return fmt.Errorf("scan site: %w", err)
 	}

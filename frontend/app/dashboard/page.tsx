@@ -27,6 +27,7 @@ type DashboardSite = {
   siteUrl: string
   siteHost: string
   runtimeHealth?: string
+  runtimeHint?: string
   quotaState?: "normal" | "warning" | "critical"
   quotaLabel?: string
   activeUsersSummary?: string
@@ -129,6 +130,7 @@ function mapApiSite(site: SiteSummary): DashboardSite {
     siteUrl: site.site_url,
     siteHost: siteHostFromURL(site.site_url) || site.subdomain,
     runtimeHealth: site.runtime_health,
+    runtimeHint: site.runtime_last_error,
     quotaState,
     quotaLabel: quotaLabelFromState(quotaState),
     activeUsersSummary: site.usage ? `${formatCount(site.usage.users_active_count)} / ${formatCount(site.users_active_limit)}` : undefined,
@@ -373,6 +375,7 @@ export default function DashboardPage() {
                     siteUrl={site.siteUrl}
                     siteHost={site.siteHost}
                     runtimeHealth={site.runtimeHealth}
+                    runtimeHint={site.runtimeHint}
                     quotaState={site.quotaState}
                     quotaLabel={site.quotaLabel}
                     activeUsersSummary={site.activeUsersSummary}

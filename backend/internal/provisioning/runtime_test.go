@@ -314,6 +314,24 @@ func TestDeriveOverallRuntimeStatus(t *testing.T) {
 	}
 }
 
+func TestSummarizeRuntimeDiagnostic(t *testing.T) {
+	raw := "[2026-03-26T07:21:33Z] moodle cron execution failed\nMoodle upgrade pending, cron execution suspended.\n"
+	if got := summarizeRuntimeDiagnostic(raw); got != "Moodle upgrade pending, cron execution suspended" {
+		t.Fatalf("summarizeRuntimeDiagnostic() = %q", got)
+	}
+}
+
+func TestDeriveRuntimeIssueSummary(t *testing.T) {
+	services := []SiteRuntimeService{
+		{Name: "web", State: "running", HealthStatus: "healthy", StatusText: "Berjalan"},
+		{Name: "cron", State: "running", HealthStatus: "unhealthy", StatusText: "Berjalan tapi tidak sehat", DetailText: "Moodle upgrade pending, cron execution suspended"},
+	}
+
+	if got := deriveRuntimeIssueSummary(services); got != "Cron: Moodle upgrade pending, cron execution suspended" {
+		t.Fatalf("deriveRuntimeIssueSummary() = %q", got)
+	}
+}
+
 func TestRuntimeActionTargets(t *testing.T) {
 	metadata := store.SiteRuntimeMetadata{
 		WebContainerName:  "web-demo",

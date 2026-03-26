@@ -116,6 +116,36 @@ export type SummaryAttentionItem = {
   tone: SummaryAttentionTone
 }
 
+function normalizeRuntimeDetail(detail?: string | null) {
+  const trimmed = detail?.trim()
+  if (!trimmed) {
+    return ""
+  }
+  return trimmed.replace(/[.。\s]+$/u, "")
+}
+
+function isMoodleUpgradePending(detail?: string | null) {
+  return normalizeRuntimeDetail(detail).toLowerCase().includes("upgrade pending")
+}
+
+function formatServiceName(serviceName: string) {
+  return serviceName === "cron" ? "Cron" : "Web"
+}
+
+export function buildRuntimeTroubleshootingHint(serviceName: string, detail?: string | null, statusText?: string | null) {
+  const normalizedDetail = normalizeRuntimeDetail(detail)
+  if (isMoodleUpgradePending(normalizedDetail)) {
+    return `${formatServiceName(serviceName)} tertahan karena Moodle sedang menunggu upgrade. Restart tidak akan membantu sampai proses upgrade Moodle diselesaikan.`
+  }
+  if (normalizedDetail) {
+    return normalizedDetail
+  }
+  if (statusText?.trim()) {
+    return `Status ${formatServiceName(serviceName)} saat ini: ${statusText.trim()}.`
+  }
+  return `${formatServiceName(serviceName)} belum melaporkan kondisi sehat.`
+}
+
 export function formatRelativeTimestamp(value?: string | null) {
   const trimmed = value?.trim()
   if (!trimmed) {
@@ -286,7 +316,9 @@ export function buildPrimaryAlert(params: {
   serviceError: string
   overallStatus?: string
   webStatusText?: string
+  webDetailText?: string
   cronStatusText?: string
+  cronDetailText?: string
   customDomainStatus?: string
   customDomainError?: string
   warningLevel?: string
@@ -340,8 +372,8 @@ export function buildPrimaryAlert(params: {
 
   if (params.overallStatus === "degraded") {
     const pendingService =
-      (params.webStatusText && params.webStatusText !== "Berjalan" && `Web: ${params.webStatusText}`) ||
-      (params.cronStatusText && params.cronStatusText !== "Berjalan" && `Cron: ${params.cronStatusText}`)
+      (params.webStatusText && params.webStatusText !== "Berjalan" && `Web: ${buildRuntimeTroubleshootingHint("web", params.webDetailText, params.webStatusText)}`) ||
+      (params.cronStatusText && params.cronStatusText !== "Berjalan" && `Cron: ${buildRuntimeTroubleshootingHint("cron", params.cronDetailText, params.cronStatusText)}`)
 
     return {
       title: "Layanan belum stabil",
@@ -413,8 +445,10 @@ export function buildSummaryAttentionItems(params: {
   storageState: CapacityState | null
   userState: CapacityState | null
   webStatusText?: string
+  webDetailText?: string
   webHealthStatus?: string
   cronStatusText?: string
+  cronDetailText?: string
   cronHealthStatus?: string
   customDomainStatus?: string
   customDomainError?: string
@@ -452,13 +486,13 @@ export function buildSummaryAttentionItems(params: {
   if (params.webHealthStatus && params.webHealthStatus !== "healthy") {
     items.push({
       title: "Layanan web perlu diperiksa",
-      description: params.webStatusText ? `Status web saat ini: ${params.webStatusText}.` : "Layanan web belum melaporkan kondisi sehat.",
+      description: buildRuntimeTroubleshootingHint("web", params.webDetailText, params.webStatusText),
       tone: "critical",
     })
   } else if (params.webStatusText && params.webStatusText !== "Berjalan") {
     items.push({
       title: "Layanan web perlu diperiksa",
-      description: `Status web saat ini: ${params.webStatusText}.`,
+      description: buildRuntimeTroubleshootingHint("web", params.webDetailText, params.webStatusText),
       tone: "critical",
     })
   }
@@ -466,13 +500,13 @@ export function buildSummaryAttentionItems(params: {
   if (params.cronHealthStatus && params.cronHealthStatus !== "healthy") {
     items.push({
       title: "Cron belum sehat",
-      description: params.cronStatusText ? `Status cron saat ini: ${params.cronStatusText}.` : "Cron belum melaporkan kondisi sehat.",
+      description: buildRuntimeTroubleshootingHint("cron", params.cronDetailText, params.cronStatusText),
       tone: "warning",
     })
   } else if (params.cronStatusText && params.cronStatusText !== "Berjalan") {
     items.push({
       title: "Cron belum sehat",
-      description: `Status cron saat ini: ${params.cronStatusText}.`,
+      description: buildRuntimeTroubleshootingHint("cron", params.cronDetailText, params.cronStatusText),
       tone: "warning",
     })
   }

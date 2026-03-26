@@ -44,6 +44,7 @@ func (h Handler) HandleHealthCheckSweepTask(ctx context.Context, _ *asynq.Task) 
 		}
 
 		previousHealth := strings.TrimSpace(item.Runtime.HealthStatus)
+		previousHealthError := strings.TrimSpace(item.Runtime.LastHealthError)
 		newHealth := mapOverallStatusToHealth(status.OverallStatus)
 
 		// Auto-restart stopped or crashed containers.
@@ -61,12 +62,13 @@ func (h Handler) HandleHealthCheckSweepTask(ctx context.Context, _ *asynq.Task) 
 			continue
 		}
 
-		// Update health status if changed.
-		if newHealth != previousHealth {
-			healthError := status.LastError
-			if newHealth == "healthy" {
-				healthError = ""
-			}
+		healthError := status.LastError
+		if newHealth == "healthy" {
+			healthError = ""
+		}
+
+		// Update stored health state whenever the status or explanatory detail changes.
+		if newHealth != previousHealth || healthError != previousHealthError {
 			_ = h.Store.UpdateSiteRuntimeHealth(ctx, item.Site.ID, newHealth, healthError)
 
 			if newHealth == "degraded" || newHealth == "failed" {

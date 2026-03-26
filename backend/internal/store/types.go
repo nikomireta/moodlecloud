@@ -81,6 +81,7 @@ type Site struct {
 	CronMemoryMiB     int                `json:"cron_memory_mib"`
 	ActivatedAt       *time.Time         `json:"activated_at,omitempty"`
 	RuntimeHealth     string             `json:"runtime_health,omitempty"`
+	RuntimeLastError  string             `json:"runtime_last_error,omitempty"`
 	Usage             *SiteUsageSnapshot `json:"usage,omitempty"`
 	CreatedAt         time.Time          `json:"created_at"`
 	UpdatedAt         time.Time          `json:"updated_at"`

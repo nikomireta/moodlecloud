@@ -98,6 +98,7 @@ export type SiteSummary = {
   provisioning_step: string
   last_error: string
   runtime_health?: string
+  runtime_last_error?: string
   users_active_limit: number
   storage_bytes_limit: number
   usage?: SiteUsageSnapshot | null
@@ -658,6 +659,7 @@ export type SiteRuntimeService = {
   started_at?: string | null
   finished_at?: string | null
   status_text: string
+  detail_text?: string
 }
 
 export type SiteRuntimeStatus = {
