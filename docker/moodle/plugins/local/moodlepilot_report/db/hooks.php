@@ -18,6 +18,10 @@ defined('MOODLE_INTERNAL') || die();
 
 $callbacks = [
     [
+        'hook' => \core\hook\output\before_standard_top_of_body_html_generation::class,
+        'callback' => \local_moodlepilot_report\hook_callbacks::class . '::before_standard_top_of_body_html_generation',
+    ],
+    [
         'hook' => \core_files\hook\before_file_created::class,
         'callback' => \local_moodlepilot_report\hook_listener::class . '::before_file_created',
         'priority' => 1000,

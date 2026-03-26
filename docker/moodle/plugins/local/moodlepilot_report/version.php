@@ -17,7 +17,7 @@
 defined('MOODLE_INTERNAL') || die();
 
 $plugin->component = 'local_moodlepilot_report';
-$plugin->version = 2026032600;
+$plugin->version = 2026032603;
 $plugin->requires = 2022041900;
-$plugin->release = '0.6.4';
+$plugin->release = '0.6.7';
 $plugin->maturity = MATURITY_ALPHA;

@@ -697,6 +697,11 @@ export type SitePlanChangeResponse = MessageResponse & {
   usage?: SiteUsageSnapshot | null
 }
 
+export type SiteAdminAccessLinkResponse = MessageResponse & {
+  login_url: string
+  expires_at: string
+}
+
 export type SitePlanChangesResponse = {
   changes: SitePlanChange[]
 }
@@ -1131,6 +1136,12 @@ export const api = {
       body: JSON.stringify({
         plan_code: input.planCode,
       }),
+    })
+  },
+
+  issueSiteAdminAccessLink(siteID: string) {
+    return apiFetch<SiteAdminAccessLinkResponse>(`/sites/${encodeURIComponent(siteID)}/admin-access-link`, {
+      method: "POST",
     })
   },
 

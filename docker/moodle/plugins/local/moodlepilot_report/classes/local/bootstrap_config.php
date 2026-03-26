@@ -106,6 +106,13 @@ class bootstrap_config {
         return rtrim(self::api_base_url(), '/') . '/v1/internal/moodle/report/quota';
     }
 
+    public static function admin_access_redeem_endpoint(): string {
+        if (self::api_base_url() === '') {
+            return '';
+        }
+        return rtrim(self::api_base_url(), '/') . '/v1/internal/moodle/admin-access/redeem';
+    }
+
     public static function plugin_version(): string {
         global $CFG;
 
@@ -156,6 +163,7 @@ class bootstrap_config {
             'tracking_rollup_v1',
             'sync_journal_v1',
             'local_reports_v1',
+            'admin_access_v1',
         ];
     }
 

@@ -3,6 +3,7 @@
 import { use, useEffect, useRef, useState } from "react"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
+import { toast } from "sonner"
 import { ProtectedRoute } from "@/components/auth/protected-route"
 import { Header } from "@/components/layout/header"
 import { Footer } from "@/components/layout/footer"
@@ -26,6 +27,7 @@ import {
   type SiteSettingsResponse,
   type SiteUsageSnapshot,
 } from "@/lib/api"
+import { openSiteAdminAccessLink } from "@/lib/site-admin-access"
 import { buildSiteURL, siteHostFromURL } from "@/lib/site-url"
 import {
   runtimeStatusBadge,
@@ -48,6 +50,7 @@ export default function SiteDetailPage({ params }: { params: Promise<{ subdomain
   const [runtimeError, setRuntimeError] = useState("")
   const [activeTab, setActiveTab] = useState("ringkasan")
   const [planUpgradeOpen, setPlanUpgradeOpen] = useState(false)
+  const [adminAccessPending, setAdminAccessPending] = useState(false)
   const previousPendingRef = useRef(false)
 
   const loadSiteContext = async (siteSubdomain: string) => {
@@ -281,6 +284,22 @@ export default function SiteDetailPage({ params }: { params: Promise<{ subdomain
     applySiteContext(context)
   }
 
+  const handleAdminAccess = async () => {
+    if (!siteData || adminAccessPending) {
+      return
+    }
+
+    setAdminAccessPending(true)
+    try {
+      const response = await openSiteAdminAccessLink(siteData.id)
+      toast.success(response.message)
+    } catch (error) {
+      toast.error(isAPIError(error) ? error.message : "Gagal membuat akses admin sementara")
+    } finally {
+      setAdminAccessPending(false)
+    }
+  }
+
   const canUpgradePlan = getSelfServeUpgradeOptions(siteData?.plan_code).length > 0
 
   return (
@@ -360,6 +379,12 @@ export default function SiteDetailPage({ params }: { params: Promise<{ subdomain
                         Buka Situs
                       </Button>
                     </Link>
+                    {siteData?.status === "active" ? (
+                      <Button variant="outline" onClick={() => void handleAdminAccess()} disabled={!siteData || adminAccessPending}>
+                        {adminAccessPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                        Masuk sebagai admin
+                      </Button>
+                    ) : null}
                   </div>
                 </div>
 

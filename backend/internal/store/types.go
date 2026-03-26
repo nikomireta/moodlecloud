@@ -177,6 +177,18 @@ type SitePlanChange struct {
 	CreatedAt    time.Time `json:"created_at"`
 }
 
+type SiteAdminAccessToken struct {
+	ID             uuid.UUID  `json:"id"`
+	SiteID         uuid.UUID  `json:"site_id"`
+	OwnerUserID    uuid.UUID  `json:"owner_user_id"`
+	TargetUsername string     `json:"target_username"`
+	TargetEmail    string     `json:"target_email"`
+	TokenHash      string     `json:"-"`
+	ExpiresAt      time.Time  `json:"expires_at"`
+	UsedAt         *time.Time `json:"used_at,omitempty"`
+	CreatedAt      time.Time  `json:"created_at"`
+}
+
 type SiteBackupSettings struct {
 	SiteID        uuid.UUID `json:"site_id"`
 	Enabled       bool      `json:"enabled"`
@@ -318,6 +330,15 @@ type CreateSitePlanChangeParams struct {
 	ToPlanCode   string
 	Status       string
 	AppliedAt    time.Time
+}
+
+type CreateSiteAdminAccessTokenParams struct {
+	SiteID         uuid.UUID
+	OwnerUserID    uuid.UUID
+	TargetUsername string
+	TargetEmail    string
+	TokenHash      string
+	ExpiresAt      time.Time
 }
 
 type UpsertSiteReportConnectionParams struct {

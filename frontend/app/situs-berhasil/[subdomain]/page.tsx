@@ -2,6 +2,7 @@
 
 import { use, useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
+import { toast } from "sonner"
 import { Header } from "@/components/layout/header"
 import { Footer } from "@/components/layout/footer"
 import { Button } from "@/components/ui/button"
@@ -18,10 +19,12 @@ import {
   BookOpen,
   Users,
   Settings,
+  Loader2,
 } from "lucide-react"
 import Link from "next/link"
 import { ProtectedRoute } from "@/components/auth/protected-route"
-import { api } from "@/lib/api"
+import { api, isAPIError } from "@/lib/api"
+import { openSiteAdminAccessLink } from "@/lib/site-admin-access"
 import { buildAdminURL, buildSiteURL } from "@/lib/site-url"
 
 export default function SitusBerhasilPage({
@@ -32,9 +35,11 @@ export default function SitusBerhasilPage({
   const { subdomain } = use(params)
   const router = useRouter()
   const [copied, setCopied] = useState<string | null>(null)
+  const [siteID, setSiteID] = useState("")
   const [siteUrl, setSiteUrl] = useState(buildSiteURL(subdomain))
   const [adminUrl, setAdminUrl] = useState(buildAdminURL(subdomain))
   const [adminUsername, setAdminUsername] = useState("admin")
+  const [adminAccessPending, setAdminAccessPending] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -54,6 +59,7 @@ export default function SitusBerhasilPage({
         setSiteUrl(response.site.site_url)
         setAdminUrl(response.site.admin_url)
         setAdminUsername(response.site.moodle_username || "admin")
+        setSiteID(response.site.id)
       } catch (error) {
         console.error("failed to load site success data", error)
       }
@@ -70,6 +76,22 @@ export default function SitusBerhasilPage({
     navigator.clipboard.writeText(text)
     setCopied(id)
     setTimeout(() => setCopied(null), 2000)
+  }
+
+  const handleAdminAccess = async () => {
+    if (!siteID || adminAccessPending) {
+      return
+    }
+
+    setAdminAccessPending(true)
+    try {
+      const response = await openSiteAdminAccessLink(siteID)
+      toast.success(response.message)
+    } catch (error) {
+      toast.error(isAPIError(error) ? error.message : "Gagal membuat akses admin sementara")
+    } finally {
+      setAdminAccessPending(false)
+    }
   }
 
   return (
@@ -124,6 +146,10 @@ export default function SitusBerhasilPage({
                       <ExternalLink className="ml-2 h-4 w-4" />
                     </Button>
                   </Link>
+                  <Button variant="outline" size="sm" disabled={!siteID || adminAccessPending} onClick={() => void handleAdminAccess()}>
+                    {adminAccessPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Key className="mr-2 h-4 w-4" />}
+                    Masuk sebagai admin
+                  </Button>
                 </div>
               </div>
             </CardContent>
@@ -187,7 +213,8 @@ export default function SitusBerhasilPage({
                 <p className="text-xs text-muted-foreground">
                   <strong className="text-foreground">Penting:</strong> Password awal tidak
                   ditampilkan di halaman ini. Gunakan detail yang dikirim ke email administrator
-                  untuk login pertama kali dan segera ubah password setelah masuk.
+                  untuk login pertama kali dan segera ubah password setelah masuk. Jika nanti lupa
+                  password, gunakan tombol <strong className="text-foreground">Masuk sebagai admin</strong> untuk akses pemulihan singkat.
                 </p>
               </div>
             </CardContent>

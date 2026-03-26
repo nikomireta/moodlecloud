@@ -10,7 +10,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import { MoreHorizontal, Globe, Clock, Users, Play, RotateCcw, Square, Database, Loader2 } from "lucide-react"
+import { MoreHorizontal, Globe, Clock, Users, Play, RotateCcw, Square, Database, Loader2, KeyRound } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { buildSiteHost, buildSiteURL } from "@/lib/site-url"
@@ -33,7 +33,9 @@ interface SiteCardProps {
   lastActivity?: string
   viewMode?: "grid" | "list"
   pendingRuntimeAction?: RuntimeAction | null
+  pendingAdminAccess?: boolean
   onRuntimeAction?: (action: RuntimeAction) => void
+  onAdminAccess?: () => void
 }
 
 type IndicatorTone = "success" | "warning" | "danger" | "muted"
@@ -212,7 +214,9 @@ export function SiteCard({
   lastActivity,
   viewMode = "grid",
   pendingRuntimeAction = null,
+  pendingAdminAccess = false,
   onRuntimeAction,
+  onAdminAccess,
 }: SiteCardProps) {
   const router = useRouter()
   const resolvedSiteUrl = siteUrl ?? buildSiteURL(subdomain)
@@ -233,6 +237,11 @@ export function SiteCard({
   const handleRuntimeAction = (action: RuntimeAction) => {
     if (!id || !onRuntimeAction || isRuntimeActionPending) return
     onRuntimeAction(action)
+  }
+
+  const handleAdminAccess = () => {
+    if (!id || !onAdminAccess || pendingAdminAccess) return
+    onAdminAccess()
   }
 
   return (
@@ -278,17 +287,22 @@ export function SiteCard({
                   <MoreHorizontal className="h-4 w-4" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
+                <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={handleAdminAccess} disabled={pendingAdminAccess}>
+                  {pendingAdminAccess ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <KeyRound className="mr-2 h-4 w-4" />}
+                  Masuk sebagai admin
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
                 <DropdownMenuItem
                   onClick={() => handleRuntimeAction("start")}
-                  disabled={isRuntimeActionPending}
+                  disabled={isRuntimeActionPending || pendingAdminAccess}
                 >
                   <Play className="mr-2 h-4 w-4" />
                   Start
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   onClick={() => handleRuntimeAction("restart")}
-                  disabled={isRuntimeActionPending}
+                  disabled={isRuntimeActionPending || pendingAdminAccess}
                 >
                   <RotateCcw className="mr-2 h-4 w-4" />
                   Restart
@@ -296,7 +310,7 @@ export function SiteCard({
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
                   onClick={() => handleRuntimeAction("stop")}
-                  disabled={isRuntimeActionPending}
+                  disabled={isRuntimeActionPending || pendingAdminAccess}
                   className="text-destructive"
                 >
                   <Square className="mr-2 h-4 w-4" />

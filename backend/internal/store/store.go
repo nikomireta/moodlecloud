@@ -18,9 +18,11 @@ type Store struct {
 }
 
 var (
-	ErrNotFound         = errors.New("not found")
-	ErrConflict         = errors.New("conflict")
-	ErrCapacityExceeded = errors.New("host capacity exceeded")
+	ErrNotFound                    = errors.New("not found")
+	ErrConflict                    = errors.New("conflict")
+	ErrCapacityExceeded            = errors.New("host capacity exceeded")
+	ErrSiteAdminAccessTokenExpired = errors.New("site admin access token expired")
+	ErrSiteAdminAccessTokenUsed    = errors.New("site admin access token already used")
 )
 
 func Open(ctx context.Context, databaseURL string) (*Store, error) {

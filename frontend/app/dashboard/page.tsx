@@ -16,7 +16,9 @@ import Link from "next/link"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { ProtectedRoute } from "@/components/auth/protected-route"
 import { useRuntimeActions } from "@/components/providers/runtime-actions-provider"
-import { api, type SiteSummary } from "@/lib/api"
+import { toast } from "sonner"
+import { api, isAPIError, type SiteSummary } from "@/lib/api"
+import { openSiteAdminAccessLink } from "@/lib/site-admin-access"
 import { siteHostFromURL } from "@/lib/site-url"
 
 type DashboardSite = {
@@ -151,6 +153,7 @@ export default function DashboardPage() {
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid")
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("semua")
   const [visibleCount, setVisibleCount] = useState(ITEMS_PER_PAGE)
+  const [pendingAdminAccess, setPendingAdminAccess] = useState<Record<string, boolean>>({})
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const previousPendingSiteIDsRef = useRef<string[]>([])
 
@@ -253,6 +256,26 @@ export default function DashboardPage() {
     nonaktif: "Nonaktif",
     gagal: "Gagal",
   }
+
+  const handleAdminAccess = useCallback(async (siteID: string) => {
+    setPendingAdminAccess((current) => ({ ...current, [siteID]: true }))
+    try {
+      const response = await openSiteAdminAccessLink(siteID)
+      toast.success(response.message)
+    } catch (error) {
+      toast.error(isAPIError(error) ? error.message : "Gagal membuat akses admin sementara")
+    } finally {
+      setPendingAdminAccess((current) => {
+        if (!current[siteID]) {
+          return current
+        }
+
+        const next = { ...current }
+        delete next[siteID]
+        return next
+      })
+    }
+  }, [])
 
   return (
     <ProtectedRoute>
@@ -383,6 +406,8 @@ export default function DashboardPage() {
                     lastActivity={site.lastActivity}
                     viewMode={viewMode}
                     pendingRuntimeAction={getPendingAction(site.id)}
+                    pendingAdminAccess={pendingAdminAccess[site.id] === true}
+                    onAdminAccess={() => void handleAdminAccess(site.id)}
                     onRuntimeAction={(action) => {
                       void runRuntimeAction(site.id, action).catch(() => {
                         // Keep dashboard runtime actions lightweight for now.

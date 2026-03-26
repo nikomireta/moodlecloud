@@ -90,6 +90,7 @@ func (s *Server) Router() http.Handler {
 
 		r.Group(func(r chi.Router) {
 			r.Use(internalRateLimit)
+			r.Post("/internal/moodle/admin-access/redeem", s.handleRedeemSiteAdminAccess)
 			r.Post("/internal/moodle/report/bootstrap", s.handleBootstrapSiteReportPlugin)
 			r.Post("/internal/moodle/report/connect", s.handleConnectSiteReportPlugin)
 			r.Post("/internal/moodle/report/ingest", s.handleIngestSiteReportSnapshot)
@@ -130,6 +131,7 @@ func (s *Server) Router() http.Handler {
 			r.Get("/sites/{siteID}/usage", s.handleGetSiteUsage)
 			r.Get("/sites/{siteID}/plan-changes", s.handleListSitePlanChanges)
 			r.Post("/sites/{siteID}/plan-change", s.handleChangeSitePlan)
+			r.Post("/sites/{siteID}/admin-access-link", s.handleIssueSiteAdminAccessLink)
 			r.Get("/sites/{siteID}/provisioning", s.handleGetProvisioningBySiteID)
 			r.Get("/sites/{siteID}/runtime", s.handleGetSiteRuntime)
 			r.Get("/sites/{siteID}/report-connection", s.handleGetSiteReportConnection)
