@@ -3,7 +3,6 @@ package httpapi
 import (
 	"errors"
 	"net/http"
-	"net/url"
 	"strings"
 	"time"
 
@@ -23,9 +22,11 @@ const (
 )
 
 type siteAdminAccessLinkResponse struct {
-	LoginURL  string `json:"login_url"`
-	ExpiresAt string `json:"expires_at"`
-	Message   string `json:"message"`
+	LoginURL    string `json:"login_url"`
+	AccessToken string `json:"access_token"`
+	LoginMethod string `json:"login_method"`
+	ExpiresAt   string `json:"expires_at"`
+	Message     string `json:"message"`
 }
 
 type siteAdminAccessRedeemRequest struct {
@@ -97,7 +98,7 @@ func (s *Server) handleIssueSiteAdminAccessLink(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	loginURL := buildSiteAdminAccessLoginURL(s.cfg, site, rawToken)
+	loginURL := buildSiteAdminAccessLoginURL(s.cfg, site)
 	if strings.TrimSpace(loginURL) == "" {
 		writeError(w, http.StatusConflict, "URL situs belum siap untuk akses admin")
 		return
@@ -117,9 +118,11 @@ func (s *Server) handleIssueSiteAdminAccessLink(w http.ResponseWriter, r *http.R
 	}
 
 	writeJSON(w, http.StatusOK, siteAdminAccessLinkResponse{
-		LoginURL:  loginURL,
-		ExpiresAt: expiresAt.Format(timeRFC3339UTC),
-		Message:   "Link akses admin siap digunakan selama 5 menit dan hanya berlaku sekali.",
+		LoginURL:    loginURL,
+		AccessToken: rawToken,
+		LoginMethod: "post",
+		ExpiresAt:   expiresAt.Format(timeRFC3339UTC),
+		Message:     "Link akses admin siap digunakan selama 5 menit dan hanya berlaku sekali.",
 	})
 }
 
@@ -149,8 +152,8 @@ func (s *Server) handleRedeemSiteAdminAccess(w http.ResponseWriter, r *http.Requ
 		writeError(w, http.StatusConflict, "Situs tidak aktif untuk akses admin")
 		return
 	}
-	if !provisioning.ValidateReportBootstrapToken(s.cfg.SiteRuntimeSecret, site.ID.String(), req.BootstrapToken) {
-		writeError(w, http.StatusUnauthorized, "Bootstrap token tidak valid")
+	if err := s.authorizeSiteAdminAccessRedeem(r, site, strings.TrimSpace(req.BootstrapToken)); err != nil {
+		writeError(w, http.StatusUnauthorized, err.Error())
 		return
 	}
 
@@ -192,7 +195,7 @@ func siteReportConnectionHasCapability(connection store.SiteReportConnection, ca
 	return false
 }
 
-func buildSiteAdminAccessLoginURL(cfg config.Config, site store.Site, token string) string {
+func buildSiteAdminAccessLoginURL(cfg config.Config, site store.Site) string {
 	baseURL := strings.TrimRight(strings.TrimSpace(site.SiteURL), "/")
 	if baseURL == "" {
 		fallbackSiteURL, _ := provisioning.BuildSiteURLs(cfg, site.Subdomain)
@@ -201,5 +204,40 @@ func buildSiteAdminAccessLoginURL(cfg config.Config, site store.Site, token stri
 	if baseURL == "" {
 		return ""
 	}
-	return baseURL + "/local/moodlepilot_report/admin_access.php?t=" + url.QueryEscape(strings.TrimSpace(token))
+	return baseURL + "/local/moodlepilot_report/admin_access.php"
+}
+
+func (s *Server) authorizeSiteAdminAccessRedeem(r *http.Request, site store.Site, bootstrapToken string) error {
+	if ingestToken := reportIngestTokenFromRequest(r); ingestToken != "" {
+		connection, err := s.store.GetSiteReportConnectionByIngestTokenHash(r.Context(), auth.HashToken(ingestToken))
+		if err == nil {
+			if connection.SiteID == site.ID {
+				return nil
+			}
+			return errors.New("Ingest token tidak cocok dengan situs")
+		}
+		if !errors.Is(err, store.ErrNotFound) {
+			return errors.New("Gagal memverifikasi ingest token")
+		}
+	}
+
+	runtimeMetadata, err := s.store.GetSiteRuntimeMetadata(r.Context(), site.ID)
+	if err != nil && !errors.Is(err, store.ErrNotFound) {
+		return errors.New("Gagal memverifikasi bootstrap token")
+	}
+	if provisioning.ValidateSiteReportBootstrapToken(
+		s.cfg.SiteRuntimeSecret,
+		site,
+		func() *store.SiteRuntimeMetadata {
+			if err == nil {
+				return &runtimeMetadata
+			}
+			return nil
+		}(),
+		bootstrapToken,
+	) {
+		return nil
+	}
+
+	return errors.New("Bootstrap token tidak valid")
 }

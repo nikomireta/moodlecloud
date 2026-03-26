@@ -19,7 +19,7 @@ func (s *Store) GetSiteByID(ctx context.Context, siteID uuid.UUID) (Site, error)
 			s.id, s.owner_user_id, s.name, s.subdomain, s.plan_code, s.region, s.status, s.site_url, s.admin_url,
 			s.admin_name, s.admin_email, s.moodle_username, s.provisioning_step, s.last_error,
 			s.users_active_limit, s.storage_bytes_limit, s.web_cpu_millicores, s.web_memory_mib,
-			s.cron_cpu_millicores, s.cron_memory_mib, s.activated_at, s.created_at, s.updated_at,
+			s.cron_cpu_millicores, s.cron_memory_mib, s.report_bootstrap_token, s.activated_at, s.created_at, s.updated_at,
 			COALESCE(m.health_status, '') as runtime_health,
 			COALESCE(m.last_health_error, '') as runtime_last_error
 		FROM sites s
@@ -29,7 +29,7 @@ func (s *Store) GetSiteByID(ctx context.Context, siteID uuid.UUID) (Site, error)
 		&site.ID, &site.OwnerUserID, &site.Name, &site.Subdomain, &site.PlanCode, &site.Region, &site.Status, &site.SiteURL, &site.AdminURL,
 		&site.AdminName, &site.AdminEmail, &site.MoodleUsername, &site.ProvisioningStep, &site.LastError,
 		&site.UsersActiveLimit, &site.StorageBytesLimit, &site.WebCPUMillicores, &site.WebMemoryMiB,
-		&site.CronCPUMillicores, &site.CronMemoryMiB, &site.ActivatedAt, &site.CreatedAt, &site.UpdatedAt,
+		&site.CronCPUMillicores, &site.CronMemoryMiB, &site.ReportBootstrapToken, &site.ActivatedAt, &site.CreatedAt, &site.UpdatedAt,
 		&site.RuntimeHealth, &site.RuntimeLastError,
 	)
 	if err != nil {

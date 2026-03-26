@@ -67,9 +67,9 @@ class tracking_repository {
             $record->session_starts = (int)$record->session_starts + $sessionstarts;
             $record->first_access = self::min_timestamp((int)$record->first_access, $observedat);
             $record->last_access = max((int)$record->last_access, $observedat);
-            $record->useragent = $details['useragent'];
+            $record->useragent = '';
             $record->userlang = $details['userlang'];
-            $record->userip = $details['userip'];
+            $record->userip = '';
             $record->timemodified = $observedat;
             $DB->update_record('local_mpilot_rpt_detail', $record);
         } else {
@@ -86,9 +86,9 @@ class tracking_repository {
                 'session_starts' => $sessionstarts,
                 'first_access' => $observedat,
                 'last_access' => $observedat,
-                'useragent' => $details['useragent'],
+                'useragent' => '',
                 'userlang' => $details['userlang'],
-                'userip' => $details['userip'],
+                'userip' => '',
                 'rolled_up_at' => null,
                 'timecreated' => $observedat,
                 'timemodified' => $observedat,
@@ -167,9 +167,9 @@ class tracking_repository {
             $existing->time_spent = (int)$existing->time_spent + (int)$detail->active_seconds;
             $existing->first_access = self::min_timestamp((int)$existing->first_access, (int)$detail->first_access);
             $existing->last_access = max((int)$existing->last_access, (int)$detail->last_access);
-            $existing->useragent = trim((string)$detail->useragent);
+            $existing->useragent = '';
             $existing->userlang = trim((string)$detail->userlang);
-            $existing->userip = trim((string)$detail->userip);
+            $existing->userip = '';
             $existing->timemodified = max((int)$detail->last_access, time());
             $DB->update_record('local_mpilot_rpt_track', $existing);
             return (int)$existing->id;
@@ -186,9 +186,9 @@ class tracking_repository {
             'time_spent' => (int)$detail->active_seconds,
             'first_access' => (int)$detail->first_access,
             'last_access' => (int)$detail->last_access,
-            'useragent' => trim((string)$detail->useragent),
+            'useragent' => '',
             'userlang' => trim((string)$detail->userlang),
-            'userip' => trim((string)$detail->userip),
+            'userip' => '',
             'timecreated' => (int)$detail->timecreated,
             'timemodified' => (int)$detail->last_access,
         ], true);
@@ -223,13 +223,11 @@ class tracking_repository {
     }
 
     private static function request_details(): array {
-        $useragent = substr(trim((string)($_SERVER['HTTP_USER_AGENT'] ?? '')), 0, 255);
-        $userip = substr(trim((string)($_SERVER['REMOTE_ADDR'] ?? '')), 0, 64);
         $userlang = substr(trim((string)($_SERVER['HTTP_ACCEPT_LANGUAGE'] ?? '')), 0, 32);
 
         return [
-            'useragent' => $useragent,
-            'userip' => $userip,
+            'useragent' => '',
+            'userip' => '',
             'userlang' => $userlang,
         ];
     }

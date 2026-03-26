@@ -34,15 +34,15 @@ func TestBuildSiteAdminAccessLoginURL(t *testing.T) {
 		SiteURL:   "http://kelas-a.example.test/",
 	}
 
-	got := buildSiteAdminAccessLoginURL(cfg, site, "abc123")
-	want := "http://kelas-a.example.test/local/moodlepilot_report/admin_access.php?t=abc123"
+	got := buildSiteAdminAccessLoginURL(cfg, site)
+	want := "http://kelas-a.example.test/local/moodlepilot_report/admin_access.php"
 	if got != want {
 		t.Fatalf("buildSiteAdminAccessLoginURL() = %q, want %q", got, want)
 	}
 
 	site.SiteURL = ""
-	got = buildSiteAdminAccessLoginURL(cfg, site, "abc123")
-	want = "http://kelas-a.lvh.me/local/moodlepilot_report/admin_access.php?t=abc123"
+	got = buildSiteAdminAccessLoginURL(cfg, site)
+	want = "http://kelas-a.lvh.me/local/moodlepilot_report/admin_access.php"
 	if got != want {
 		t.Fatalf("buildSiteAdminAccessLoginURL() fallback = %q, want %q", got, want)
 	}

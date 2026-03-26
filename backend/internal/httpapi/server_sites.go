@@ -75,17 +75,23 @@ func (s *Server) handleCreateSite(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "Email administrator tidak valid")
 		return
 	}
+	reportBootstrapToken, err := auth.NewOpaqueToken()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
 
 	site, job, _, err := s.store.CreateSite(r.Context(), store.CreateSiteParams{
-		OwnerUserID: user.ID,
-		Name:        strings.TrimSpace(req.Name),
-		Subdomain:   req.Subdomain,
-		PlanCode:    req.PlanCode,
-		Region:      store.SelfServeDefaultRegion,
-		AdminName:   strings.TrimSpace(req.AdminName),
-		AdminEmail:  auth.SanitizeEmail(req.AdminEmail),
-		SiteURL:     siteURLForSubdomain(s.cfg, req.Subdomain),
-		AdminURL:    adminURLForSubdomain(s.cfg, req.Subdomain),
+		OwnerUserID:          user.ID,
+		Name:                 strings.TrimSpace(req.Name),
+		Subdomain:            req.Subdomain,
+		PlanCode:             req.PlanCode,
+		Region:               store.SelfServeDefaultRegion,
+		AdminName:            strings.TrimSpace(req.AdminName),
+		AdminEmail:           auth.SanitizeEmail(req.AdminEmail),
+		SiteURL:              siteURLForSubdomain(s.cfg, req.Subdomain),
+		AdminURL:             adminURLForSubdomain(s.cfg, req.Subdomain),
+		ReportBootstrapToken: reportBootstrapToken,
 	}, s.cfg.ProvisioningRuntimeMode, plan, store.HostCapacityPolicy{
 		StorageBytesLimit:  s.cfg.HostStorageBudgetBytes,
 		CPUMillicoresLimit: s.cfg.HostCPUMillicoresBudget,

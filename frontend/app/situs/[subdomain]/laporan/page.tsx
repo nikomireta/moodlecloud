@@ -625,7 +625,7 @@ export default function SiteFullReportPage({ params }: { params: Promise<{ subdo
                                         {(payload?.at_risk_users?.length ?? 0) > 0 ? (
                                           <div className="space-y-3 text-sm">
                                             {payload!.at_risk_users.slice(0, 3).map((row, index) => (
-                                              <div key={`${row.email}-${index}`} className="rounded-lg border bg-muted/20 p-3">
+                                              <div key={`${row.user_name}-${row.course_name}-${index}`} className="rounded-lg border bg-muted/20 p-3">
                                                 <div className="flex items-start justify-between gap-3">
                                                   <div>
                                                     <p className="font-medium">{row.user_name}</p>

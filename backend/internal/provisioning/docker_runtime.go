@@ -1047,6 +1047,10 @@ func (r *DockerLocalRuntime) restartContainerIfNeeded(ctx context.Context, conta
 
 func (r *DockerLocalRuntime) runtimeEnv(site store.Site, metadata store.SiteRuntimeMetadata) []string {
 	dbPassword := DatabasePassword(r.cfg.SiteRuntimeSecret, site.ID.String())
+	reportBootstrapToken := strings.TrimSpace(metadata.ReportBootstrapToken)
+	if reportBootstrapToken == "" {
+		reportBootstrapToken = reportBootstrapTokenForSite(r.cfg.SiteRuntimeSecret, site)
+	}
 	return []string{
 		"MOODLE_DB_TYPE=pgsql",
 		"MOODLE_DB_HOST=postgres",
@@ -1060,7 +1064,7 @@ func (r *DockerLocalRuntime) runtimeEnv(site store.Site, metadata store.SiteRunt
 		fmt.Sprintf("MOODLEPILOT_SITE_ID=%s", site.ID.String()),
 		"MOODLEPILOT_REPORT_AUTO_AUTHORIZE=1",
 		fmt.Sprintf("MOODLEPILOT_API_BASE_URL=%s", strings.TrimRight(strings.TrimSpace(r.cfg.SiteInternalAPIBaseURL), "/")),
-		fmt.Sprintf("MOODLEPILOT_REPORT_BOOTSTRAP_TOKEN=%s", ReportBootstrapToken(r.cfg.SiteRuntimeSecret, site.ID.String())),
+		fmt.Sprintf("MOODLEPILOT_REPORT_BOOTSTRAP_TOKEN=%s", reportBootstrapToken),
 	}
 }
 

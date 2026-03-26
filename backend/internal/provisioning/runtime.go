@@ -136,15 +136,16 @@ func BuildRuntimeMetadata(cfg config.Config, site store.Site) store.SiteRuntimeM
 	databaseSlug := truncateResourceSegment(strings.ReplaceAll(resourceSlug, "-", "_"), 16)
 
 	return store.SiteRuntimeMetadata{
-		SiteID:            site.ID,
-		ImageRepository:   strings.TrimSpace(cfg.MoodleImageRepository),
-		ImageTag:          strings.TrimSpace(cfg.MoodleImageTag),
-		WebContainerName:  fmt.Sprintf("mc-web-%s", resourceName),
-		CronContainerName: fmt.Sprintf("mc-cron-%s", resourceName),
-		VolumeName:        fmt.Sprintf("mc-data-%s", resourceName),
-		DatabaseName:      fmt.Sprintf("mc_%s_%s", databaseSlug, shortID),
-		DatabaseUser:      fmt.Sprintf("mc_u_%s_%s", databaseSlug, shortID),
-		HealthStatus:      "unknown",
+		SiteID:               site.ID,
+		ImageRepository:      strings.TrimSpace(cfg.MoodleImageRepository),
+		ImageTag:             strings.TrimSpace(cfg.MoodleImageTag),
+		WebContainerName:     fmt.Sprintf("mc-web-%s", resourceName),
+		CronContainerName:    fmt.Sprintf("mc-cron-%s", resourceName),
+		VolumeName:           fmt.Sprintf("mc-data-%s", resourceName),
+		DatabaseName:         fmt.Sprintf("mc_%s_%s", databaseSlug, shortID),
+		DatabaseUser:         fmt.Sprintf("mc_u_%s_%s", databaseSlug, shortID),
+		HealthStatus:         "unknown",
+		ReportBootstrapToken: reportBootstrapTokenForSite(cfg.SiteRuntimeSecret, site),
 	}
 }
 
@@ -164,6 +165,32 @@ func ReportBootstrapToken(secret string, siteID string) string {
 func ValidateReportBootstrapToken(secret, siteID, provided string) bool {
 	expected := ReportBootstrapToken(secret, siteID)
 	return subtle.ConstantTimeCompare([]byte(strings.TrimSpace(expected)), []byte(strings.TrimSpace(provided))) == 1
+}
+
+func reportBootstrapTokenForSite(secret string, site store.Site) string {
+	if token := strings.TrimSpace(site.ReportBootstrapToken); token != "" {
+		return token
+	}
+	return ReportBootstrapToken(secret, site.ID.String())
+}
+
+func ValidateSiteReportBootstrapToken(secret string, site store.Site, metadata *store.SiteRuntimeMetadata, provided string) bool {
+	provided = strings.TrimSpace(provided)
+	if provided == "" {
+		return false
+	}
+
+	expected := ""
+	if metadata != nil {
+		expected = strings.TrimSpace(metadata.ReportBootstrapToken)
+	}
+	if expected == "" {
+		expected = strings.TrimSpace(site.ReportBootstrapToken)
+	}
+	if expected == "" {
+		expected = ReportBootstrapToken(secret, site.ID.String())
+	}
+	return subtle.ConstantTimeCompare([]byte(expected), []byte(provided)) == 1
 }
 
 func ReportConnectToken(secret string, siteID string) string {

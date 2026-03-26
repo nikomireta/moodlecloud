@@ -160,13 +160,11 @@ class analytics_repository {
     }
 
     private static function request_details(): array {
-        $useragent = substr(trim((string)($_SERVER['HTTP_USER_AGENT'] ?? '')), 0, 255);
-        $userip = substr(trim((string)($_SERVER['REMOTE_ADDR'] ?? '')), 0, 64);
         $userlang = substr(trim((string)($_SERVER['HTTP_ACCEPT_LANGUAGE'] ?? '')), 0, 32);
 
         return [
-            'useragent' => $useragent,
-            'userip' => $userip,
+            'useragent' => '',
+            'userip' => '',
             'userlang' => $userlang,
         ];
     }
@@ -195,12 +193,7 @@ class analytics_repository {
     }
 
     private static function build_metadata(\core\event\base $event, array $overrides): string {
-        $payload = [
-            'contextinstanceid' => (int)($event->contextinstanceid ?? 0),
-            'contextid' => (int)($event->contextid ?? 0),
-            'other' => $event->other ?? [],
-            'overrides' => $overrides,
-        ];
+        $payload = ['redacted' => true];
 
         $json = json_encode($payload);
         if ($json === false) {
@@ -226,8 +219,8 @@ class analytics_repository {
             'objectid' => (int)($event->objectid ?? 0) ?: null,
             'contextlevel' => (int)($event->contextlevel ?? 0) ?: null,
             'metadata' => $metadata,
-            'useragent' => $details['useragent'],
-            'userip' => $details['userip'],
+            'useragent' => '',
+            'userip' => '',
             'timecreated' => $timecreated,
         ];
 

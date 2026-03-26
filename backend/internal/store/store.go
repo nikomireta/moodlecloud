@@ -124,27 +124,28 @@ func (s *Store) CreateSite(ctx context.Context, params CreateSiteParams, runtime
 
 	now := time.Now().UTC()
 	site := Site{
-		ID:                uuid.New(),
-		OwnerUserID:       params.OwnerUserID,
-		Name:              params.Name,
-		Subdomain:         strings.ToLower(strings.TrimSpace(params.Subdomain)),
-		PlanCode:          params.PlanCode,
-		Region:            params.Region,
-		Status:            "pending",
-		SiteURL:           strings.TrimSpace(params.SiteURL),
-		AdminURL:          strings.TrimSpace(params.AdminURL),
-		AdminName:         params.AdminName,
-		AdminEmail:        params.AdminEmail,
-		MoodleUsername:    "admin",
-		ProvisioningStep:  "pending",
-		UsersActiveLimit:  plan.UsersActiveLimit,
-		StorageBytesLimit: plan.StorageBytesLimit,
-		WebCPUMillicores:  plan.WebCPUMillicores,
-		WebMemoryMiB:      plan.WebMemoryMiB,
-		CronCPUMillicores: plan.CronCPUMillicores,
-		CronMemoryMiB:     plan.CronMemoryMiB,
-		CreatedAt:         now,
-		UpdatedAt:         now,
+		ID:                   uuid.New(),
+		OwnerUserID:          params.OwnerUserID,
+		Name:                 params.Name,
+		Subdomain:            strings.ToLower(strings.TrimSpace(params.Subdomain)),
+		PlanCode:             params.PlanCode,
+		Region:               params.Region,
+		Status:               "pending",
+		SiteURL:              strings.TrimSpace(params.SiteURL),
+		AdminURL:             strings.TrimSpace(params.AdminURL),
+		AdminName:            params.AdminName,
+		AdminEmail:           params.AdminEmail,
+		MoodleUsername:       "admin",
+		ProvisioningStep:     "pending",
+		UsersActiveLimit:     plan.UsersActiveLimit,
+		StorageBytesLimit:    plan.StorageBytesLimit,
+		WebCPUMillicores:     plan.WebCPUMillicores,
+		WebMemoryMiB:         plan.WebMemoryMiB,
+		CronCPUMillicores:    plan.CronCPUMillicores,
+		CronMemoryMiB:        plan.CronMemoryMiB,
+		ReportBootstrapToken: strings.TrimSpace(params.ReportBootstrapToken),
+		CreatedAt:            now,
+		UpdatedAt:            now,
 	}
 	if site.SiteURL == "" {
 		site.SiteURL = fmt.Sprintf("https://%s.moodlepilot.id", site.Subdomain)
@@ -157,10 +158,10 @@ func (s *Store) CreateSite(ctx context.Context, params CreateSiteParams, runtime
 			id, owner_user_id, name, subdomain, plan_code, region, status, site_url, admin_url,
 			admin_name, admin_email, moodle_username, provisioning_step, users_active_limit,
 			storage_bytes_limit, web_cpu_millicores, web_memory_mib, cron_cpu_millicores,
-			cron_memory_mib, created_at, updated_at
+			cron_memory_mib, report_bootstrap_token, created_at, updated_at
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
-	`, site.ID, site.OwnerUserID, site.Name, site.Subdomain, site.PlanCode, site.Region, site.Status, site.SiteURL, site.AdminURL, site.AdminName, site.AdminEmail, site.MoodleUsername, site.ProvisioningStep, site.UsersActiveLimit, site.StorageBytesLimit, site.WebCPUMillicores, site.WebMemoryMiB, site.CronCPUMillicores, site.CronMemoryMiB, site.CreatedAt, site.UpdatedAt)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
+	`, site.ID, site.OwnerUserID, site.Name, site.Subdomain, site.PlanCode, site.Region, site.Status, site.SiteURL, site.AdminURL, site.AdminName, site.AdminEmail, site.MoodleUsername, site.ProvisioningStep, site.UsersActiveLimit, site.StorageBytesLimit, site.WebCPUMillicores, site.WebMemoryMiB, site.CronCPUMillicores, site.CronMemoryMiB, site.ReportBootstrapToken, site.CreatedAt, site.UpdatedAt)
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
@@ -225,17 +226,18 @@ func (s *Store) CreateSite(ctx context.Context, params CreateSiteParams, runtime
 func (s *Store) UpsertSiteRuntimeMetadata(ctx context.Context, params UpsertSiteRuntimeMetadataParams) (SiteRuntimeMetadata, error) {
 	now := time.Now().UTC()
 	metadata := SiteRuntimeMetadata{
-		SiteID:            params.SiteID,
-		ImageRepository:   strings.TrimSpace(params.ImageRepository),
-		ImageTag:          strings.TrimSpace(params.ImageTag),
-		WebContainerName:  strings.TrimSpace(params.WebContainerName),
-		CronContainerName: strings.TrimSpace(params.CronContainerName),
-		VolumeName:        strings.TrimSpace(params.VolumeName),
-		DatabaseName:      strings.TrimSpace(params.DatabaseName),
-		DatabaseUser:      strings.TrimSpace(params.DatabaseUser),
-		HealthStatus:      strings.TrimSpace(params.HealthStatus),
-		LastHealthError:   strings.TrimSpace(params.LastHealthError),
-		UpdatedAt:         now,
+		SiteID:               params.SiteID,
+		ImageRepository:      strings.TrimSpace(params.ImageRepository),
+		ImageTag:             strings.TrimSpace(params.ImageTag),
+		WebContainerName:     strings.TrimSpace(params.WebContainerName),
+		CronContainerName:    strings.TrimSpace(params.CronContainerName),
+		VolumeName:           strings.TrimSpace(params.VolumeName),
+		DatabaseName:         strings.TrimSpace(params.DatabaseName),
+		DatabaseUser:         strings.TrimSpace(params.DatabaseUser),
+		HealthStatus:         strings.TrimSpace(params.HealthStatus),
+		LastHealthError:      strings.TrimSpace(params.LastHealthError),
+		ReportBootstrapToken: strings.TrimSpace(params.ReportBootstrapToken),
+		UpdatedAt:            now,
 	}
 	if metadata.HealthStatus == "" {
 		metadata.HealthStatus = "unknown"
@@ -244,9 +246,9 @@ func (s *Store) UpsertSiteRuntimeMetadata(ctx context.Context, params UpsertSite
 	err := s.pool.QueryRow(ctx, `
 		INSERT INTO site_runtime_metadata (
 			site_id, image_repository, image_tag, web_container_name, cron_container_name, volume_name,
-			database_name, database_user, health_status, last_health_error, created_at, updated_at
+			database_name, database_user, health_status, last_health_error, report_bootstrap_token, created_at, updated_at
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $11)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $12)
 		ON CONFLICT (site_id) DO UPDATE SET
 			image_repository = EXCLUDED.image_repository,
 			image_tag = EXCLUDED.image_tag,
@@ -257,12 +259,16 @@ func (s *Store) UpsertSiteRuntimeMetadata(ctx context.Context, params UpsertSite
 			database_user = EXCLUDED.database_user,
 			health_status = EXCLUDED.health_status,
 			last_health_error = EXCLUDED.last_health_error,
+			report_bootstrap_token = CASE
+				WHEN EXCLUDED.report_bootstrap_token <> '' THEN EXCLUDED.report_bootstrap_token
+				ELSE site_runtime_metadata.report_bootstrap_token
+			END,
 			updated_at = EXCLUDED.updated_at
 		RETURNING site_id, image_repository, image_tag, web_container_name, cron_container_name, volume_name,
-		          database_name, database_user, health_status, last_health_error, last_health_checked_at, created_at, updated_at
-	`, metadata.SiteID, metadata.ImageRepository, metadata.ImageTag, metadata.WebContainerName, metadata.CronContainerName, metadata.VolumeName, metadata.DatabaseName, metadata.DatabaseUser, metadata.HealthStatus, metadata.LastHealthError, now).Scan(
+		          database_name, database_user, health_status, last_health_error, report_bootstrap_token, last_health_checked_at, created_at, updated_at
+	`, metadata.SiteID, metadata.ImageRepository, metadata.ImageTag, metadata.WebContainerName, metadata.CronContainerName, metadata.VolumeName, metadata.DatabaseName, metadata.DatabaseUser, metadata.HealthStatus, metadata.LastHealthError, metadata.ReportBootstrapToken, now).Scan(
 		&metadata.SiteID, &metadata.ImageRepository, &metadata.ImageTag, &metadata.WebContainerName, &metadata.CronContainerName, &metadata.VolumeName,
-		&metadata.DatabaseName, &metadata.DatabaseUser, &metadata.HealthStatus, &metadata.LastHealthError, &metadata.LastHealthCheckedAt, &metadata.CreatedAt, &metadata.UpdatedAt,
+		&metadata.DatabaseName, &metadata.DatabaseUser, &metadata.HealthStatus, &metadata.LastHealthError, &metadata.ReportBootstrapToken, &metadata.LastHealthCheckedAt, &metadata.CreatedAt, &metadata.UpdatedAt,
 	)
 	if err != nil {
 		return SiteRuntimeMetadata{}, fmt.Errorf("upsert site runtime metadata: %w", err)
@@ -274,12 +280,12 @@ func (s *Store) GetSiteRuntimeMetadata(ctx context.Context, siteID uuid.UUID) (S
 	var metadata SiteRuntimeMetadata
 	err := s.pool.QueryRow(ctx, `
 		SELECT site_id, image_repository, image_tag, web_container_name, cron_container_name, volume_name,
-		       database_name, database_user, health_status, last_health_error, last_health_checked_at, created_at, updated_at
+		       database_name, database_user, health_status, last_health_error, report_bootstrap_token, last_health_checked_at, created_at, updated_at
 		FROM site_runtime_metadata
 		WHERE site_id = $1
 	`, siteID).Scan(
 		&metadata.SiteID, &metadata.ImageRepository, &metadata.ImageTag, &metadata.WebContainerName, &metadata.CronContainerName, &metadata.VolumeName,
-		&metadata.DatabaseName, &metadata.DatabaseUser, &metadata.HealthStatus, &metadata.LastHealthError, &metadata.LastHealthCheckedAt, &metadata.CreatedAt, &metadata.UpdatedAt,
+		&metadata.DatabaseName, &metadata.DatabaseUser, &metadata.HealthStatus, &metadata.LastHealthError, &metadata.ReportBootstrapToken, &metadata.LastHealthCheckedAt, &metadata.CreatedAt, &metadata.UpdatedAt,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -311,7 +317,7 @@ func (s *Store) GetProvisioningContextByJobID(ctx context.Context, jobID uuid.UU
 			s.id, s.owner_user_id, s.name, s.subdomain, s.plan_code, s.region, s.status, s.site_url, s.admin_url,
 			s.admin_name, s.admin_email, s.moodle_username, s.provisioning_step, s.last_error,
 			s.users_active_limit, s.storage_bytes_limit, s.web_cpu_millicores, s.web_memory_mib,
-			s.cron_cpu_millicores, s.cron_memory_mib, s.activated_at, s.created_at, s.updated_at
+			s.cron_cpu_millicores, s.cron_memory_mib, s.report_bootstrap_token, s.activated_at, s.created_at, s.updated_at
 		FROM provisioning_jobs pj
 		JOIN sites s ON s.id = pj.site_id
 		WHERE pj.id = $1
@@ -320,7 +326,7 @@ func (s *Store) GetProvisioningContextByJobID(ctx context.Context, jobID uuid.UU
 		&site.ID, &site.OwnerUserID, &site.Name, &site.Subdomain, &site.PlanCode, &site.Region, &site.Status, &site.SiteURL, &site.AdminURL,
 		&site.AdminName, &site.AdminEmail, &site.MoodleUsername, &site.ProvisioningStep, &site.LastError,
 		&site.UsersActiveLimit, &site.StorageBytesLimit, &site.WebCPUMillicores, &site.WebMemoryMiB,
-		&site.CronCPUMillicores, &site.CronMemoryMiB, &site.ActivatedAt, &site.CreatedAt, &site.UpdatedAt,
+		&site.CronCPUMillicores, &site.CronMemoryMiB, &site.ReportBootstrapToken, &site.ActivatedAt, &site.CreatedAt, &site.UpdatedAt,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {

@@ -113,6 +113,12 @@ class bootstrap_config {
         return rtrim(self::api_base_url(), '/') . '/v1/internal/moodle/admin-access/redeem';
     }
 
+    public static function allow_insecure_internal_http(): bool {
+        global $CFG;
+
+        return !empty($CFG->moodlepilot_allow_insecure_internal_http);
+    }
+
     public static function plugin_version(): string {
         global $CFG;
 

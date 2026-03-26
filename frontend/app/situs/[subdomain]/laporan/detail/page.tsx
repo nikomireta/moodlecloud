@@ -172,11 +172,11 @@ function rowMatchesFocus(section: SiteReportSectionKey, row: unknown, focus: Sit
   switch (section) {
     case "at-risk-users": {
       const item = row as SiteReportAtRiskUserItem
-      return (!focus.userName || focus.userName === item.user_name) && (!focus.email || focus.email === item.email)
+      return !focus.userName || focus.userName === item.user_name
     }
     case "user-activity-summary": {
       const item = row as SiteReportUserActivityItem
-      return (!focus.userId || focus.userId === item.user_id) && (!focus.email || focus.email === item.email) && (!focus.userName || focus.userName === item.user_name)
+      return (!focus.userId || focus.userId === item.user_id) && (!focus.userName || focus.userName === item.user_name)
     }
     case "course-completion-summary": {
       const item = row as SiteReportCourseCompletionItem
@@ -220,7 +220,7 @@ function rowMatchesFocus(section: SiteReportSectionKey, row: unknown, focus: Sit
     }
     case "user-status": {
       const item = row as SiteReportUserStatusItem
-      return (!focus.userId || focus.userId === item.user_id) && (!focus.courseId || focus.courseId === item.course_id) && (!focus.email || focus.email === item.email) && (!focus.userName || focus.userName === item.user_name)
+      return (!focus.userId || focus.userId === item.user_id) && (!focus.courseId || focus.courseId === item.course_id) && (!focus.userName || focus.userName === item.user_name)
     }
     case "daily-trend":
     default:
@@ -237,7 +237,6 @@ function renderDetailTable(section: SiteReportSectionKey, rows: unknown[], focus
           <TableHeader>
             <TableRow>
               <TableHead>Pengguna</TableHead>
-              <TableHead>Email</TableHead>
               <TableHead>Kursus</TableHead>
               <TableHead>Status</TableHead>
               <TableHead className="text-right">Risiko</TableHead>
@@ -249,9 +248,8 @@ function renderDetailTable(section: SiteReportSectionKey, rows: unknown[], focus
             {items.map((row, index) => {
               const isFocused = rowMatchesFocus(section, row, focus)
               return (
-                <TableRow key={`${row.email}-${index}`} className={focusedRowClass(isFocused)} data-report-focus-target={isFocused || undefined}>
+                <TableRow key={`${row.user_name}-${row.course_name}-${index}`} className={focusedRowClass(isFocused)} data-report-focus-target={isFocused || undefined}>
                   <TableCell className="font-medium">{row.user_name}</TableCell>
-                  <TableCell>{row.email || "-"}</TableCell>
                   <TableCell>{row.course_name || "-"}</TableCell>
                   <TableCell>{row.status_label || "-"}</TableCell>
                   <TableCell className="text-right">
@@ -270,11 +268,11 @@ function renderDetailTable(section: SiteReportSectionKey, rows: unknown[], focus
       const items = rows as SiteReportUserActivityItem[]
       return items.length > 0 ? (
         <Table>
-          <TableHeader><TableRow><TableHead>Pengguna</TableHead><TableHead>Email</TableHead><TableHead>Role</TableHead><TableHead className="text-right">Sesi</TableHead><TableHead className="text-right">Online</TableHead><TableHead className="text-right">Submissions</TableHead><TableHead>Last Action</TableHead></TableRow></TableHeader>
+          <TableHeader><TableRow><TableHead>Pengguna</TableHead><TableHead>Role</TableHead><TableHead className="text-right">Sesi</TableHead><TableHead className="text-right">Online</TableHead><TableHead className="text-right">Submissions</TableHead><TableHead>Last Action</TableHead></TableRow></TableHeader>
           <TableBody>
             {items.map((row) => {
               const isFocused = rowMatchesFocus(section, row, focus)
-              return <TableRow key={row.user_id} className={focusedRowClass(isFocused)} data-report-focus-target={isFocused || undefined}><TableCell className="font-medium">{row.user_name}</TableCell><TableCell>{row.email || "-"}</TableCell><TableCell>{row.role_label || "-"}</TableCell><TableCell className="text-right">{row.sessions}</TableCell><TableCell className="text-right">{row.total_online_label}</TableCell><TableCell className="text-right">{row.submissions}</TableCell><TableCell>{formatReportClock(row.last_action_at)}</TableCell></TableRow>
+              return <TableRow key={row.user_id} className={focusedRowClass(isFocused)} data-report-focus-target={isFocused || undefined}><TableCell className="font-medium">{row.user_name}</TableCell><TableCell>{row.role_label || "-"}</TableCell><TableCell className="text-right">{row.sessions}</TableCell><TableCell className="text-right">{row.total_online_label}</TableCell><TableCell className="text-right">{row.submissions}</TableCell><TableCell>{formatReportClock(row.last_action_at)}</TableCell></TableRow>
             })}
           </TableBody>
         </Table>
@@ -326,11 +324,11 @@ function renderDetailTable(section: SiteReportSectionKey, rows: unknown[], focus
       const items = rows as SiteReportGradebookDetailItem[]
       return items.length > 0 ? (
         <Table>
-          <TableHeader><TableRow><TableHead>Kursus</TableHead><TableHead>Grade Item</TableHead><TableHead>Pengguna</TableHead><TableHead>Email</TableHead><TableHead className="text-right">Nilai</TableHead><TableHead>Pass/Fail</TableHead><TableHead>Graded At</TableHead></TableRow></TableHeader>
+          <TableHeader><TableRow><TableHead>Kursus</TableHead><TableHead>Grade Item</TableHead><TableHead>Pengguna</TableHead><TableHead className="text-right">Nilai</TableHead><TableHead>Pass/Fail</TableHead><TableHead>Graded At</TableHead></TableRow></TableHeader>
           <TableBody>
             {items.map((row, index) => {
               const isFocused = rowMatchesFocus(section, row, focus)
-              return <TableRow key={`${row.grade_item_id}-${row.user_id}-${index}`} className={focusedRowClass(isFocused)} data-report-focus-target={isFocused || undefined}><TableCell>{row.course_name || "-"}</TableCell><TableCell className="font-medium">{row.grade_item_name}</TableCell><TableCell>{row.user_name}</TableCell><TableCell>{row.email || "-"}</TableCell><TableCell className="text-right">{formatGradeValue(row.final_grade)}</TableCell><TableCell>{row.pass_fail}</TableCell><TableCell>{formatReportClock(row.graded_at)}</TableCell></TableRow>
+              return <TableRow key={`${row.grade_item_id}-${row.user_id}-${index}`} className={focusedRowClass(isFocused)} data-report-focus-target={isFocused || undefined}><TableCell>{row.course_name || "-"}</TableCell><TableCell className="font-medium">{row.grade_item_name}</TableCell><TableCell>{row.user_name}</TableCell><TableCell className="text-right">{formatGradeValue(row.final_grade)}</TableCell><TableCell>{row.pass_fail}</TableCell><TableCell>{formatReportClock(row.graded_at)}</TableCell></TableRow>
             })}
           </TableBody>
         </Table>
@@ -340,11 +338,11 @@ function renderDetailTable(section: SiteReportSectionKey, rows: unknown[], focus
       const items = rows as SiteReportActivityCompletionItem[]
       return items.length > 0 ? (
         <Table>
-          <TableHeader><TableRow><TableHead>Kursus</TableHead><TableHead>Aktivitas</TableHead><TableHead>Pengguna</TableHead><TableHead>Email</TableHead><TableHead>Status</TableHead><TableHead>Completed At</TableHead><TableHead>Last Action</TableHead></TableRow></TableHeader>
+          <TableHeader><TableRow><TableHead>Kursus</TableHead><TableHead>Aktivitas</TableHead><TableHead>Pengguna</TableHead><TableHead>Status</TableHead><TableHead>Completed At</TableHead><TableHead>Last Action</TableHead></TableRow></TableHeader>
           <TableBody>
             {items.map((row, index) => {
               const isFocused = rowMatchesFocus(section, row, focus)
-              return <TableRow key={`${row.activity_id}-${row.user_id}-${index}`} className={focusedRowClass(isFocused)} data-report-focus-target={isFocused || undefined}><TableCell>{row.course_name || "-"}</TableCell><TableCell className="font-medium">{row.activity_name}</TableCell><TableCell>{row.user_name}</TableCell><TableCell>{row.email || "-"}</TableCell><TableCell><Badge variant="outline" className={completionStateBadgeClass(row.completion_state_key)}>{row.completion_state_label}</Badge></TableCell><TableCell>{formatReportClock(row.completion_at)}</TableCell><TableCell>{formatReportClock(row.last_action_at)}</TableCell></TableRow>
+              return <TableRow key={`${row.activity_id}-${row.user_id}-${index}`} className={focusedRowClass(isFocused)} data-report-focus-target={isFocused || undefined}><TableCell>{row.course_name || "-"}</TableCell><TableCell className="font-medium">{row.activity_name}</TableCell><TableCell>{row.user_name}</TableCell><TableCell><Badge variant="outline" className={completionStateBadgeClass(row.completion_state_key)}>{row.completion_state_label}</Badge></TableCell><TableCell>{formatReportClock(row.completion_at)}</TableCell><TableCell>{formatReportClock(row.last_action_at)}</TableCell></TableRow>
             })}
           </TableBody>
         </Table>
@@ -382,11 +380,11 @@ function renderDetailTable(section: SiteReportSectionKey, rows: unknown[], focus
       const items = rows as SiteReportRecentActivityItem[]
       return items.length > 0 ? (
         <Table>
-          <TableHeader><TableRow><TableHead>Pengguna</TableHead><TableHead>Aksi</TableHead><TableHead>Waktu</TableHead><TableHead>IP</TableHead></TableRow></TableHeader>
+          <TableHeader><TableRow><TableHead>Pengguna</TableHead><TableHead>Aksi</TableHead><TableHead>Waktu</TableHead></TableRow></TableHeader>
           <TableBody>
             {items.map((row, index) => {
               const isFocused = rowMatchesFocus(section, row, focus)
-              return <TableRow key={`${row.user_name}-${row.occurred_at}-${index}`} className={focusedRowClass(isFocused)} data-report-focus-target={isFocused || undefined}><TableCell className="font-medium">{row.user_name}</TableCell><TableCell>{row.action}</TableCell><TableCell>{formatReportClock(row.occurred_at)}</TableCell><TableCell>{row.ip_address || "-"}</TableCell></TableRow>
+              return <TableRow key={`${row.user_name}-${row.occurred_at}-${index}`} className={focusedRowClass(isFocused)} data-report-focus-target={isFocused || undefined}><TableCell className="font-medium">{row.user_name}</TableCell><TableCell>{row.action}</TableCell><TableCell>{formatReportClock(row.occurred_at)}</TableCell></TableRow>
             })}
           </TableBody>
         </Table>
@@ -424,11 +422,11 @@ function renderDetailTable(section: SiteReportSectionKey, rows: unknown[], focus
       const items = rows as SiteReportUserStatusItem[]
       return items.length > 0 ? (
         <Table>
-          <TableHeader><TableRow><TableHead>Pengguna</TableHead><TableHead>Email</TableHead><TableHead>Kursus</TableHead><TableHead>Role</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Avg Grade</TableHead><TableHead>Last Action</TableHead></TableRow></TableHeader>
+          <TableHeader><TableRow><TableHead>Pengguna</TableHead><TableHead>Kursus</TableHead><TableHead>Role</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Avg Grade</TableHead><TableHead>Last Action</TableHead></TableRow></TableHeader>
           <TableBody>
             {items.map((row) => {
               const isFocused = rowMatchesFocus(section, row, focus)
-              return <TableRow key={`${row.user_id}-${row.course_id}`} className={focusedRowClass(isFocused)} data-report-focus-target={isFocused || undefined}><TableCell className="font-medium">{row.user_name}</TableCell><TableCell>{row.email || "-"}</TableCell><TableCell>{row.course_name || "-"}</TableCell><TableCell>{row.role_label || "-"}</TableCell><TableCell>{row.status_label}</TableCell><TableCell className="text-right">{formatGradeValue(row.average_grade)}</TableCell><TableCell>{formatReportClock(row.last_action_at)}</TableCell></TableRow>
+              return <TableRow key={`${row.user_id}-${row.course_id}`} className={focusedRowClass(isFocused)} data-report-focus-target={isFocused || undefined}><TableCell className="font-medium">{row.user_name}</TableCell><TableCell>{row.course_name || "-"}</TableCell><TableCell>{row.role_label || "-"}</TableCell><TableCell>{row.status_label}</TableCell><TableCell className="text-right">{formatGradeValue(row.average_grade)}</TableCell><TableCell>{formatReportClock(row.last_action_at)}</TableCell></TableRow>
             })}
           </TableBody>
         </Table>

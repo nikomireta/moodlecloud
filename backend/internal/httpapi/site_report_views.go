@@ -118,7 +118,6 @@ type siteReportRecentActivityItem struct {
 	UserName   string `json:"user_name"`
 	Action     string `json:"action"`
 	OccurredAt string `json:"occurred_at"`
-	IPAddress  string `json:"ip_address"`
 }
 
 type siteReportCourseCompletionItem struct {
@@ -140,7 +139,6 @@ type siteReportAssignmentSubmissionItem struct {
 	AssignmentName string   `json:"assignment_name"`
 	UserID         int      `json:"user_id"`
 	UserName       string   `json:"user_name"`
-	Email          string   `json:"email"`
 	DueAt          string   `json:"due_at"`
 	SubmittedAt    string   `json:"submitted_at"`
 	StatusKey      string   `json:"status_key"`
@@ -181,7 +179,6 @@ type siteReportGradebookDetailItem struct {
 	CourseName    string   `json:"course_name"`
 	UserID        int      `json:"user_id"`
 	UserName      string   `json:"user_name"`
-	Email         string   `json:"email"`
 	GradeItemID   int      `json:"grade_item_id"`
 	GradeItemName string   `json:"grade_item_name"`
 	ItemModule    string   `json:"item_module"`
@@ -195,7 +192,6 @@ type siteReportGradebookDetailItem struct {
 type siteReportUserActivityItem struct {
 	UserID             int    `json:"user_id"`
 	UserName           string `json:"user_name"`
-	Email              string `json:"email"`
 	RoleLabel          string `json:"role_label"`
 	Sessions           int    `json:"sessions"`
 	TotalOnlineSeconds int    `json:"total_online_seconds"`
@@ -207,8 +203,6 @@ type siteReportUserActivityItem struct {
 type siteReportUserStatusItem struct {
 	UserID               int      `json:"user_id"`
 	UserName             string   `json:"user_name"`
-	Username             string   `json:"username"`
-	Email                string   `json:"email"`
 	RoleLabel            string   `json:"role_label"`
 	CourseID             int      `json:"course_id"`
 	CourseName           string   `json:"course_name"`
@@ -224,7 +218,6 @@ type siteReportUserStatusItem struct {
 
 type siteReportAtRiskUserItem struct {
 	UserName     string   `json:"user_name"`
-	Email        string   `json:"email"`
 	RoleLabel    string   `json:"role_label"`
 	CourseName   string   `json:"course_name"`
 	StatusLabel  string   `json:"status_label"`
@@ -261,7 +254,6 @@ type siteReportActivityCompletionItem struct {
 	ComponentName        string `json:"component_name"`
 	UserID               int    `json:"user_id"`
 	UserName             string `json:"user_name"`
-	Email                string `json:"email"`
 	CompletionState      int    `json:"completion_state"`
 	CompletionStateKey   string `json:"completion_state_key"`
 	CompletionStateLabel string `json:"completion_state_label"`
@@ -276,7 +268,6 @@ type siteReportQuizActivityItem struct {
 	CourseName       string  `json:"course_name"`
 	UserID           int     `json:"user_id"`
 	UserName         string  `json:"user_name"`
-	Email            string  `json:"email"`
 	Attempts         int     `json:"attempts"`
 	FinishedAttempts int     `json:"finished_attempts"`
 	BestScore        float64 `json:"best_score"`

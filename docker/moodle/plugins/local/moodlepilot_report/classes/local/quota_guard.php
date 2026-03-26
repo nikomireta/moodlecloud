@@ -223,26 +223,12 @@ class quota_guard {
             return null;
         }
 
-        require_once($CFG->libdir . '/filelib.php');
-
-        $curl = new \curl(['ignoresecurity' => true]);
-        $response = $curl->get(
+        $response = internal_api_client::get_json(
             $quotaendpoint,
-            [],
-            [
-                'CURLOPT_RETURNTRANSFER' => true,
-                'CURLOPT_CONNECTTIMEOUT' => 5,
-                'CURLOPT_TIMEOUT' => 20,
-                'CURLOPT_HTTPHEADER' => [
-                    'Accept: application/json',
-                    'Authorization: Bearer ' . $ingesttoken,
-                ],
-            ]
+            ['Authorization' => 'Bearer ' . $ingesttoken]
         );
-
-        $info = $curl->get_info();
-        $statuscode = (int)($info['http_code'] ?? 0);
-        $decoded = json_decode((string)$response, true);
+        $statuscode = (int)$response['status_code'];
+        $decoded = is_array($response['decoded']) ? $response['decoded'] : null;
         if ($statuscode < 200 || $statuscode >= 300 || !is_array($decoded)) {
             return null;
         }

@@ -78,6 +78,14 @@ copy_into_container() {
   fi
 }
 
+run_post_sync_tasks() {
+  local web_container="$1"
+
+  echo "Refreshing plugin registration state and report metadata in $web_container"
+  docker exec "$web_container" php /var/www/html/admin/cli/scheduled_task.php --execute='\\local_moodlepilot_report\\task\\bootstrap_registration_task'
+  docker exec "$web_container" php /var/www/html/admin/cli/scheduled_task.php --execute='\\local_moodlepilot_report\\task\\report_snapshot_ingest_task'
+}
+
 main() {
   require_command docker
 
@@ -119,6 +127,8 @@ main() {
   docker restart "$web_container" "$cron_container" >/dev/null
   wait_for_container_running "$web_container"
   wait_for_container_running "$cron_container"
+
+  run_post_sync_tasks "$web_container"
 
   echo "Plugin sync complete."
 }

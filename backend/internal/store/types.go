@@ -59,48 +59,50 @@ type Plan struct {
 }
 
 type Site struct {
-	ID                uuid.UUID          `json:"id"`
-	OwnerUserID       uuid.UUID          `json:"owner_user_id"`
-	Name              string             `json:"name"`
-	Subdomain         string             `json:"subdomain"`
-	PlanCode          string             `json:"plan_code"`
-	Region            string             `json:"region"`
-	Status            string             `json:"status"`
-	SiteURL           string             `json:"site_url"`
-	AdminURL          string             `json:"admin_url"`
-	AdminName         string             `json:"admin_name"`
-	AdminEmail        string             `json:"admin_email"`
-	MoodleUsername    string             `json:"moodle_username"`
-	ProvisioningStep  string             `json:"provisioning_step"`
-	LastError         string             `json:"last_error"`
-	UsersActiveLimit  int                `json:"users_active_limit"`
-	StorageBytesLimit int64              `json:"storage_bytes_limit"`
-	WebCPUMillicores  int                `json:"web_cpu_millicores"`
-	WebMemoryMiB      int                `json:"web_memory_mib"`
-	CronCPUMillicores int                `json:"cron_cpu_millicores"`
-	CronMemoryMiB     int                `json:"cron_memory_mib"`
-	ActivatedAt       *time.Time         `json:"activated_at,omitempty"`
-	RuntimeHealth     string             `json:"runtime_health,omitempty"`
-	RuntimeLastError  string             `json:"runtime_last_error,omitempty"`
-	Usage             *SiteUsageSnapshot `json:"usage,omitempty"`
-	CreatedAt         time.Time          `json:"created_at"`
-	UpdatedAt         time.Time          `json:"updated_at"`
+	ID                   uuid.UUID          `json:"id"`
+	OwnerUserID          uuid.UUID          `json:"owner_user_id"`
+	Name                 string             `json:"name"`
+	Subdomain            string             `json:"subdomain"`
+	PlanCode             string             `json:"plan_code"`
+	Region               string             `json:"region"`
+	Status               string             `json:"status"`
+	SiteURL              string             `json:"site_url"`
+	AdminURL             string             `json:"admin_url"`
+	AdminName            string             `json:"admin_name"`
+	AdminEmail           string             `json:"admin_email"`
+	MoodleUsername       string             `json:"moodle_username"`
+	ProvisioningStep     string             `json:"provisioning_step"`
+	LastError            string             `json:"last_error"`
+	UsersActiveLimit     int                `json:"users_active_limit"`
+	StorageBytesLimit    int64              `json:"storage_bytes_limit"`
+	WebCPUMillicores     int                `json:"web_cpu_millicores"`
+	WebMemoryMiB         int                `json:"web_memory_mib"`
+	CronCPUMillicores    int                `json:"cron_cpu_millicores"`
+	CronMemoryMiB        int                `json:"cron_memory_mib"`
+	ActivatedAt          *time.Time         `json:"activated_at,omitempty"`
+	RuntimeHealth        string             `json:"runtime_health,omitempty"`
+	RuntimeLastError     string             `json:"runtime_last_error,omitempty"`
+	Usage                *SiteUsageSnapshot `json:"usage,omitempty"`
+	ReportBootstrapToken string             `json:"-"`
+	CreatedAt            time.Time          `json:"created_at"`
+	UpdatedAt            time.Time          `json:"updated_at"`
 }
 
 type SiteRuntimeMetadata struct {
-	SiteID              uuid.UUID  `json:"site_id"`
-	ImageRepository     string     `json:"image_repository"`
-	ImageTag            string     `json:"image_tag"`
-	WebContainerName    string     `json:"web_container_name"`
-	CronContainerName   string     `json:"cron_container_name"`
-	VolumeName          string     `json:"volume_name"`
-	DatabaseName        string     `json:"database_name"`
-	DatabaseUser        string     `json:"database_user"`
-	HealthStatus        string     `json:"health_status"`
-	LastHealthError     string     `json:"last_health_error"`
-	LastHealthCheckedAt *time.Time `json:"last_health_checked_at,omitempty"`
-	CreatedAt           time.Time  `json:"created_at"`
-	UpdatedAt           time.Time  `json:"updated_at"`
+	SiteID               uuid.UUID  `json:"site_id"`
+	ImageRepository      string     `json:"image_repository"`
+	ImageTag             string     `json:"image_tag"`
+	WebContainerName     string     `json:"web_container_name"`
+	CronContainerName    string     `json:"cron_container_name"`
+	VolumeName           string     `json:"volume_name"`
+	DatabaseName         string     `json:"database_name"`
+	DatabaseUser         string     `json:"database_user"`
+	HealthStatus         string     `json:"health_status"`
+	LastHealthError      string     `json:"last_health_error"`
+	ReportBootstrapToken string     `json:"-"`
+	LastHealthCheckedAt  *time.Time `json:"last_health_checked_at,omitempty"`
+	CreatedAt            time.Time  `json:"created_at"`
+	UpdatedAt            time.Time  `json:"updated_at"`
 }
 
 type SiteCustomDomain struct {
@@ -175,6 +177,16 @@ type SitePlanChange struct {
 	Status       string    `json:"status"`
 	AppliedAt    time.Time `json:"applied_at"`
 	CreatedAt    time.Time `json:"created_at"`
+}
+
+type SiteReportConnectToken struct {
+	ID          uuid.UUID  `json:"id"`
+	SiteID      uuid.UUID  `json:"site_id"`
+	OwnerUserID uuid.UUID  `json:"owner_user_id"`
+	TokenHash   string     `json:"-"`
+	ExpiresAt   time.Time  `json:"expires_at"`
+	UsedAt      *time.Time `json:"used_at,omitempty"`
+	CreatedAt   time.Time  `json:"created_at"`
 }
 
 type SiteAdminAccessToken struct {
@@ -293,15 +305,16 @@ type CreateSessionParams struct {
 }
 
 type CreateSiteParams struct {
-	OwnerUserID uuid.UUID
-	Name        string
-	Subdomain   string
-	PlanCode    string
-	Region      string
-	AdminName   string
-	AdminEmail  string
-	SiteURL     string
-	AdminURL    string
+	OwnerUserID          uuid.UUID
+	Name                 string
+	Subdomain            string
+	PlanCode             string
+	Region               string
+	AdminName            string
+	AdminEmail           string
+	SiteURL              string
+	AdminURL             string
+	ReportBootstrapToken string
 }
 
 type UpdateSiteParams struct {
@@ -339,6 +352,13 @@ type CreateSiteAdminAccessTokenParams struct {
 	TargetEmail    string
 	TokenHash      string
 	ExpiresAt      time.Time
+}
+
+type CreateSiteReportConnectTokenParams struct {
+	SiteID      uuid.UUID
+	OwnerUserID uuid.UUID
+	TokenHash   string
+	ExpiresAt   time.Time
 }
 
 type UpsertSiteReportConnectionParams struct {
@@ -383,16 +403,17 @@ type HostCapacityPolicy struct {
 }
 
 type UpsertSiteRuntimeMetadataParams struct {
-	SiteID            uuid.UUID
-	ImageRepository   string
-	ImageTag          string
-	WebContainerName  string
-	CronContainerName string
-	VolumeName        string
-	DatabaseName      string
-	DatabaseUser      string
-	HealthStatus      string
-	LastHealthError   string
+	SiteID               uuid.UUID
+	ImageRepository      string
+	ImageTag             string
+	WebContainerName     string
+	CronContainerName    string
+	VolumeName           string
+	DatabaseName         string
+	DatabaseUser         string
+	HealthStatus         string
+	LastHealthError      string
+	ReportBootstrapToken string
 }
 
 type UpsertSiteCustomDomainParams struct {

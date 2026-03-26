@@ -462,21 +462,21 @@ func writeSiteReportDetailCSV(w http.ResponseWriter, snapshot *store.SiteReportS
 	switch section {
 	case "at-risk-users":
 		rows, _ := metadata.AllRows.([]siteReportAtRiskUserItem)
-		if err := write([]string{"user_name", "email", "role_label", "course_name", "status_label", "average_grade", "last_action_at", "risk_score", "risk_reason"}); err != nil {
+		if err := write([]string{"user_name", "role_label", "course_name", "status_label", "average_grade", "last_action_at", "risk_score", "risk_reason"}); err != nil {
 			return err
 		}
 		for _, row := range rows {
-			if err := write([]string{row.UserName, row.Email, row.RoleLabel, row.CourseName, row.StatusLabel, nullableFloatString(row.AverageGrade), row.LastActionAt, strconv.Itoa(row.RiskScore), row.RiskReason}); err != nil {
+			if err := write([]string{row.UserName, row.RoleLabel, row.CourseName, row.StatusLabel, nullableFloatString(row.AverageGrade), row.LastActionAt, strconv.Itoa(row.RiskScore), row.RiskReason}); err != nil {
 				return err
 			}
 		}
 	case "user-activity-summary":
 		rows, _ := metadata.AllRows.([]siteReportUserActivityItem)
-		if err := write([]string{"user_id", "user_name", "email", "role_label", "sessions", "total_online_seconds", "total_online_label", "submissions", "last_action_at"}); err != nil {
+		if err := write([]string{"user_id", "user_name", "role_label", "sessions", "total_online_seconds", "total_online_label", "submissions", "last_action_at"}); err != nil {
 			return err
 		}
 		for _, row := range rows {
-			if err := write([]string{strconv.Itoa(row.UserID), row.UserName, row.Email, row.RoleLabel, strconv.Itoa(row.Sessions), strconv.Itoa(row.TotalOnlineSeconds), row.TotalOnlineLabel, strconv.Itoa(row.Submissions), row.LastActionAt}); err != nil {
+			if err := write([]string{strconv.Itoa(row.UserID), row.UserName, row.RoleLabel, strconv.Itoa(row.Sessions), strconv.Itoa(row.TotalOnlineSeconds), row.TotalOnlineLabel, strconv.Itoa(row.Submissions), row.LastActionAt}); err != nil {
 				return err
 			}
 		}
@@ -492,11 +492,11 @@ func writeSiteReportDetailCSV(w http.ResponseWriter, snapshot *store.SiteReportS
 		}
 	case "assignment-submission-detail":
 		rows, _ := metadata.AllRows.([]siteReportAssignmentSubmissionItem)
-		if err := write([]string{"course_id", "course_name", "assignment_id", "assignment_name", "user_id", "user_name", "email", "status_key", "status_label", "due_at", "submitted_at", "grade", "graded_at", "missing_grade", "late_by_seconds", "late_by_label"}); err != nil {
+		if err := write([]string{"course_id", "course_name", "assignment_id", "assignment_name", "user_id", "user_name", "status_key", "status_label", "due_at", "submitted_at", "grade", "graded_at", "missing_grade", "late_by_seconds", "late_by_label"}); err != nil {
 			return err
 		}
 		for _, row := range rows {
-			if err := write([]string{strconv.Itoa(row.CourseID), row.CourseName, strconv.Itoa(row.AssignmentID), row.AssignmentName, strconv.Itoa(row.UserID), row.UserName, row.Email, row.StatusKey, row.StatusLabel, row.DueAt, row.SubmittedAt, nullableFloatString(row.Grade), row.GradedAt, yesNo(row.MissingGrade), strconv.Itoa(row.LateBySeconds), row.LateByLabel}); err != nil {
+			if err := write([]string{strconv.Itoa(row.CourseID), row.CourseName, strconv.Itoa(row.AssignmentID), row.AssignmentName, strconv.Itoa(row.UserID), row.UserName, row.StatusKey, row.StatusLabel, row.DueAt, row.SubmittedAt, nullableFloatString(row.Grade), row.GradedAt, yesNo(row.MissingGrade), strconv.Itoa(row.LateBySeconds), row.LateByLabel}); err != nil {
 				return err
 			}
 		}
@@ -512,31 +512,31 @@ func writeSiteReportDetailCSV(w http.ResponseWriter, snapshot *store.SiteReportS
 		}
 	case "gradebook-detail":
 		rows, _ := metadata.AllRows.([]siteReportGradebookDetailItem)
-		if err := write([]string{"course_id", "course_name", "user_id", "user_name", "email", "grade_item_id", "grade_item_name", "item_module", "item_instance", "final_grade", "pass_fail", "graded_at", "missing_grade"}); err != nil {
+		if err := write([]string{"course_id", "course_name", "user_id", "user_name", "grade_item_id", "grade_item_name", "item_module", "item_instance", "final_grade", "pass_fail", "graded_at", "missing_grade"}); err != nil {
 			return err
 		}
 		for _, row := range rows {
-			if err := write([]string{strconv.Itoa(row.CourseID), row.CourseName, strconv.Itoa(row.UserID), row.UserName, row.Email, strconv.Itoa(row.GradeItemID), row.GradeItemName, row.ItemModule, strconv.Itoa(row.ItemInstance), nullableFloatString(row.FinalGrade), row.PassFail, row.GradedAt, yesNo(row.MissingGrade)}); err != nil {
+			if err := write([]string{strconv.Itoa(row.CourseID), row.CourseName, strconv.Itoa(row.UserID), row.UserName, strconv.Itoa(row.GradeItemID), row.GradeItemName, row.ItemModule, strconv.Itoa(row.ItemInstance), nullableFloatString(row.FinalGrade), row.PassFail, row.GradedAt, yesNo(row.MissingGrade)}); err != nil {
 				return err
 			}
 		}
 	case "activity-completion-detail":
 		rows, _ := metadata.AllRows.([]siteReportActivityCompletionItem)
-		if err := write([]string{"course_id", "course_name", "activity_id", "activity_name", "module_type", "component_name", "user_id", "user_name", "email", "completion_state", "completion_state_key", "completion_state_label", "completion_at", "last_action_at"}); err != nil {
+		if err := write([]string{"course_id", "course_name", "activity_id", "activity_name", "module_type", "component_name", "user_id", "user_name", "completion_state", "completion_state_key", "completion_state_label", "completion_at", "last_action_at"}); err != nil {
 			return err
 		}
 		for _, row := range rows {
-			if err := write([]string{strconv.Itoa(row.CourseID), row.CourseName, strconv.Itoa(row.ActivityID), row.ActivityName, row.ModuleType, row.ComponentName, strconv.Itoa(row.UserID), row.UserName, row.Email, strconv.Itoa(row.CompletionState), row.CompletionStateKey, row.CompletionStateLabel, row.CompletionAt, row.LastActionAt}); err != nil {
+			if err := write([]string{strconv.Itoa(row.CourseID), row.CourseName, strconv.Itoa(row.ActivityID), row.ActivityName, row.ModuleType, row.ComponentName, strconv.Itoa(row.UserID), row.UserName, strconv.Itoa(row.CompletionState), row.CompletionStateKey, row.CompletionStateLabel, row.CompletionAt, row.LastActionAt}); err != nil {
 				return err
 			}
 		}
 	case "quiz-activity-detail":
 		rows, _ := metadata.AllRows.([]siteReportQuizActivityItem)
-		if err := write([]string{"course_id", "course_name", "quiz_id", "quiz_name", "user_id", "user_name", "email", "attempts", "finished_attempts", "best_score", "average_score", "lowest_score", "time_spent_seconds", "time_spent_label", "status_label", "completion_at", "last_attempt_at"}); err != nil {
+		if err := write([]string{"course_id", "course_name", "quiz_id", "quiz_name", "user_id", "user_name", "attempts", "finished_attempts", "best_score", "average_score", "lowest_score", "time_spent_seconds", "time_spent_label", "status_label", "completion_at", "last_attempt_at"}); err != nil {
 			return err
 		}
 		for _, row := range rows {
-			if err := write([]string{strconv.Itoa(row.CourseID), row.CourseName, strconv.Itoa(row.QuizID), row.QuizName, strconv.Itoa(row.UserID), row.UserName, row.Email, strconv.Itoa(row.Attempts), strconv.Itoa(row.FinishedAttempts), floatString(row.BestScore), floatString(row.AverageScore), floatString(row.LowestScore), strconv.Itoa(row.TimeSpentSeconds), row.TimeSpentLabel, row.StatusLabel, row.CompletionAt, row.LastAttemptAt}); err != nil {
+			if err := write([]string{strconv.Itoa(row.CourseID), row.CourseName, strconv.Itoa(row.QuizID), row.QuizName, strconv.Itoa(row.UserID), row.UserName, strconv.Itoa(row.Attempts), strconv.Itoa(row.FinishedAttempts), floatString(row.BestScore), floatString(row.AverageScore), floatString(row.LowestScore), strconv.Itoa(row.TimeSpentSeconds), row.TimeSpentLabel, row.StatusLabel, row.CompletionAt, row.LastAttemptAt}); err != nil {
 				return err
 			}
 		}
@@ -552,11 +552,11 @@ func writeSiteReportDetailCSV(w http.ResponseWriter, snapshot *store.SiteReportS
 		}
 	case "recent-activity":
 		rows, _ := metadata.AllRows.([]siteReportRecentActivityItem)
-		if err := write([]string{"user_name", "action", "occurred_at", "ip_address"}); err != nil {
+		if err := write([]string{"user_name", "action", "occurred_at"}); err != nil {
 			return err
 		}
 		for _, row := range rows {
-			if err := write([]string{row.UserName, row.Action, row.OccurredAt, row.IPAddress}); err != nil {
+			if err := write([]string{row.UserName, row.Action, row.OccurredAt}); err != nil {
 				return err
 			}
 		}
@@ -582,11 +582,11 @@ func writeSiteReportDetailCSV(w http.ResponseWriter, snapshot *store.SiteReportS
 		}
 	case "user-status":
 		rows, _ := metadata.AllRows.([]siteReportUserStatusItem)
-		if err := write([]string{"course_id", "course_name", "user_id", "user_name", "username", "email", "role_label", "enrolment_method", "enrolment_method_label", "enrolled_on", "status_key", "status_label", "average_grade", "last_action_at"}); err != nil {
+		if err := write([]string{"course_id", "course_name", "user_id", "user_name", "role_label", "enrolment_method", "enrolment_method_label", "enrolled_on", "status_key", "status_label", "average_grade", "last_action_at"}); err != nil {
 			return err
 		}
 		for _, row := range rows {
-			if err := write([]string{strconv.Itoa(row.CourseID), row.CourseName, strconv.Itoa(row.UserID), row.UserName, row.Username, row.Email, row.RoleLabel, row.EnrolmentMethod, row.EnrolmentMethodLabel, row.EnrolledOn, row.StatusKey, row.StatusLabel, nullableFloatString(row.AverageGrade), row.LastActionAt}); err != nil {
+			if err := write([]string{strconv.Itoa(row.CourseID), row.CourseName, strconv.Itoa(row.UserID), row.UserName, row.RoleLabel, row.EnrolmentMethod, row.EnrolmentMethodLabel, row.EnrolledOn, row.StatusKey, row.StatusLabel, nullableFloatString(row.AverageGrade), row.LastActionAt}); err != nil {
 				return err
 			}
 		}

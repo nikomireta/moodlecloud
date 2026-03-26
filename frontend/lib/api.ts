@@ -244,7 +244,6 @@ export type SiteReportRecentActivityItem = {
   user_name: string
   action: string
   occurred_at: string
-  ip_address: string
 }
 
 export type SiteReportCourseCompletionItem = {
@@ -266,7 +265,6 @@ export type SiteReportAssignmentSubmissionItem = {
   assignment_name: string
   user_id: number
   user_name: string
-  email: string
   due_at: string
   submitted_at: string
   status_key: string
@@ -307,7 +305,6 @@ export type SiteReportGradebookDetailItem = {
   course_name: string
   user_id: number
   user_name: string
-  email: string
   grade_item_id: number
   grade_item_name: string
   item_module: string
@@ -321,7 +318,6 @@ export type SiteReportGradebookDetailItem = {
 export type SiteReportUserActivityItem = {
   user_id: number
   user_name: string
-  email: string
   role_label: string
   sessions: number
   total_online_seconds: number
@@ -333,8 +329,6 @@ export type SiteReportUserActivityItem = {
 export type SiteReportUserStatusItem = {
   user_id: number
   user_name: string
-  username: string
-  email: string
   role_label: string
   course_id: number
   course_name: string
@@ -350,7 +344,6 @@ export type SiteReportUserStatusItem = {
 
 export type SiteReportAtRiskUserItem = {
   user_name: string
-  email: string
   role_label: string
   course_name: string
   status_label: string
@@ -387,7 +380,6 @@ export type SiteReportActivityCompletionItem = {
   component_name: string
   user_id: number
   user_name: string
-  email: string
   completion_state: number
   completion_state_key: string
   completion_state_label: string
@@ -402,7 +394,6 @@ export type SiteReportQuizActivityItem = {
   course_name: string
   user_id: number
   user_name: string
-  email: string
   attempts: number
   finished_attempts: number
   best_score: number
@@ -602,6 +593,7 @@ export type SiteReportConnectTokenResponse = {
   mode: string
   site_id: string
   registration_token: string
+  expires_at?: string
   message: string
 }
 
@@ -699,6 +691,8 @@ export type SitePlanChangeResponse = MessageResponse & {
 
 export type SiteAdminAccessLinkResponse = MessageResponse & {
   login_url: string
+  access_token: string
+  login_method: string
   expires_at: string
 }
 

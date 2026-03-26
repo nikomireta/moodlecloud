@@ -273,6 +273,9 @@ echo $OUTPUT->header();
 echo $OUTPUT->heading(get_string('dashboard:page_heading', 'local_moodlepilot_report'));
 echo html_writer::tag('p', get_string('dashboard:page_intro', 'local_moodlepilot_report'));
 echo $OUTPUT->notification(get_string('dashboard:report_surface_note', 'local_moodlepilot_report'), 'info');
+if (bootstrap_config::allow_insecure_internal_http()) {
+    echo $OUTPUT->notification(get_string('security:insecure_internal_http_warning', 'local_moodlepilot_report'), 'warning');
+}
 if ($quotastatuskey === 'over_limit') {
     echo $OUTPUT->notification(get_string('dashboard:quota_over_limit_notice', 'local_moodlepilot_report'), 'error');
 } else if ($quotastatuskey === 'warning' || $quotastatuskey === 'critical') {

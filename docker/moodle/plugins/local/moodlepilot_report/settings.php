@@ -132,7 +132,7 @@ if ($hassiteconfig) {
             PARAM_URL
         ));
 
-        $settings->add(new admin_setting_configtext(
+        $settings->add(new admin_setting_configpasswordunmask(
             'local_moodlepilot_report/manual_registration_token',
             get_string('manual:token_label', 'local_moodlepilot_report'),
             get_string('manual:token_desc', 'local_moodlepilot_report'),

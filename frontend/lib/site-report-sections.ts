@@ -38,7 +38,6 @@ export type SiteReportFocusParams = {
   forumId?: number | null
   gradeItemId?: number | null
   questionId?: number | null
-  email?: string | null
   courseName?: string | null
   userName?: string | null
   occurredAt?: string | null
@@ -100,7 +99,6 @@ export function readSiteReportFocusParams(searchParams: Pick<URLSearchParams, "g
     forumId: normalizeIntegerParam(searchParams.get("focus_forum_id")),
     gradeItemId: normalizeIntegerParam(searchParams.get("focus_grade_item_id")),
     questionId: normalizeIntegerParam(searchParams.get("focus_question_id")),
-    email: searchParams.get("focus_email"),
     courseName: searchParams.get("focus_course_name"),
     userName: searchParams.get("focus_user_name"),
     occurredAt: searchParams.get("focus_occurred_at"),
@@ -118,7 +116,6 @@ function appendFocusParams(params: URLSearchParams, focus?: SiteReportFocusParam
   setIfPresent(params, "focus_forum_id", focus?.forumId)
   setIfPresent(params, "focus_grade_item_id", focus?.gradeItemId)
   setIfPresent(params, "focus_question_id", focus?.questionId)
-  setIfPresent(params, "focus_email", focus?.email)
   setIfPresent(params, "focus_course_name", focus?.courseName)
   setIfPresent(params, "focus_user_name", focus?.userName)
   setIfPresent(params, "focus_occurred_at", focus?.occurredAt)

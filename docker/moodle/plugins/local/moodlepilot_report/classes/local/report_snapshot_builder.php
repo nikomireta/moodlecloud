@@ -374,7 +374,6 @@ class report_snapshot_builder {
                 'user_name' => trim($record->firstname . ' ' . $record->lastname),
                 'action' => self::humanize_log_action((string)$record->action, (string)$record->target, (string)$record->component, (string)$record->coursefullname),
                 'occurred_at' => gmdate(\DateTimeInterface::ATOM, (int)$record->timecreated),
-                'ip_address' => trim((string)$record->ip),
             ];
         }
 
@@ -675,7 +674,6 @@ class report_snapshot_builder {
                     'assignment_name' => (string)$assignment['assignment_name'],
                     'user_id' => (int)$user['user_id'],
                     'user_name' => (string)$user['user_name'],
-                    'email' => (string)$user['email'],
                     'due_at' => $dueat > 0 ? gmdate(\DateTimeInterface::ATOM, $dueat) : '',
                     'submitted_at' => $submittedat > 0 ? gmdate(\DateTimeInterface::ATOM, $submittedat) : '',
                     'status_key' => $statuskey,
@@ -974,7 +972,6 @@ class report_snapshot_builder {
                     'course_name' => trim((string)$record->coursefullname),
                     'user_id' => (int)$user['user_id'],
                     'user_name' => (string)$user['user_name'],
-                    'email' => (string)$user['email'],
                     'grade_item_id' => $gradeitemid,
                     'grade_item_name' => $gradeitemname,
                     'item_module' => trim((string)$record->itemmodule),
@@ -1038,7 +1035,7 @@ class report_snapshot_builder {
                 $params[] = 'course';
                 $params[] = $courseid;
             }
-            $records = $DB->get_records_sql("\n                SELECT\n                    u.id,\n                    u.firstname,\n                    u.lastname,\n                    COALESCE(u.email, '') AS email,\n                    MAX(t.last_access) AS lastaction\n                FROM {user} u\n                JOIN {local_mpilot_rpt_track} t ON t.userid = u.id AND t.last_access BETWEEN ? AND ?\n                WHERE u.deleted = 0\n                  AND u.suspended = 0\n                  AND u.id > 0\n                  $coursesql\n                GROUP BY u.id, u.firstname, u.lastname, u.email\n                ORDER BY MAX(t.last_access) DESC\n            ", $params);
+            $records = $DB->get_records_sql("\n                SELECT\n                    u.id,\n                    u.firstname,\n                    u.lastname,\n                    MAX(t.last_access) AS lastaction\n                FROM {user} u\n                JOIN {local_mpilot_rpt_track} t ON t.userid = u.id AND t.last_access BETWEEN ? AND ?\n                WHERE u.deleted = 0\n                  AND u.suspended = 0\n                  AND u.id > 0\n                  $coursesql\n                GROUP BY u.id, u.firstname, u.lastname\n                ORDER BY MAX(t.last_access) DESC\n            ", $params);
         } else if (self::table_exists('logstore_standard_log')) {
             $params = [$startts, $endts];
             $coursesql = '';
@@ -1046,7 +1043,7 @@ class report_snapshot_builder {
                 $coursesql = ' AND l.courseid = ?';
                 $params[] = $courseid;
             }
-            $records = $DB->get_records_sql("\n                SELECT\n                    u.id,\n                    u.firstname,\n                    u.lastname,\n                    COALESCE(u.email, '') AS email,\n                    MAX(l.timecreated) AS lastaction\n                FROM {user} u\n                JOIN {logstore_standard_log} l ON l.userid = u.id AND l.timecreated BETWEEN ? AND ?\n                WHERE u.deleted = 0\n                  AND u.suspended = 0\n                  AND u.id > 0\n                  $coursesql\n                GROUP BY u.id, u.firstname, u.lastname, u.email\n                ORDER BY MAX(l.timecreated) DESC\n            ", $params);
+            $records = $DB->get_records_sql("\n                SELECT\n                    u.id,\n                    u.firstname,\n                    u.lastname,\n                    MAX(l.timecreated) AS lastaction\n                FROM {user} u\n                JOIN {logstore_standard_log} l ON l.userid = u.id AND l.timecreated BETWEEN ? AND ?\n                WHERE u.deleted = 0\n                  AND u.suspended = 0\n                  AND u.id > 0\n                  $coursesql\n                GROUP BY u.id, u.firstname, u.lastname\n                ORDER BY MAX(l.timecreated) DESC\n            ", $params);
         } else {
             self::$cache[$cachekey] = [];
             return [];
@@ -1066,7 +1063,6 @@ class report_snapshot_builder {
             $items[] = [
                 'user_id' => $userid,
                 'user_name' => trim($record->firstname . ' ' . $record->lastname),
-                'email' => trim((string)$record->email),
                 'role_label' => self::role_label($rolemap[$userid] ?? []),
                 'sessions' => (int)($stats['sessions'] ?? 0),
                 'total_online_seconds' => $totalseconds,
@@ -1102,7 +1098,7 @@ class report_snapshot_builder {
         }
 
         $activitymap = self::build_course_last_activity_map($filters);
-        $records = $DB->get_records_sql("\n            SELECT\n                u.id AS userid,\n                u.firstname,\n                u.lastname,\n                COALESCE(u.username, '') AS username,\n                COALESCE(u.email, '') AS email,\n                c.id AS courseid,\n                c.fullname AS coursefullname,\n                COALESCE(c.shortname, '') AS courseshortname,\n                COALESCE(e.enrol, '') AS enrolmethod,\n                ue.timecreated AS enrolledon,\n                COALESCE(cc.timecompleted, 0) AS timecompleted,\n                COALESCE(cc.timestarted, 0) AS timestarted,\n                CASE WHEN gi.id IS NULL THEN 0 ELSE 1 END AS gradeitemexists,\n                CASE WHEN cgg.finalgrade IS NULL THEN 0 ELSE 1 END AS gradeavailable,\n                cgg.finalgrade AS averagegrade\n            FROM {user} u\n            JOIN {user_enrolments} ue ON ue.userid = u.id AND ue.status = 0\n            JOIN {enrol} e ON e.id = ue.enrolid AND e.status = 0 AND e.courseid <> 1\n            JOIN {course} c ON c.id = e.courseid\n            LEFT JOIN {course_completions} cc ON cc.userid = u.id AND cc.course = c.id\n            LEFT JOIN {grade_items} gi ON gi.courseid = c.id AND gi.itemtype = 'course'\n            LEFT JOIN {grade_grades} cgg ON cgg.itemid = gi.id AND cgg.userid = u.id\n            WHERE u.deleted = 0\n              AND u.suspended = 0\n              AND u.id > 0\n              $coursesql\n            GROUP BY\n                u.id, u.firstname, u.lastname, u.username, u.email,\n                c.id, c.fullname, c.shortname, e.enrol, ue.timecreated,\n                cc.timecompleted, cc.timestarted, gi.id, cgg.finalgrade\n            ORDER BY ue.timecreated DESC, u.lastname ASC, u.firstname ASC\n        ", $params);
+        $records = $DB->get_records_sql("\n            SELECT\n                u.id AS userid,\n                u.firstname,\n                u.lastname,\n                c.id AS courseid,\n                c.fullname AS coursefullname,\n                COALESCE(c.shortname, '') AS courseshortname,\n                COALESCE(e.enrol, '') AS enrolmethod,\n                ue.timecreated AS enrolledon,\n                COALESCE(cc.timecompleted, 0) AS timecompleted,\n                COALESCE(cc.timestarted, 0) AS timestarted,\n                CASE WHEN gi.id IS NULL THEN 0 ELSE 1 END AS gradeitemexists,\n                CASE WHEN cgg.finalgrade IS NULL THEN 0 ELSE 1 END AS gradeavailable,\n                cgg.finalgrade AS averagegrade\n            FROM {user} u\n            JOIN {user_enrolments} ue ON ue.userid = u.id AND ue.status = 0\n            JOIN {enrol} e ON e.id = ue.enrolid AND e.status = 0 AND e.courseid <> 1\n            JOIN {course} c ON c.id = e.courseid\n            LEFT JOIN {course_completions} cc ON cc.userid = u.id AND cc.course = c.id\n            LEFT JOIN {grade_items} gi ON gi.courseid = c.id AND gi.itemtype = 'course'\n            LEFT JOIN {grade_grades} cgg ON cgg.itemid = gi.id AND cgg.userid = u.id\n            WHERE u.deleted = 0\n              AND u.suspended = 0\n              AND u.id > 0\n              $coursesql\n            GROUP BY\n                u.id, u.firstname, u.lastname,\n                c.id, c.fullname, c.shortname, e.enrol, ue.timecreated,\n                cc.timecompleted, cc.timestarted, gi.id, cgg.finalgrade\n            ORDER BY ue.timecreated DESC, u.lastname ASC, u.firstname ASC\n        ", $params);
 
         $userids = array_map(static function($record) {
             return (int)$record->userid;
@@ -1121,8 +1117,6 @@ class report_snapshot_builder {
             $items[] = [
                 'user_id' => $userid,
                 'user_name' => trim($record->firstname . ' ' . $record->lastname),
-                'username' => trim((string)$record->username),
-                'email' => trim((string)$record->email),
                 'role_label' => self::role_label($rolemap[$userid] ?? []),
                 'course_id' => $coursekey,
                 'course_name' => trim((string)$record->coursefullname),
@@ -1208,7 +1202,6 @@ class report_snapshot_builder {
 
             $items[] = [
                 'user_name' => (string)$row['user_name'],
-                'email' => (string)$row['email'],
                 'role_label' => (string)$row['role_label'],
                 'course_name' => (string)$row['course_name'],
                 'status_label' => (string)$row['status_label'],
@@ -1451,7 +1444,6 @@ class report_snapshot_builder {
                     'component_name' => $componentname,
                     'user_id' => (int)$user['user_id'],
                     'user_name' => (string)$user['user_name'],
-                    'email' => (string)$user['email'],
                     'completion_state' => $completionstate,
                     'completion_state_key' => self::completion_state_key($completionstate),
                     'completion_state_label' => self::humanize_completion_state($completionstate),
@@ -1514,7 +1506,7 @@ class report_snapshot_builder {
             $params[] = $courseid;
         }
 
-        $records = $DB->get_recordset_sql("\n            SELECT\n                q.id AS quizid,\n                q.name AS quizname,\n                c.id AS courseid,\n                c.fullname AS coursefullname,\n                u.id AS userid,\n                u.firstname,\n                u.lastname,\n                COALESCE(u.email, '') AS email,\n                COUNT(qa.id) AS attempts,\n                SUM(CASE WHEN qa.state = 'finished' THEN 1 ELSE 0 END) AS finishedattempts,\n                ROUND(COALESCE(MAX(qa.sumgrades), 0), 1) AS bestscore,\n                ROUND(COALESCE(AVG(qa.sumgrades), 0), 1) AS averagescore,\n                ROUND(COALESCE(MIN(qa.sumgrades), 0), 1) AS lowestscore,\n                MAX(qa.timemodified) AS lastattempt,\n                MAX(CASE WHEN qa.timefinish > qa.timestart THEN qa.timefinish ELSE 0 END) AS completionat,\n                COALESCE(MAX(trackagg.timespent), 0) AS trackedseconds,\n                COALESCE(SUM(CASE WHEN qa.timefinish > qa.timestart THEN qa.timefinish - qa.timestart ELSE 0 END), 0) AS attemptseconds\n            FROM {quiz_attempts} qa\n            JOIN {quiz} q ON q.id = qa.quiz\n            JOIN {course} c ON c.id = q.course AND c.id <> 1\n            JOIN {user} u ON u.id = qa.userid\n            LEFT JOIN {modules} m ON m.name = 'quiz'\n            LEFT JOIN {course_modules} cm ON cm.instance = q.id AND cm.module = m.id\n            LEFT JOIN (\n                SELECT\n                    t.userid,\n                    t.page_instance AS cmid,\n                    COALESCE(SUM(l.time_spent), 0) AS timespent\n                FROM {local_mpilot_rpt_track} t\n                JOIN {local_mpilot_rpt_log} l ON l.trackid = t.id\n                WHERE t.page_type = 'module'\n                  AND l.bucket_start BETWEEN ? AND ?\n                GROUP BY t.userid, t.page_instance\n            ) trackagg ON trackagg.userid = qa.userid AND trackagg.cmid = cm.id\n            WHERE qa.userid > 0\n              AND qa.timemodified BETWEEN ? AND ?\n              $coursesql\n            GROUP BY q.id, q.name, c.id, c.fullname, u.id, u.firstname, u.lastname, u.email\n            ORDER BY MAX(qa.timemodified) DESC\n        ", $params);
+        $records = $DB->get_recordset_sql("\n            SELECT\n                q.id AS quizid,\n                q.name AS quizname,\n                c.id AS courseid,\n                c.fullname AS coursefullname,\n                u.id AS userid,\n                u.firstname,\n                u.lastname,\n                COUNT(qa.id) AS attempts,\n                SUM(CASE WHEN qa.state = 'finished' THEN 1 ELSE 0 END) AS finishedattempts,\n                ROUND(COALESCE(MAX(qa.sumgrades), 0), 1) AS bestscore,\n                ROUND(COALESCE(AVG(qa.sumgrades), 0), 1) AS averagescore,\n                ROUND(COALESCE(MIN(qa.sumgrades), 0), 1) AS lowestscore,\n                MAX(qa.timemodified) AS lastattempt,\n                MAX(CASE WHEN qa.timefinish > qa.timestart THEN qa.timefinish ELSE 0 END) AS completionat,\n                COALESCE(MAX(trackagg.timespent), 0) AS trackedseconds,\n                COALESCE(SUM(CASE WHEN qa.timefinish > qa.timestart THEN qa.timefinish - qa.timestart ELSE 0 END), 0) AS attemptseconds\n            FROM {quiz_attempts} qa\n            JOIN {quiz} q ON q.id = qa.quiz\n            JOIN {course} c ON c.id = q.course AND c.id <> 1\n            JOIN {user} u ON u.id = qa.userid\n            LEFT JOIN {modules} m ON m.name = 'quiz'\n            LEFT JOIN {course_modules} cm ON cm.instance = q.id AND cm.module = m.id\n            LEFT JOIN (\n                SELECT\n                    t.userid,\n                    t.page_instance AS cmid,\n                    COALESCE(SUM(l.time_spent), 0) AS timespent\n                FROM {local_mpilot_rpt_track} t\n                JOIN {local_mpilot_rpt_log} l ON l.trackid = t.id\n                WHERE t.page_type = 'module'\n                  AND l.bucket_start BETWEEN ? AND ?\n                GROUP BY t.userid, t.page_instance\n            ) trackagg ON trackagg.userid = qa.userid AND trackagg.cmid = cm.id\n            WHERE qa.userid > 0\n              AND qa.timemodified BETWEEN ? AND ?\n              $coursesql\n            GROUP BY q.id, q.name, c.id, c.fullname, u.id, u.firstname, u.lastname\n            ORDER BY MAX(qa.timemodified) DESC\n        ", $params);
 
         $items = [];
         foreach ($records as $record) {
@@ -1528,7 +1520,6 @@ class report_snapshot_builder {
                 'course_name' => trim((string)$record->coursefullname),
                 'user_id' => (int)$record->userid,
                 'user_name' => trim($record->firstname . ' ' . $record->lastname),
-                'email' => trim((string)$record->email),
                 'attempts' => $attempts,
                 'finished_attempts' => $finishedattempts,
                 'best_score' => (float)$record->bestscore,
@@ -1672,8 +1663,7 @@ class report_snapshot_builder {
                 e.courseid,
                 u.id AS userid,
                 COALESCE(u.firstname, '') AS firstname,
-                COALESCE(u.lastname, '') AS lastname,
-                COALESCE(u.email, '') AS email
+                COALESCE(u.lastname, '') AS lastname
             FROM {enrol} e
             JOIN {user_enrolments} ue ON ue.enrolid = e.id AND ue.status = 0
             JOIN {user} u ON u.id = ue.userid AND u.deleted = 0 AND u.suspended = 0
@@ -1693,7 +1683,6 @@ class report_snapshot_builder {
             $items[$resolvedcourseid][$userid] = [
                 'user_id' => $userid,
                 'user_name' => trim($record->firstname . ' ' . $record->lastname),
-                'email' => trim((string)$record->email),
             ];
         }
         $records->close();

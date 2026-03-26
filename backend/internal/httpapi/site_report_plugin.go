@@ -1,9 +1,11 @@
 package httpapi
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -28,6 +30,7 @@ type siteReportPluginConnectTokenResponse struct {
 	Mode              string    `json:"mode"`
 	SiteID            uuid.UUID `json:"site_id"`
 	RegistrationToken string    `json:"registration_token"`
+	ExpiresAt         string    `json:"expires_at,omitempty"`
 	Message           string    `json:"message"`
 }
 
@@ -40,6 +43,8 @@ type siteReportPluginRegistrationRequest struct {
 	MoodleVersion     string   `json:"moodle_version"`
 	Capabilities      []string `json:"capabilities"`
 }
+
+const siteReportConnectTokenTTL = 15 * time.Minute
 
 func (s *Server) handleBootstrapSiteReportPlugin(w http.ResponseWriter, r *http.Request) {
 	var req siteReportPluginRegistrationRequest
@@ -74,13 +79,29 @@ func (s *Server) handleIssueSiteReportConnectToken(w http.ResponseWriter, r *htt
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	rawToken, err := auth.NewOpaqueToken()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	expiresAt := time.Now().UTC().Add(siteReportConnectTokenTTL)
+	if _, err := s.store.CreateSiteReportConnectToken(r.Context(), store.CreateSiteReportConnectTokenParams{
+		SiteID:      siteID,
+		OwnerUserID: user.ID,
+		TokenHash:   auth.HashToken(rawToken),
+		ExpiresAt:   expiresAt,
+	}); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
 
 	writeJSON(w, http.StatusOK, siteReportPluginConnectTokenResponse{
 		Status:            "ready",
 		Mode:              "manual",
 		SiteID:            siteID,
-		RegistrationToken: provisioning.ReportConnectToken(s.cfg.SiteRuntimeSecret, siteID.String()),
-		Message:           "Connect token plugin laporan berhasil dibuat",
+		RegistrationToken: rawToken,
+		ExpiresAt:         expiresAt.Format(timeRFC3339UTC),
+		Message:           "Connect token plugin laporan berhasil dibuat dan berlaku singkat.",
 	})
 }
 
@@ -107,7 +128,7 @@ func (s *Server) handleRegisterSiteReportPlugin(w http.ResponseWriter, r *http.R
 			writeError(w, http.StatusBadRequest, "Bootstrap token wajib diisi")
 			return
 		}
-		if !provisioning.ValidateReportBootstrapToken(s.cfg.SiteRuntimeSecret, site.ID.String(), req.BootstrapToken) {
+		if !s.validateSiteReportBootstrapToken(r.Context(), site, req.BootstrapToken) {
 			writeError(w, http.StatusUnauthorized, "Bootstrap token tidak valid")
 			return
 		}
@@ -116,8 +137,17 @@ func (s *Server) handleRegisterSiteReportPlugin(w http.ResponseWriter, r *http.R
 			writeError(w, http.StatusBadRequest, "Registration token wajib diisi")
 			return
 		}
-		if !provisioning.ValidateReportConnectToken(s.cfg.SiteRuntimeSecret, site.ID.String(), req.RegistrationToken) {
-			writeError(w, http.StatusUnauthorized, "Registration token tidak valid")
+		if _, err := s.store.RedeemSiteReportConnectToken(r.Context(), site.ID, req.RegistrationToken); err != nil {
+			switch {
+			case errors.Is(err, store.ErrNotFound):
+				writeError(w, http.StatusUnauthorized, "Registration token tidak valid")
+			case errors.Is(err, store.ErrSiteReportConnectTokenExpired):
+				writeError(w, http.StatusGone, "Registration token sudah kedaluwarsa. Buat token baru dari dashboard.")
+			case errors.Is(err, store.ErrSiteReportConnectTokenUsed):
+				writeError(w, http.StatusGone, "Registration token ini sudah pernah digunakan. Buat token baru dari dashboard.")
+			default:
+				writeError(w, http.StatusInternalServerError, err.Error())
+			}
 			return
 		}
 	default:
@@ -196,4 +226,15 @@ func normalizeCapabilities(values []string) []string {
 		return []string{"summary_metrics_v1"}
 	}
 	return normalized
+}
+
+func (s *Server) validateSiteReportBootstrapToken(ctx context.Context, site store.Site, provided string) bool {
+	runtimeMetadata, err := s.store.GetSiteRuntimeMetadata(ctx, site.ID)
+	if err != nil && !errors.Is(err, store.ErrNotFound) {
+		return false
+	}
+	if err == nil {
+		return provisioning.ValidateSiteReportBootstrapToken(s.cfg.SiteRuntimeSecret, site, &runtimeMetadata, provided)
+	}
+	return provisioning.ValidateSiteReportBootstrapToken(s.cfg.SiteRuntimeSecret, site, nil, provided)
 }

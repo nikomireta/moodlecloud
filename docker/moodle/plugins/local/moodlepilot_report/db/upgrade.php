@@ -166,5 +166,24 @@ function xmldb_local_moodlepilot_report_upgrade(int $oldversion): bool {
         upgrade_plugin_savepoint(true, 2026031901, 'local', 'moodlepilot_report');
     }
 
+    if ($oldversion < 2026032604) {
+        if ($dbman->table_exists(new xmldb_table('local_mpilot_rpt_detail'))) {
+            $DB->execute("UPDATE {local_mpilot_rpt_detail} SET useragent = '', userip = '' WHERE COALESCE(useragent, '') <> '' OR COALESCE(userip, '') <> ''");
+        }
+
+        if ($dbman->table_exists(new xmldb_table('local_mpilot_rpt_track'))) {
+            $DB->execute("UPDATE {local_mpilot_rpt_track} SET useragent = '', userip = '' WHERE COALESCE(useragent, '') <> '' OR COALESCE(userip, '') <> ''");
+        }
+
+        if ($dbman->table_exists(new xmldb_table('local_mpilot_rpt_event'))) {
+            $DB->execute(
+                "UPDATE {local_mpilot_rpt_event} SET useragent = '', userip = '', metadata = ? WHERE COALESCE(useragent, '') <> '' OR COALESCE(userip, '') <> '' OR COALESCE(metadata, '') <> ''",
+                ['{"redacted":true}']
+            );
+        }
+
+        upgrade_plugin_savepoint(true, 2026032604, 'local', 'moodlepilot_report');
+    }
+
     return true;
 }

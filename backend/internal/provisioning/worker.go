@@ -59,16 +59,17 @@ func (h Handler) HandleProvisionSiteTask(ctx context.Context, task *asynq.Task) 
 		}
 		runtimeMetadata = &metadata
 		_, err = h.Store.UpsertSiteRuntimeMetadata(stepCtx, store.UpsertSiteRuntimeMetadataParams{
-			SiteID:            metadata.SiteID,
-			ImageRepository:   metadata.ImageRepository,
-			ImageTag:          metadata.ImageTag,
-			WebContainerName:  metadata.WebContainerName,
-			CronContainerName: metadata.CronContainerName,
-			VolumeName:        metadata.VolumeName,
-			DatabaseName:      metadata.DatabaseName,
-			DatabaseUser:      metadata.DatabaseUser,
-			HealthStatus:      metadata.HealthStatus,
-			LastHealthError:   metadata.LastHealthError,
+			SiteID:               metadata.SiteID,
+			ImageRepository:      metadata.ImageRepository,
+			ImageTag:             metadata.ImageTag,
+			WebContainerName:     metadata.WebContainerName,
+			CronContainerName:    metadata.CronContainerName,
+			VolumeName:           metadata.VolumeName,
+			DatabaseName:         metadata.DatabaseName,
+			DatabaseUser:         metadata.DatabaseUser,
+			HealthStatus:         metadata.HealthStatus,
+			LastHealthError:      metadata.LastHealthError,
+			ReportBootstrapToken: metadata.ReportBootstrapToken,
 		})
 		return err
 	}); err != nil {

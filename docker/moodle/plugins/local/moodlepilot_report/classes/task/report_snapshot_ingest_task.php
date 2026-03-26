@@ -21,6 +21,7 @@ defined('MOODLE_INTERNAL') || die();
 use core\task\scheduled_task;
 use local_moodlepilot_report\local\analytics_repository;
 use local_moodlepilot_report\local\bootstrap_config;
+use local_moodlepilot_report\local\internal_api_client;
 use local_moodlepilot_report\local\report_snapshot_builder;
 
 class report_snapshot_ingest_task extends scheduled_task {
@@ -45,7 +46,6 @@ class report_snapshot_ingest_task extends scheduled_task {
             return;
         }
 
-        require_once($CFG->libdir . '/filelib.php');
         $snapshots = report_snapshot_builder::build_supported_snapshots();
         $lastreceivedat = '';
 
@@ -78,28 +78,21 @@ class report_snapshot_ingest_task extends scheduled_task {
                     return;
                 }
 
-                $curl = new \curl(['ignoresecurity' => true]);
-                $response = $curl->post(
+                $response = internal_api_client::post_json(
                     $ingesturl,
-                    $json,
+                    $payload,
                     [
-                        'CURLOPT_RETURNTRANSFER' => true,
-                        'CURLOPT_CONNECTTIMEOUT' => 5,
-                        'CURLOPT_TIMEOUT' => 30,
-                        'CURLOPT_HTTPHEADER' => [
-                            'Content-Type: application/json',
-                            'Accept: application/json',
-                            'Authorization: Bearer ' . $ingesttoken,
-                        ],
-                    ]
+                        'Content-Type' => 'application/json',
+                        'Authorization' => 'Bearer ' . $ingesttoken,
+                    ],
+                    30
                 );
-
-                $info = $curl->get_info();
-                $statuscode = (int)($info['http_code'] ?? 0);
-                $decoded = json_decode((string)$response, true);
+                $statuscode = (int)$response['status_code'];
+                $decoded = is_array($response['decoded']) ? $response['decoded'] : null;
+                $rawresponse = (string)$response['raw_body'];
 
                 if ($statuscode < 200 || $statuscode >= 300 || !is_array($decoded)) {
-                    $this->store_error(bootstrap_config::error_message_from_response($decoded, (string)$response, $statuscode), $syncid);
+                    $this->store_error(bootstrap_config::error_message_from_response($decoded, $rawresponse, $statuscode), $syncid);
                     return;
                 }
 

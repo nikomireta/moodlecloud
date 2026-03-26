@@ -20,6 +20,7 @@ defined('MOODLE_INTERNAL') || die();
 
 use core\task\scheduled_task;
 use local_moodlepilot_report\local\bootstrap_config;
+use local_moodlepilot_report\local\internal_api_client;
 
 class bootstrap_registration_task extends scheduled_task {
     public function get_name(): string {
@@ -59,8 +60,6 @@ class bootstrap_registration_task extends scheduled_task {
             return;
         }
 
-        require_once($CFG->libdir . '/filelib.php');
-
         $payload = [
             'site_id' => bootstrap_config::site_id(),
             'site_url' => rtrim((string)$CFG->wwwroot, '/'),
@@ -89,29 +88,17 @@ class bootstrap_registration_task extends scheduled_task {
             return;
         }
 
-        // The bootstrap or connect target may use an internal host like
-        // host.docker.internal in local environments.
-        $curl = new \curl(['ignoresecurity' => true]);
-        $response = $curl->post(
+        $response = internal_api_client::post_json(
             $targetendpoint,
-            $json,
-            [
-                'CURLOPT_RETURNTRANSFER' => true,
-                'CURLOPT_CONNECTTIMEOUT' => 5,
-                'CURLOPT_TIMEOUT' => 20,
-                'CURLOPT_HTTPHEADER' => [
-                    'Content-Type: application/json',
-                    'Accept: application/json',
-                ],
-            ]
+            $payload,
+            ['Content-Type' => 'application/json']
         );
-
-        $info = $curl->get_info();
-        $statuscode = (int)($info['http_code'] ?? 0);
-        $decoded = json_decode((string)$response, true);
+        $statuscode = (int)$response['status_code'];
+        $decoded = is_array($response['decoded']) ? $response['decoded'] : null;
+        $rawresponse = (string)$response['raw_body'];
 
         if ($statuscode < 200 || $statuscode >= 300 || !is_array($decoded)) {
-            $message = bootstrap_config::error_message_from_response($decoded, (string)$response, $statuscode);
+            $message = bootstrap_config::error_message_from_response($decoded, $rawresponse, $statuscode);
             $this->store_error($message);
             return;
         }
@@ -130,6 +117,7 @@ class bootstrap_registration_task extends scheduled_task {
         set_config('last_ingest_error', '', 'local_moodlepilot_report');
         if ($mode === 'manual') {
             set_config('manual_force_reconnect', 0, 'local_moodlepilot_report');
+            set_config('manual_registration_token', '', 'local_moodlepilot_report');
         }
         mtrace('[local_moodlepilot_report] ' . $mode . ' registration completed.');
     }

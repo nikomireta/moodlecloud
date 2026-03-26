@@ -17,6 +17,7 @@
 require_once(__DIR__ . '/../../config.php');
 
 use local_moodlepilot_report\local\bootstrap_config;
+use local_moodlepilot_report\local\internal_api_client;
 
 require_once($CFG->libdir . '/filelib.php');
 
@@ -29,6 +30,12 @@ $PAGE->set_pagelayout('login');
 $PAGE->set_title(get_string('adminaccess:page_title', 'local_moodlepilot_report'));
 $PAGE->set_heading(get_string('adminaccess:page_heading', 'local_moodlepilot_report'));
 $PAGE->navbar->add(get_string('adminaccess:page_heading', 'local_moodlepilot_report'));
+
+if (!headers_sent()) {
+    header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+    header('Pragma: no-cache');
+    header('Referrer-Policy: no-referrer');
+}
 
 $render_error = static function(string $message, int $statuscode = 400) use ($OUTPUT): void {
     if (!headers_sent()) {
@@ -70,6 +77,10 @@ $find_user_by_email = static function(string $email) {
     return reset($matches);
 };
 
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    $render_error(get_string('adminaccess:error_post_required', 'local_moodlepilot_report'), 405);
+}
+
 if ($token === '') {
     $render_error(get_string('adminaccess:error_missing_token', 'local_moodlepilot_report'));
 }
@@ -81,35 +92,26 @@ if ($siteid === '' || $bootstraptoken === '' || $redeemendpoint === '') {
     $render_error(get_string('adminaccess:error_unavailable', 'local_moodlepilot_report'), 503);
 }
 
-$payload = json_encode([
+$payload = [
     'site_id' => $siteid,
-    'bootstrap_token' => $bootstraptoken,
     'access_token' => $token,
-]);
-if ($payload === false) {
-    $render_error(get_string('adminaccess:error_unavailable', 'local_moodlepilot_report'), 500);
+];
+if ($bootstraptoken !== '') {
+    $payload['bootstrap_token'] = $bootstraptoken;
+}
+$headers = ['Content-Type' => 'application/json'];
+$ingesttoken = bootstrap_config::ingest_token();
+if ($ingesttoken !== '') {
+    $headers['Authorization'] = 'Bearer ' . $ingesttoken;
 }
 
-$curl = new \curl(['ignoresecurity' => true]);
-$response = $curl->post(
-    $redeemendpoint,
-    $payload,
-    [
-        'CURLOPT_RETURNTRANSFER' => true,
-        'CURLOPT_CONNECTTIMEOUT' => 5,
-        'CURLOPT_TIMEOUT' => 20,
-        'CURLOPT_HTTPHEADER' => [
-            'Content-Type: application/json',
-            'Accept: application/json',
-        ],
-    ]
-);
-$info = $curl->get_info();
-$statuscode = (int)($info['http_code'] ?? 0);
-$decoded = json_decode((string)$response, true);
+$response = internal_api_client::post_json($redeemendpoint, $payload, $headers);
+$statuscode = (int)$response['status_code'];
+$decoded = is_array($response['decoded']) ? $response['decoded'] : null;
+$rawbody = (string)$response['raw_body'];
 
 if ($statuscode < 200 || $statuscode >= 300 || !is_array($decoded)) {
-    $message = bootstrap_config::error_message_from_response($decoded, (string)$response, $statuscode);
+    $message = bootstrap_config::error_message_from_response($decoded, $rawbody, $statuscode);
     $render_error($message, $statuscode > 0 ? $statuscode : 500);
 }
 
