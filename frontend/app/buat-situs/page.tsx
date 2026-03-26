@@ -21,7 +21,7 @@ import Link from "next/link"
 import { ProtectedRoute } from "@/components/auth/protected-route"
 import { useAuth } from "@/components/providers/auth-provider"
 import { api, isAPIError } from "@/lib/api"
-import { getTierByCode, pricingPlanOptions } from "@/lib/pricing"
+import { getTierByCode, SELF_SERVE_REGION, selfServePricingPlanOptions } from "@/lib/pricing"
 import { buildSiteURL, SITE_BASE_DOMAIN } from "@/lib/site-url"
 
 type Step = 1 | 2 | 3
@@ -49,7 +49,7 @@ export default function BuatSitusPage() {
     adminName: "",
     adminEmail: "",
     plan: "",
-    region: "",
+    region: SELF_SERVE_REGION,
   })
 
   const steps = [
@@ -355,7 +355,7 @@ export default function BuatSitusPage() {
                         <SelectValue placeholder="Pilih paket layanan" />
                       </SelectTrigger>
                       <SelectContent>
-                        {pricingPlanOptions.map((plan) => (
+                        {selfServePricingPlanOptions.map((plan) => (
                           <SelectItem key={plan.code} value={plan.code}>
                             <div className="flex flex-col items-start">
                               <span>{plan.label} - Rp {plan.caption}</span>
@@ -380,11 +380,10 @@ export default function BuatSitusPage() {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="jakarta">Jakarta, Indonesia</SelectItem>
-                        <SelectItem value="singapore">Singapura</SelectItem>
                       </SelectContent>
                     </Select>
                     <p className="text-xs text-muted-foreground">
-                      Pilih lokasi server terdekat untuk performa terbaik
+                      Untuk fase shared hosting saat ini, paket self-serve ditempatkan di Jakarta.
                     </p>
                   </div>
                 </CardContent>

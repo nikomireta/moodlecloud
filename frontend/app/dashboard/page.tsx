@@ -15,7 +15,7 @@ import {
 import Link from "next/link"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { ProtectedRoute } from "@/components/auth/protected-route"
-import { useAuth } from "@/components/providers/auth-provider"
+import { useRuntimeActions } from "@/components/providers/runtime-actions-provider"
 import { api, type SiteSummary } from "@/lib/api"
 import { siteHostFromURL } from "@/lib/site-url"
 
@@ -27,7 +27,22 @@ type DashboardSite = {
   siteUrl: string
   siteHost: string
   runtimeHealth?: string
+  quotaState?: "normal" | "warning" | "critical"
+  quotaLabel?: string
+  activeUsersSummary?: string
+  storageSummary?: string
   lastActivity?: string
+}
+
+function sitePriority(site: DashboardSite): number {
+  if (site.status === "gagal") return 0
+  if (site.status === "sedang_dibuat") return 1
+  if (site.runtimeHealth === "failed" || site.runtimeHealth === "stopped") return 2
+  if (site.runtimeHealth === "degraded") return 3
+  if (site.quotaState === "critical") return 4
+  if (site.quotaState === "warning") return 5
+  if (site.status === "aktif") return 6
+  return 7
 }
 
 function mapSiteStatus(status: string): DashboardSite["status"] {
@@ -52,7 +67,60 @@ function relativeTime(dateStr: string): string {
   return `${diffMonths} bulan lalu`
 }
 
+function formatCount(value?: number | null): string {
+  if (typeof value !== "number" || Number.isNaN(value) || value < 0) {
+    return "-"
+  }
+  return value.toLocaleString("id-ID")
+}
+
+function formatBytes(value?: number | null): string {
+  if (typeof value !== "number" || Number.isNaN(value) || value < 0) {
+    return "-"
+  }
+
+  const units = ["B", "KB", "MB", "GB", "TB"]
+  let size = value
+  let unitIndex = 0
+
+  while (size >= 1024 && unitIndex < units.length - 1) {
+    size /= 1024
+    unitIndex += 1
+  }
+
+  const digits = size >= 10 || unitIndex === 0 ? 0 : 1
+  return `${size.toFixed(digits)} ${units[unitIndex]}`
+}
+
+function quotaStateFromSite(site: SiteSummary): DashboardSite["quotaState"] {
+  const usage = site.usage
+  if (!usage) {
+    return undefined
+  }
+  if (usage.over_limit || usage.warning_level === "over_limit" || usage.warning_level === "critical") {
+    return "critical"
+  }
+  if (usage.warning_level === "warning") {
+    return "warning"
+  }
+  return "normal"
+}
+
+function quotaLabelFromState(state: DashboardSite["quotaState"]): string | undefined {
+  if (state === "critical") {
+    return "Quota kritis"
+  }
+  if (state === "warning") {
+    return "Quota waspada"
+  }
+  if (state === "normal") {
+    return "Quota aman"
+  }
+  return undefined
+}
+
 function mapApiSite(site: SiteSummary): DashboardSite {
+  const quotaState = quotaStateFromSite(site)
   return {
     id: site.id,
     name: site.name,
@@ -61,6 +129,10 @@ function mapApiSite(site: SiteSummary): DashboardSite {
     siteUrl: site.site_url,
     siteHost: siteHostFromURL(site.site_url) || site.subdomain,
     runtimeHealth: site.runtime_health,
+    quotaState,
+    quotaLabel: quotaLabelFromState(quotaState),
+    activeUsersSummary: site.usage ? `${formatCount(site.usage.users_active_count)} / ${formatCount(site.users_active_limit)}` : undefined,
+    storageSummary: site.usage ? `${formatBytes(site.usage.storage_bytes_used)} / ${formatBytes(site.storage_bytes_limit)}` : undefined,
     lastActivity: site.updated_at ? relativeTime(site.updated_at) : undefined,
   }
 }
@@ -70,7 +142,7 @@ type StatusFilter = "semua" | "aktif" | "sedang_dibuat" | "nonaktif" | "gagal"
 const ITEMS_PER_PAGE = 12
 
 export default function DashboardPage() {
-  const { user } = useAuth()
+  const { pendingActions, getPendingAction, runRuntimeAction } = useRuntimeActions()
   const [sites, setSites] = useState<DashboardSite[]>([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState("")
@@ -78,6 +150,7 @@ export default function DashboardPage() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("semua")
   const [visibleCount, setVisibleCount] = useState(ITEMS_PER_PAGE)
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const previousPendingSiteIDsRef = useRef<string[]>([])
 
   const fetchSites = useCallback(async () => {
     try {
@@ -95,29 +168,50 @@ export default function DashboardPage() {
     fetchSites()
   }, [fetchSites])
 
-  // Polling: refresh every 10s if any site is provisioning
+  const pendingSiteIDs = useMemo(() => Object.keys(pendingActions), [pendingActions])
+  const hasPendingRuntimeActions = pendingSiteIDs.length > 0
+  const hasProvisioning = sites.some((s) => s.status === "sedang_dibuat")
+
+  // Polling: refresh every 2s if any runtime action is in flight,
+  // otherwise every 10s if a site is still provisioning.
   useEffect(() => {
-    const hasProvisioning = sites.some((s) => s.status === "sedang_dibuat")
-    if (hasProvisioning) {
-      pollingRef.current = setInterval(fetchSites, 10000)
-    } else if (pollingRef.current) {
+    const intervalMs = hasPendingRuntimeActions ? 2000 : hasProvisioning ? 10000 : null
+
+    if (pollingRef.current) {
       clearInterval(pollingRef.current)
       pollingRef.current = null
     }
+
+    if (intervalMs !== null) {
+      pollingRef.current = setInterval(() => {
+        void fetchSites()
+      }, intervalMs)
+    }
+
     return () => {
       if (pollingRef.current) clearInterval(pollingRef.current)
     }
-  }, [sites, fetchSites])
+  }, [fetchSites, hasPendingRuntimeActions, hasProvisioning])
+
+  useEffect(() => {
+    const settledSiteIDs = previousPendingSiteIDsRef.current.filter(
+      (siteID) => !pendingSiteIDs.includes(siteID)
+    )
+
+    previousPendingSiteIDsRef.current = pendingSiteIDs
+
+    if (settledSiteIDs.length > 0) {
+      void fetchSites()
+    }
+  }, [fetchSites, pendingSiteIDs])
 
   const filteredSites = useMemo(() => {
     let result = sites
 
-    // Filter by status
     if (statusFilter !== "semua") {
       result = result.filter((s) => s.status === statusFilter)
     }
 
-    // Filter by search
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase()
       result = result.filter(
@@ -127,7 +221,13 @@ export default function DashboardPage() {
       )
     }
 
-    return result
+    return [...result].sort((left, right) => {
+      const priorityDiff = sitePriority(left) - sitePriority(right)
+      if (priorityDiff !== 0) {
+        return priorityDiff
+      }
+      return left.name.localeCompare(right.name, "id-ID")
+    })
   }, [sites, searchQuery, statusFilter])
 
   const paginatedSites = useMemo(() => {
@@ -273,8 +373,18 @@ export default function DashboardPage() {
                     siteUrl={site.siteUrl}
                     siteHost={site.siteHost}
                     runtimeHealth={site.runtimeHealth}
+                    quotaState={site.quotaState}
+                    quotaLabel={site.quotaLabel}
+                    activeUsersSummary={site.activeUsersSummary}
+                    storageSummary={site.storageSummary}
                     lastActivity={site.lastActivity}
-                    onAction={fetchSites}
+                    viewMode={viewMode}
+                    pendingRuntimeAction={getPendingAction(site.id)}
+                    onRuntimeAction={(action) => {
+                      void runRuntimeAction(site.id, action).catch(() => {
+                        // Keep dashboard runtime actions lightweight for now.
+                      })
+                    }}
                   />
                 ))
               )}

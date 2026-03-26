@@ -16,8 +16,15 @@
 
 defined('MOODLE_INTERNAL') || die();
 
-$plugin->component = 'local_moodlepilot_report';
-$plugin->version = 2026032600;
-$plugin->requires = 2022041900;
-$plugin->release = '0.6.4';
-$plugin->maturity = MATURITY_ALPHA;
+$callbacks = [
+    [
+        'hook' => \core_files\hook\before_file_created::class,
+        'callback' => \local_moodlepilot_report\hook_listener::class . '::before_file_created',
+        'priority' => 1000,
+    ],
+    [
+        'hook' => \core_user\hook\before_user_updated::class,
+        'callback' => \local_moodlepilot_report\hook_listener::class . '::before_user_updated',
+        'priority' => 1000,
+    ],
+];

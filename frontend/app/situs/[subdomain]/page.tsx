@@ -1,6 +1,6 @@
 "use client"
 
-import { use, useEffect, useState } from "react"
+import { use, useEffect, useRef, useState } from "react"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 import { ProtectedRoute } from "@/components/auth/protected-route"
@@ -10,6 +10,8 @@ import { SiteReportTab } from "@/components/dashboard/site-report-tab"
 import { SiteSummaryTab } from "@/components/site-detail/site-summary-tab"
 import { SiteBackupTab } from "@/components/site-detail/site-backup-tab"
 import { SiteSettingsTab } from "@/components/site-detail/site-settings-tab"
+import { SitePlanUpgradeDialog } from "@/components/site-detail/site-plan-upgrade-dialog"
+import { useRuntimeActions, type RuntimeAction } from "@/components/providers/runtime-actions-provider"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
@@ -30,11 +32,13 @@ import {
   findRuntimeService,
   isRuntimeControllable,
 } from "@/components/site-detail/site-detail-helpers"
+import { getSelfServeUpgradeOptions } from "@/lib/pricing"
 
 export default function SiteDetailPage({ params }: { params: Promise<{ subdomain: string }> }) {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { subdomain } = use(params)
+  const { runRuntimeAction, getPendingAction, isRuntimeActionPending } = useRuntimeActions()
   
   const [siteData, setSiteData] = useState<SiteSummary | null>(null)
   const [siteSettings, setSiteSettings] = useState<SiteSettingsResponse | null>(null)
@@ -42,8 +46,9 @@ export default function SiteDetailPage({ params }: { params: Promise<{ subdomain
   const [siteUsage, setSiteUsage] = useState<SiteUsageSnapshot | null>(null)
   const [reportConnection, setReportConnection] = useState<SiteReportConnectionStatus | null>(null)
   const [runtimeError, setRuntimeError] = useState("")
-  const [runtimeAction, setRuntimeAction] = useState<"start" | "restart" | "stop" | null>(null)
   const [activeTab, setActiveTab] = useState("ringkasan")
+  const [planUpgradeOpen, setPlanUpgradeOpen] = useState(false)
+  const previousPendingRef = useRef(false)
 
   const loadSiteContext = async (siteSubdomain: string) => {
     const siteResponse = await api.getSiteBySubdomain(siteSubdomain)
@@ -77,10 +82,14 @@ export default function SiteDetailPage({ params }: { params: Promise<{ subdomain
 
     if (context.usageResult.status === "fulfilled") {
       setSiteUsage(context.usageResult.value.usage)
+    } else {
+      setSiteUsage(null)
     }
   }
 
   const siteID = siteData?.id ?? null
+  const pendingRuntimeAction = siteID ? getPendingAction(siteID) : null
+  const isPendingRuntimeAction = siteID ? isRuntimeActionPending(siteID) : false
 
   useEffect(() => {
     if (!siteID) {
@@ -143,7 +152,7 @@ export default function SiteDetailPage({ params }: { params: Promise<{ subdomain
   }, [subdomain])
 
   useEffect(() => {
-    if (activeTab !== "ringkasan" || !siteData || runtimeAction !== null) {
+    if (activeTab !== "ringkasan" || !siteData || isPendingRuntimeAction) {
       return
     }
 
@@ -162,7 +171,69 @@ export default function SiteDetailPage({ params }: { params: Promise<{ subdomain
     return () => {
       window.clearInterval(intervalID)
     }
-  }, [activeTab, siteData, runtimeAction])
+  }, [activeTab, isPendingRuntimeAction, siteData])
+
+  useEffect(() => {
+    if (!siteData || !isPendingRuntimeAction) {
+      return
+    }
+
+    let cancelled = false
+
+    const refreshRuntime = async () => {
+      try {
+        const refreshedStatus = await api.getSiteRuntime(siteData.id)
+        if (cancelled) {
+          return
+        }
+        setRuntimeStatus(refreshedStatus)
+        if (refreshedStatus.last_error) {
+          setRuntimeError(refreshedStatus.last_error)
+        }
+      } catch {
+        // Keep polling lightweight while an action is still in flight.
+      }
+    }
+
+    void refreshRuntime()
+    const intervalID = window.setInterval(() => {
+      void refreshRuntime()
+    }, 2000)
+
+    return () => {
+      cancelled = true
+      window.clearInterval(intervalID)
+    }
+  }, [isPendingRuntimeAction, siteData])
+
+  useEffect(() => {
+    const wasPending = previousPendingRef.current
+    previousPendingRef.current = isPendingRuntimeAction
+
+    if (!siteData || !wasPending || isPendingRuntimeAction) {
+      return
+    }
+
+    let cancelled = false
+
+    const refreshSiteContext = async () => {
+      try {
+        const context = await loadSiteContext(subdomain)
+        if (cancelled) {
+          return
+        }
+        applySiteContext(context)
+      } catch {
+        // Preserve the last known state if the final refresh fails.
+      }
+    }
+
+    void refreshSiteContext()
+
+    return () => {
+      cancelled = true
+    }
+  }, [isPendingRuntimeAction, siteData, subdomain])
 
   const siteUrl = siteData?.site_url ?? buildSiteURL(subdomain)
   const siteHost = siteHostFromURL(siteUrl, subdomain)
@@ -179,23 +250,13 @@ export default function SiteDetailPage({ params }: { params: Promise<{ subdomain
   const canRestart = canControlRuntime && ["running", "degraded", "unknown"].includes(runtimeStatus?.overall_status ?? "")
   const canStop = canControlRuntime && ((webService?.state ?? "unknown") === "running" || (cronService?.state ?? "unknown") === "running")
 
-  const handleRuntimeAction = async (action: "start" | "restart" | "stop") => {
+  const handleRuntimeAction = (action: RuntimeAction) => {
     if (!siteData) {
       return
     }
 
-    setRuntimeAction(action)
-    try {
-      const nextStatus =
-        action === "start"
-          ? await api.startSiteRuntime(siteData.id)
-          : action === "restart"
-            ? await api.restartSiteRuntime(siteData.id)
-            : await api.stopSiteRuntime(siteData.id)
-      setRuntimeStatus(nextStatus)
-      setSiteData(nextStatus.site)
-      setRuntimeError(nextStatus.last_error ?? "")
-    } catch (error) {
+    setRuntimeError("")
+    void runRuntimeAction(siteData.id, action).catch(async (error) => {
       setRuntimeError(isAPIError(error) ? error.message : "Aksi runtime gagal dijalankan")
       try {
         const refreshedStatus = await api.getSiteRuntime(siteData.id)
@@ -207,15 +268,20 @@ export default function SiteDetailPage({ params }: { params: Promise<{ subdomain
       } catch {
         // Keep the previous runtime state if refresh fails.
       }
-    } finally {
-      setRuntimeAction(null)
-    }
+    })
   }
 
   const handleSiteTabChange = (tab: string) => {
     setActiveTab(tab)
     router.replace(`/situs/${subdomain}?tab=${tab}`, { scroll: false })
   }
+
+  const handlePlanChanged = async () => {
+    const context = await loadSiteContext(subdomain)
+    applySiteContext(context)
+  }
+
+  const canUpgradePlan = getSelfServeUpgradeOptions(siteData?.plan_code).length > 0
 
   return (
     <ProtectedRoute>
@@ -260,29 +326,29 @@ export default function SiteDetailPage({ params }: { params: Promise<{ subdomain
                         <Button 
                           variant="outline" 
                           size="sm" 
-                          disabled={!canRestart || runtimeAction !== null} 
+                          disabled={!canRestart || isPendingRuntimeAction} 
                           onClick={() => handleRuntimeAction("restart")}
                         >
-                          {runtimeAction === "restart" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RotateCw className="mr-2 h-4 w-4" />}
+                          {pendingRuntimeAction === "restart" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RotateCw className="mr-2 h-4 w-4" />}
                           Restart
                         </Button>
                         <Button 
                           variant="outline" 
                           size="sm" 
-                          disabled={!canStart || runtimeAction !== null}
+                          disabled={!canStart || isPendingRuntimeAction}
                           onClick={() => handleRuntimeAction("start")}
                         >
-                          {runtimeAction === "start" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Play className="mr-2 h-4 w-4" />}
+                          {pendingRuntimeAction === "start" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Play className="mr-2 h-4 w-4" />}
                           Start
                         </Button>
                         <Button 
                           variant="outline" 
                           size="sm" 
                           className="hover:bg-destructive hover:text-destructive-foreground hover:border-destructive"
-                          disabled={!canStop || runtimeAction !== null}
+                          disabled={!canStop || isPendingRuntimeAction}
                           onClick={() => handleRuntimeAction("stop")}
                         >
-                          {runtimeAction === "stop" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Square className="mr-2 h-4 w-4" />}
+                          {pendingRuntimeAction === "stop" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Square className="mr-2 h-4 w-4" />}
                           Stop
                         </Button>
                       </>
@@ -314,6 +380,8 @@ export default function SiteDetailPage({ params }: { params: Promise<{ subdomain
                       reportConnection={reportConnection}
                       runtimeError={runtimeError}
                       currentDomainHost={currentDomainHost}
+                      canUpgradePlan={canUpgradePlan}
+                      onUpgradePlan={() => setPlanUpgradeOpen(true)}
                     />
                   </TabsContent>
 
@@ -345,6 +413,13 @@ export default function SiteDetailPage({ params }: { params: Promise<{ subdomain
             )}
           </div>
         </main>
+
+        <SitePlanUpgradeDialog
+          open={planUpgradeOpen}
+          onOpenChange={setPlanUpgradeOpen}
+          site={siteData}
+          onPlanChanged={handlePlanChanged}
+        />
         
         <Footer />
       </div>

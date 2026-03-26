@@ -52,9 +52,20 @@ func (s *Store) ListSitesByOwner(ctx context.Context, ownerUserID uuid.UUID) ([]
 			s.admin_name, s.admin_email, s.moodle_username, s.provisioning_step, s.last_error,
 			s.users_active_limit, s.storage_bytes_limit, s.web_cpu_millicores, s.web_memory_mib,
 			s.cron_cpu_millicores, s.cron_memory_mib, s.activated_at, s.created_at, s.updated_at,
-			COALESCE(m.health_status, '') as runtime_health
+			COALESCE(m.health_status, '') as runtime_health,
+			COALESCE(u.users_active_count, 0),
+			COALESCE(u.files_bytes_used, 0),
+			COALESCE(u.database_bytes_used, 0),
+			COALESCE(u.storage_bytes_used, 0),
+			COALESCE(NULLIF(u.warning_level, ''), 'normal'),
+			COALESCE(u.over_limit, FALSE),
+			COALESCE(u.last_error, ''),
+			u.measured_at,
+			COALESCE(u.created_at, s.created_at),
+			COALESCE(u.updated_at, s.updated_at)
 		FROM sites s
 		LEFT JOIN site_runtime_metadata m ON m.site_id = s.id
+		LEFT JOIN site_usage_snapshots u ON u.site_id = s.id
 		WHERE s.owner_user_id = $1
 		ORDER BY s.created_at DESC
 	`, ownerUserID)
@@ -66,9 +77,20 @@ func (s *Store) ListSitesByOwner(ctx context.Context, ownerUserID uuid.UUID) ([]
 	sites := make([]Site, 0)
 	for rows.Next() {
 		var site Site
-		if err := scanSite(rows, &site); err != nil {
-			return nil, err
+		var usage SiteUsageSnapshot
+		if err := rows.Scan(
+			&site.ID, &site.OwnerUserID, &site.Name, &site.Subdomain, &site.PlanCode, &site.Region, &site.Status, &site.SiteURL, &site.AdminURL,
+			&site.AdminName, &site.AdminEmail, &site.MoodleUsername, &site.ProvisioningStep, &site.LastError,
+			&site.UsersActiveLimit, &site.StorageBytesLimit, &site.WebCPUMillicores, &site.WebMemoryMiB,
+			&site.CronCPUMillicores, &site.CronMemoryMiB, &site.ActivatedAt, &site.CreatedAt, &site.UpdatedAt,
+			&site.RuntimeHealth,
+			&usage.UsersActiveCount, &usage.FilesBytesUsed, &usage.DatabaseBytesUsed, &usage.StorageBytesUsed,
+			&usage.WarningLevel, &usage.OverLimit, &usage.LastError, &usage.MeasuredAt, &usage.CreatedAt, &usage.UpdatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("scan site: %w", err)
 		}
+		usage.SiteID = site.ID
+		site.Usage = &usage
 		sites = append(sites, site)
 	}
 	return sites, rows.Err()
@@ -437,6 +459,10 @@ func (s *Store) GetSiteUsageBySiteIDForOwner(ctx context.Context, ownerUserID, s
 		return SiteUsageSnapshot{}, err
 	}
 
+	return s.GetSiteUsageBySiteID(ctx, siteID)
+}
+
+func (s *Store) GetSiteUsageBySiteID(ctx context.Context, siteID uuid.UUID) (SiteUsageSnapshot, error) {
 	var usage SiteUsageSnapshot
 	err := s.pool.QueryRow(ctx, `
 		SELECT
@@ -814,6 +840,37 @@ func validateHostCapacity(ctx context.Context, tx pgx.Tx, plan Plan, capacity Ho
 		return fmt.Errorf("%w: CPU host tidak cukup untuk paket %s", ErrCapacityExceeded, plan.Code)
 	case capacity.MemoryMiBLimit > 0 && reservedMemory+requestedMemory > int64(capacity.MemoryMiBLimit):
 		return fmt.Errorf("%w: memori host tidak cukup untuk paket %s", ErrCapacityExceeded, plan.Code)
+	default:
+		return nil
+	}
+}
+
+func validateHostCapacityChange(ctx context.Context, tx pgx.Tx, currentSite Site, targetPlan Plan, capacity HostCapacityPolicy) error {
+	var reservedStorage int64
+	var reservedCPU int64
+	var reservedMemory int64
+	if err := tx.QueryRow(ctx, `
+		SELECT
+			COALESCE(SUM(storage_bytes_limit), 0),
+			COALESCE(SUM(web_cpu_millicores + cron_cpu_millicores), 0),
+			COALESCE(SUM(web_memory_mib + cron_memory_mib), 0)
+		FROM sites
+		WHERE status NOT IN ('failed', 'deleted')
+		  AND id <> $1
+	`, currentSite.ID).Scan(&reservedStorage, &reservedCPU, &reservedMemory); err != nil {
+		return fmt.Errorf("read host capacity reservations for plan change: %w", err)
+	}
+
+	requestedCPU := int64(targetPlan.WebCPUMillicores + targetPlan.CronCPUMillicores)
+	requestedMemory := int64(targetPlan.WebMemoryMiB + targetPlan.CronMemoryMiB)
+
+	switch {
+	case capacity.StorageBytesLimit > 0 && reservedStorage+targetPlan.StorageBytesLimit > capacity.StorageBytesLimit:
+		return fmt.Errorf("%w: storage host tidak cukup untuk paket %s", ErrCapacityExceeded, targetPlan.Code)
+	case capacity.CPUMillicoresLimit > 0 && reservedCPU+requestedCPU > int64(capacity.CPUMillicoresLimit):
+		return fmt.Errorf("%w: CPU host tidak cukup untuk paket %s", ErrCapacityExceeded, targetPlan.Code)
+	case capacity.MemoryMiBLimit > 0 && reservedMemory+requestedMemory > int64(capacity.MemoryMiBLimit):
+		return fmt.Errorf("%w: memori host tidak cukup untuk paket %s", ErrCapacityExceeded, targetPlan.Code)
 	default:
 		return nil
 	}

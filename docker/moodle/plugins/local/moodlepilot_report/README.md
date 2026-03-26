@@ -9,6 +9,7 @@ It currently provides:
 
 - automatic bootstrap registration with Moodlepilot
 - scheduled summary snapshot ingest to the Moodlepilot backend
+- package quota enforcement for active users and storage uploads
 - Moodle event journaling for high-signal report events
 - browser heartbeat tracking for visits and engaged time
 - rollup processing from granular detail buckets into report aggregates

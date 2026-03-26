@@ -57,6 +57,14 @@ func (h Handler) HandleMeterSiteUsageSweepTask(ctx context.Context, _ *asynq.Tas
 	return nil
 }
 
+func MeasureSiteUsageSnapshot(ctx context.Context, item store.SiteProvisioningContext, siteDBAdminURL, siteRuntimeSecret string) (store.SiteUsageSnapshot, error) {
+	handler := Handler{
+		SiteDBAdminURL:    siteDBAdminURL,
+		SiteRuntimeSecret: siteRuntimeSecret,
+	}
+	return handler.measureSiteUsageSnapshot(ctx, item)
+}
+
 func (h Handler) measureSiteUsageSnapshot(ctx context.Context, item store.SiteProvisioningContext) (store.SiteUsageSnapshot, error) {
 	if item.Runtime == nil {
 		return store.SiteUsageSnapshot{}, errors.New("runtime metadata belum tersedia untuk metering")

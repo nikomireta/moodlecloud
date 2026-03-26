@@ -21,8 +21,30 @@ export type PricingPlanGroup = {
   plans: PricingPlan[]
 }
 
+export type PricingPlanOption = PricingPlan & {
+  caption: string
+  description: string
+}
+
+const legacyPricingPlans: PricingPlan[] = [
+  {
+    code: "starter",
+    label: "Starter",
+    groupId: "legacy",
+    groupLabel: "Legacy",
+    users: 100,
+    usersLabel: "100 pengguna",
+    storageLabel: "2 GB",
+    monthlyPrice: 0,
+    yearlyPrice: 0,
+    highlights: ["Legacy package"],
+  },
+]
+
 export const pricingSiteNote =
   "Setiap paket berlaku untuk 1 site. Jika butuh site tambahan, tambahkan paket lain."
+
+export const SELF_SERVE_REGION = "jakarta"
 
 export const pricingPlanGroups: PricingPlanGroup[] = [
   {
@@ -221,12 +243,26 @@ export const pricingFaqs = [
   },
 ]
 
-export const pricingPlanOptions = pricingPlanGroups.flatMap((group) =>
-  group.plans.map((plan) => ({
-    ...plan,
-    caption: `${formatPrice(plan.monthlyPrice)}/bulan`,
-    description: `${plan.usersLabel} • ${plan.storageLabel} • ${group.name}`,
-  })),
+const selfServePlanRanks: Record<string, number> = {
+  "kelas-10": 1,
+  "kelas-50": 2,
+  "kelas-100": 3,
+}
+
+function buildPricingPlanOptions(groups: PricingPlanGroup[]): PricingPlanOption[] {
+  return groups.flatMap((group) =>
+    group.plans.map((plan) => ({
+      ...plan,
+      caption: `${formatPrice(plan.monthlyPrice)}/bulan`,
+      description: `${plan.usersLabel} • ${plan.storageLabel} • ${group.name}`,
+    })),
+  )
+}
+
+export const pricingPlanOptions = buildPricingPlanOptions(pricingPlanGroups)
+
+export const selfServePricingPlanOptions = buildPricingPlanOptions(
+  pricingPlanGroups.filter((group) => group.id === "kelas"),
 )
 
 export function formatPrice(price: number) {
@@ -242,11 +278,30 @@ export function getPricingTier(planCode?: string | null) {
     return null
   }
 
-  return pricingPlanOptions.find((plan) => plan.code === planCode) ?? null
+  return pricingPlanOptions.find((plan) => plan.code === planCode) ?? legacyPricingPlans.find((plan) => plan.code === planCode) ?? null
 }
 
 export const getTierByCode = getPricingTier
 
 export function formatPricingPlanLabel(planCode?: string | null) {
   return getPricingTier(planCode)?.label ?? planCode ?? ""
+}
+
+export function getSelfServePlanRank(planCode?: string | null) {
+  if (!planCode) {
+    return 0
+  }
+  return selfServePlanRanks[planCode] ?? 0
+}
+
+export function getSelfServeUpgradeOptions(planCode?: string | null) {
+  if (planCode === "starter") {
+    return selfServePricingPlanOptions.filter((plan) => plan.code === "kelas-100")
+  }
+
+  const currentRank = getSelfServePlanRank(planCode)
+  if (currentRank <= 0) {
+    return []
+  }
+  return selfServePricingPlanOptions.filter((plan) => getSelfServePlanRank(plan.code) > currentRank)
 }

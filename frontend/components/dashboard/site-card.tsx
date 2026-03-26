@@ -2,19 +2,20 @@
 
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { 
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
-  DropdownMenuTrigger 
+  DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { MoreHorizontal, Globe, Clock, Users, Play, RotateCcw, Square } from "lucide-react"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { MoreHorizontal, Globe, Clock, Users, Play, RotateCcw, Square, Database, Loader2 } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { buildSiteHost, buildSiteURL } from "@/lib/site-url"
-import { api } from "@/lib/api"
-import { useState } from "react"
+import { type ReactNode } from "react"
+import type { RuntimeAction } from "@/components/providers/runtime-actions-provider"
 
 interface SiteCardProps {
   id?: string
@@ -23,79 +24,200 @@ interface SiteCardProps {
   status: "aktif" | "sedang_dibuat" | "nonaktif" | "gagal"
   siteUrl?: string
   siteHost?: string
-  users?: number
   runtimeHealth?: string
+  quotaState?: "normal" | "warning" | "critical"
+  quotaLabel?: string
+  activeUsersSummary?: string
+  storageSummary?: string
   lastActivity?: string
-  onAction?: () => void
+  viewMode?: "grid" | "list"
+  pendingRuntimeAction?: RuntimeAction | null
+  onRuntimeAction?: (action: RuntimeAction) => void
 }
 
-function runtimeStatusBadge(status: string) {
-  switch (status) {
-    case "healthy":
-    case "running":
+type IndicatorTone = "success" | "warning" | "danger" | "muted"
+
+function toneClasses(tone: IndicatorTone) {
+  switch (tone) {
+    case "success":
       return {
-        label: "Running",
-        className: "text-green-600 border-green-600/50 bg-green-500/10 text-[10px]",
+        dot: "bg-green-500",
+        chip: "border-green-600/25 bg-green-500/5 text-green-700",
       }
-    case "degraded":
+    case "warning":
       return {
-        label: "Degraded",
-        className: "text-amber-600 border-amber-600/50 bg-amber-500/10 text-[10px]",
+        dot: "bg-amber-500",
+        chip: "border-amber-600/25 bg-amber-500/5 text-amber-700",
       }
-    case "stopped":
+    case "danger":
       return {
-        label: "Stopped",
-        className: "text-slate-600 border-slate-600/50 bg-slate-500/10 text-[10px]",
-      }
-    case "failed":
-      return {
-        label: "Failed",
-        className: "text-red-600 border-red-600/50 bg-red-500/10 text-[10px]",
-      }
-    case "provisioning":
-      return {
-        label: "Provisioning",
-        className: "text-orange-600 border-orange-600/50 bg-orange-500/10 text-[10px]",
+        dot: "bg-red-500",
+        chip: "border-red-600/25 bg-red-500/5 text-red-700",
       }
     default:
       return {
-        label: "Unknown",
-        className: "text-muted-foreground border-border bg-muted/30 text-[10px]",
+        dot: "bg-slate-400",
+        chip: "border-border bg-muted/40 text-muted-foreground",
       }
   }
 }
 
-export function SiteCard({ id, name, subdomain, status, siteUrl, siteHost, users, runtimeHealth, lastActivity, onAction }: SiteCardProps) {
-  const router = useRouter()
-  const [actionLoading, setActionLoading] = useState<string | null>(null)
-
-  const statusConfig = {
-    aktif: {
-      label: "Aktif",
-      color: "bg-success",
-      textColor: "text-success",
-    },
-    sedang_dibuat: {
-      label: "Sedang Dibuat",
-      color: "bg-warning",
-      textColor: "text-warning",
-    },
-    nonaktif: {
-      label: "Nonaktif",
-      color: "bg-muted-foreground",
-      textColor: "text-muted-foreground",
-    },
-    gagal: {
+function runtimeIndicator(
+  status: SiteCardProps["status"],
+  runtimeHealth?: string
+): { label: string; hint: string; tone: IndicatorTone } {
+  if (status === "gagal") {
+    return {
       label: "Gagal",
-      color: "bg-destructive",
-      textColor: "text-destructive",
-    },
+      hint: "Provisioning situs gagal dan butuh pengecekan lebih lanjut.",
+      tone: "danger",
+    }
   }
 
-  const { label, color, textColor } = statusConfig[status]
-  const showUsers = typeof users === "number"
+  if (status === "sedang_dibuat") {
+    return {
+      label: "Menyiapkan",
+      hint: "Situs sedang diproses. Buka progress untuk memantau tahap provisioning.",
+      tone: "warning",
+    }
+  }
+
+  if (status === "nonaktif") {
+    return {
+      label: "Nonaktif",
+      hint: "Situs sedang nonaktif. Anda masih bisa membuka detail situs untuk mengelolanya.",
+      tone: "muted",
+    }
+  }
+
+  switch (runtimeHealth) {
+    case "healthy":
+    case "running":
+      return {
+        label: "Sehat",
+        hint: "Runtime berjalan normal dan layanan situs dalam kondisi sehat.",
+        tone: "success",
+      }
+    case "degraded":
+      return {
+        label: "Tidak stabil",
+        hint: "Ada komponen runtime yang belum sehat penuh. Periksa detail Web dan Cron.",
+        tone: "warning",
+      }
+    case "stopped":
+      return {
+        label: "Berhenti",
+        hint: "Runtime situs sedang berhenti.",
+        tone: "muted",
+      }
+    case "failed":
+      return {
+        label: "Bermasalah",
+        hint: "Runtime situs gagal berjalan dan perlu tindakan.",
+        tone: "danger",
+      }
+    case "provisioning":
+      return {
+        label: "Menyiapkan",
+        hint: "Runtime masih menunggu proses provisioning selesai.",
+        tone: "warning",
+      }
+    default:
+      return {
+        label: "Tidak diketahui",
+        hint: "Status runtime belum tersedia.",
+        tone: "muted",
+      }
+  }
+}
+
+function quotaIndicator(
+  quotaState?: "normal" | "warning" | "critical",
+  quotaLabel?: string
+): { label: string; hint: string; tone: IndicatorTone } | null {
+  if (!quotaState || !quotaLabel) {
+    return null
+  }
+
+  if (quotaState === "critical") {
+    return {
+      label: quotaLabel,
+      hint: "Quota hampir atau sudah melewati batas. Kurangi usage atau upgrade paket.",
+      tone: "danger",
+    }
+  }
+
+  if (quotaState === "warning") {
+    return {
+      label: quotaLabel,
+      hint: "Quota mulai mendekati batas dan perlu dipantau.",
+      tone: "warning",
+    }
+  }
+
+  return {
+    label: quotaLabel,
+    hint: "Quota masih dalam batas aman.",
+    tone: "success",
+  }
+}
+
+function HintChip({
+  label,
+  hint,
+  tone,
+  icon,
+}: {
+  label: string
+  hint: string
+  tone?: IndicatorTone
+  icon?: ReactNode
+}) {
+  const classes = tone ? toneClasses(tone) : null
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <div
+          className={`inline-flex items-center gap-2 rounded-full border px-2.5 py-1 text-xs ${
+            classes ? classes.chip : "border-border bg-muted/35 text-muted-foreground"
+          }`}
+        >
+          {icon}
+          <span className="truncate">{label}</span>
+        </div>
+      </TooltipTrigger>
+      <TooltipContent side="top" sideOffset={8} className="max-w-56">
+        {hint}
+      </TooltipContent>
+    </Tooltip>
+  )
+}
+
+export function SiteCard({
+  id,
+  name,
+  subdomain,
+  status,
+  siteUrl,
+  siteHost,
+  runtimeHealth,
+  quotaState,
+  quotaLabel,
+  activeUsersSummary,
+  storageSummary,
+  lastActivity,
+  viewMode = "grid",
+  pendingRuntimeAction = null,
+  onRuntimeAction,
+}: SiteCardProps) {
+  const router = useRouter()
   const resolvedSiteUrl = siteUrl ?? buildSiteURL(subdomain)
   const resolvedSiteHost = siteHost ?? buildSiteHost(subdomain)
+  const runtime = runtimeIndicator(status, runtimeHealth)
+  const runtimeTone = toneClasses(runtime.tone)
+  const quota = quotaIndicator(quotaState, quotaLabel)
+  const isRuntimeActionPending = pendingRuntimeAction !== null
 
   const handleCardClick = () => {
     if (status === "sedang_dibuat") {
@@ -105,139 +227,134 @@ export function SiteCard({ id, name, subdomain, status, siteUrl, siteHost, users
     }
   }
 
-  const handleRuntimeAction = async (action: "start" | "restart" | "stop") => {
-    if (!id) return
-    setActionLoading(action)
-    try {
-      if (action === "start") await api.startSiteRuntime(id)
-      else if (action === "restart") await api.restartSiteRuntime(id)
-      else if (action === "stop") await api.stopSiteRuntime(id)
-      onAction?.()
-    } catch {
-      // silently fail — user can retry
-    } finally {
-      setActionLoading(null)
-    }
+  const handleRuntimeAction = (action: RuntimeAction) => {
+    if (!id || !onRuntimeAction || isRuntimeActionPending) return
+    onRuntimeAction(action)
   }
 
   return (
-    <Card 
-      className="group relative overflow-hidden border-border bg-card p-4 transition-all hover:border-muted-foreground/50 cursor-pointer"
+    <Card
+      className={`group relative overflow-hidden border-border bg-card transition-all hover:border-muted-foreground/50 cursor-pointer ${
+        viewMode === "list" ? "p-5" : "h-full p-4"
+      }`}
       onClick={handleCardClick}
     >
-      {/* Top row: icon + name + badge + menu */}
-      <div className="flex items-start justify-between">
-        <div className="flex items-start gap-3 min-w-0">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex min-w-0 items-start gap-3">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted">
             <Globe className="h-5 w-5 text-muted-foreground" />
           </div>
-          <div className="min-w-0 space-y-1">
+          <div className="min-w-0">
             <div className="flex items-center gap-2">
               <h3 className="truncate font-medium leading-none">{name}</h3>
-              {status === "aktif" && runtimeHealth && (
-                <div className={`shrink-0 rounded border px-1.5 py-0.5 font-medium ${runtimeStatusBadge(runtimeHealth).className}`}>
-                  {runtimeStatusBadge(runtimeHealth).label}
-                </div>
-              )}
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/35 px-2 py-0.5 text-[11px] text-muted-foreground">
+                    {isRuntimeActionPending ? (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    ) : (
+                      <span className={`h-2.5 w-2.5 rounded-full ${runtimeTone.dot}`} />
+                    )}
+                    <span>{runtime.label}</span>
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent side="top" sideOffset={8} className="max-w-56">
+                  {runtime.hint}
+                </TooltipContent>
+              </Tooltip>
             </div>
-            <p className="truncate text-sm text-muted-foreground">
-              {resolvedSiteHost}
-            </p>
+            <p className="mt-1 truncate text-sm text-muted-foreground">{resolvedSiteHost}</p>
           </div>
         </div>
-        
-        {/* Always-visible menu for active sites */}
-        {status === "aktif" && id && (
+
+        {status === "aktif" && id ? (
           <div onClick={(e) => e.stopPropagation()} className="shrink-0">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button 
-                  variant="ghost" 
-                  size="icon" 
-                  className="h-8 w-8"
-                >
+                <Button variant="ghost" size="icon" className="h-8 w-8" disabled={isRuntimeActionPending}>
                   <MoreHorizontal className="h-4 w-4" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem 
+                <DropdownMenuItem
                   onClick={() => handleRuntimeAction("start")}
-                  disabled={actionLoading !== null}
+                  disabled={isRuntimeActionPending}
                 >
                   <Play className="mr-2 h-4 w-4" />
-                  {actionLoading === "start" ? "Starting..." : "Start"}
+                  Start
                 </DropdownMenuItem>
-                <DropdownMenuItem 
+                <DropdownMenuItem
                   onClick={() => handleRuntimeAction("restart")}
-                  disabled={actionLoading !== null}
+                  disabled={isRuntimeActionPending}
                 >
                   <RotateCcw className="mr-2 h-4 w-4" />
-                  {actionLoading === "restart" ? "Restarting..." : "Restart"}
+                  Restart
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem 
+                <DropdownMenuItem
                   onClick={() => handleRuntimeAction("stop")}
-                  disabled={actionLoading !== null}
+                  disabled={isRuntimeActionPending}
                   className="text-destructive"
                 >
                   <Square className="mr-2 h-4 w-4" />
-                  {actionLoading === "stop" ? "Stopping..." : "Stop"}
+                  Stop
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
-        )}
+        ) : null}
       </div>
 
-      {/* Bottom row: status + meta (left) | action link (right) */}
-      <div className="mt-4 flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-1.5">
-            <div className={`h-2 w-2 rounded-full ${color}`} />
-            <span className={`text-xs ${textColor}`}>{label}</span>
-          </div>
-          {status === "aktif" && (
-            <>
-              {showUsers && (
-                <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                  <Users className="h-3 w-3" />
-                  <span>{users} pengguna</span>
-                </div>
-              )}
-              {lastActivity && (
-                <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                  <Clock className="h-3 w-3" />
-                  <span>{lastActivity}</span>
-                </div>
-              )}
-            </>
-          )}
-        </div>
-        
-        <div className="shrink-0">
-          {status === "aktif" && (
-            <Link 
-              href={resolvedSiteUrl}
-              target="_blank"
-              className="text-xs text-muted-foreground transition-colors hover:text-foreground"
-              onClick={(e) => e.stopPropagation()}
-            >
-              Kunjungi →
-            </Link>
-          )}
-          
-          {status === "sedang_dibuat" && (
-            <span className="text-xs text-warning">
-              Lihat Progress →
-            </span>
-          )}
+      <div className="mt-4 flex flex-wrap gap-2">
+        {quota ? (
+          <HintChip
+            label={quota.label}
+            hint={quota.hint}
+            tone={quota.tone}
+            icon={<span className={`h-2.5 w-2.5 rounded-full ${toneClasses(quota.tone).dot}`} />}
+          />
+        ) : null}
 
-          {status === "gagal" && (
-            <span className="text-xs text-destructive">
-              Provisioning gagal
-            </span>
-          )}
-        </div>
+        {activeUsersSummary ? (
+          <HintChip
+            label={activeUsersSummary}
+            hint={`Pengguna aktif saat ini: ${activeUsersSummary}.`}
+            icon={<Users className="h-3.5 w-3.5" />}
+          />
+        ) : null}
+
+        {storageSummary ? (
+          <HintChip
+            label={storageSummary}
+            hint={`Pemakaian storage saat ini: ${storageSummary}.`}
+            icon={<Database className="h-3.5 w-3.5" />}
+          />
+        ) : null}
+
+        {lastActivity ? (
+          <HintChip
+            label={lastActivity}
+            hint={`Aktivitas terakhir tercatat ${lastActivity}.`}
+            icon={<Clock className="h-3.5 w-3.5" />}
+          />
+        ) : null}
+      </div>
+
+      <div className="mt-4 flex items-center justify-between gap-3 text-xs">
+        <span className="text-muted-foreground">
+          {status === "sedang_dibuat" ? "Lihat progress" : "Lihat detail"}
+        </span>
+
+        {status === "aktif" ? (
+          <Link
+            href={resolvedSiteUrl}
+            target="_blank"
+            className="text-muted-foreground transition-colors hover:text-foreground"
+            onClick={(e) => e.stopPropagation()}
+          >
+            Buka situs
+          </Link>
+        ) : null}
       </div>
     </Card>
   )

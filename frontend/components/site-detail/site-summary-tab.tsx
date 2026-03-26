@@ -3,8 +3,9 @@
 import { useMemo } from "react"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
-import { Settings, Database, Zap, BarChart3, Mail } from "lucide-react"
+import { Settings, Database, Zap, BarChart3, Mail, ArrowUpRight } from "lucide-react"
 import {
   type SiteSummary,
   type SiteRuntimeStatus,
@@ -36,6 +37,8 @@ interface SiteSummaryTabProps {
   reportConnection: SiteReportConnectionStatus | null
   runtimeError: string
   currentDomainHost: string
+  canUpgradePlan?: boolean
+  onUpgradePlan?: () => void
 }
 
 export function SiteSummaryTab({
@@ -46,6 +49,8 @@ export function SiteSummaryTab({
   reportConnection,
   runtimeError,
   currentDomainHost,
+  canUpgradePlan = false,
+  onUpgradePlan,
 }: SiteSummaryTabProps) {
   const webService = findRuntimeService(runtimeStatus, "web")
   const cronService = findRuntimeService(runtimeStatus, "cron")
@@ -85,6 +90,7 @@ export function SiteSummaryTab({
   }), [serviceError, runtimeStatus?.overall_status, webService?.status_text, cronService?.status_text, customDomain?.status, customDomain?.last_error, siteUsage?.warning_level, siteUsage?.over_limit])
 
   const summaryHealth = useMemo(() => buildSummaryHealth(primaryAlert.title), [primaryAlert.title])
+  const quotaNeedsAttention = siteUsage?.over_limit || ["warning", "critical", "over_limit"].includes(siteUsage?.warning_level ?? "")
 
   const summaryAttentionItems = useMemo(() => buildSummaryAttentionItems({
     storageState: storageCapacityState,
@@ -108,13 +114,21 @@ export function SiteSummaryTab({
     <div className="space-y-4">
       <Card className="border-border p-4">
         <div className="space-y-2.5">
-          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-            <span className="font-medium text-foreground">Status Utama Situs</span>
-            <Badge variant="outline" className={summaryHealth.badgeClassName}>
-              {summaryHealth.label}
-            </Badge>
-            <span className="hidden sm:inline">•</span>
-            <span>{lastCheckedText}</span>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+              <span className="font-medium text-foreground">Status Utama Situs</span>
+              <Badge variant="outline" className={summaryHealth.badgeClassName}>
+                {summaryHealth.label}
+              </Badge>
+              <span className="hidden sm:inline">•</span>
+              <span>{lastCheckedText}</span>
+            </div>
+            {canUpgradePlan && onUpgradePlan && quotaNeedsAttention ? (
+              <Button variant="outline" size="sm" onClick={onUpgradePlan}>
+                Upgrade Paket
+                <ArrowUpRight className="ml-2 h-4 w-4" />
+              </Button>
+            ) : null}
           </div>
           <p className="text-sm break-words">
             <span className="font-medium text-foreground">{primaryAlert.title}.</span>{" "}
@@ -240,7 +254,14 @@ export function SiteSummaryTab({
                 </div>
                 <div className="flex items-center justify-between gap-4 py-3">
                   <span className="text-sm text-muted-foreground">Paket</span>
-                  <span className="text-sm font-medium">{formatLabel(siteData?.plan_code)}</span>
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm font-medium">{formatLabel(siteData?.plan_code)}</span>
+                    {canUpgradePlan && onUpgradePlan ? (
+                      <Button variant="outline" size="sm" onClick={onUpgradePlan}>
+                        Upgrade Paket
+                      </Button>
+                    ) : null}
+                  </div>
                 </div>
                 <div className="flex items-center justify-between gap-4 py-3">
                   <span className="text-sm text-muted-foreground">Region</span>

@@ -285,6 +285,9 @@ func (r *DockerLocalRuntime) ReconcileSite(ctx context.Context, site store.Site,
 	if err := r.recreateWebContainer(ctx, site, *metadata, customDomain); err != nil {
 		return SiteRuntimeStatus{}, err
 	}
+	if err := r.recreateCronContainer(ctx, site, *metadata); err != nil {
+		return SiteRuntimeStatus{}, err
+	}
 	if site.Status == "active" {
 		if err := r.ValidateRoute(ctx, site, *metadata); err != nil {
 			return SiteRuntimeStatus{}, err
@@ -471,6 +474,13 @@ func (r *DockerLocalRuntime) ensureCronContainer(ctx context.Context, site store
 	env := r.runtimeEnv(site, metadata)
 	cmd := []string{"/usr/local/bin/cron.sh"}
 	return r.ensureContainer(ctx, metadata.CronContainerName, imageRef(metadata), env, labels, cmd, cronContainerHealthcheck(), metadata, false, r.containerResourcesForService(site, "cron"))
+}
+
+func (r *DockerLocalRuntime) recreateCronContainer(ctx context.Context, site store.Site, metadata store.SiteRuntimeMetadata) error {
+	if err := r.removeContainerIfExists(ctx, metadata.CronContainerName); err != nil {
+		return err
+	}
+	return r.ensureCronContainer(ctx, site, metadata)
 }
 
 func (r *DockerLocalRuntime) ensureContainer(ctx context.Context, name, image string, env []string, labels map[string]string, cmd []string, healthcheck *container.HealthConfig, metadata store.SiteRuntimeMetadata, attachTTY bool, resources container.Resources) error {

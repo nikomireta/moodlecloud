@@ -3,6 +3,7 @@ import { Inter } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
 import { ThemeProvider } from '@/components/theme-provider'
 import { AuthProvider } from '@/components/providers/auth-provider'
+import { RuntimeActionsProvider } from '@/components/providers/runtime-actions-provider'
 import { ToastProvider } from '@/components/providers/toast-provider'
 import './globals.css'
 
@@ -56,8 +57,10 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <AuthProvider>
-            {children}
-            <ToastProvider />
+            <RuntimeActionsProvider>
+              {children}
+              <ToastProvider />
+            </RuntimeActionsProvider>
           </AuthProvider>
         </ThemeProvider>
         <Analytics />

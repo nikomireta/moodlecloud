@@ -1,10 +1,23 @@
-'use client'
+"use client"
 
-import { useState } from "react"
+import Link from "next/link"
+import { useCallback, useEffect, useMemo, useState } from "react"
+import { toast } from "sonner"
+import {
+  ArrowUpRight,
+  CheckCircle2,
+  CreditCard,
+  Download,
+  Loader2,
+  Plus,
+} from "lucide-react"
+
+import { ProtectedRoute } from "@/components/auth/protected-route"
 import { Header } from "@/components/layout/header"
 import { Footer } from "@/components/layout/footer"
+import { SitePlanUpgradeDialog } from "@/components/site-detail/site-plan-upgrade-dialog"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import {
@@ -15,49 +28,29 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { CreditCard, Download, Plus, AlertCircle, CheckCircle2, Clock, ArrowUpRight } from "lucide-react"
-import Link from "next/link"
-
-const currentPlan = {
-  name: "Professional",
-  price: 499000,
-  period: "bulan",
-  nextBilling: "10 April 2026",
-  status: "active"
-}
-
-const usage = {
-  sites: { used: 3, limit: 5 },
-  users: { used: 456, limit: 1000 },
-  storage: { used: 42.5, limit: 100, unit: "GB" },
-  bandwidth: { used: 67.2, limit: 100, unit: "GB" }
-}
+import { api, isAPIError, type SitePlanChange, type SiteSummary } from "@/lib/api"
+import { formatPrice, getSelfServeUpgradeOptions, getTierByCode } from "@/lib/pricing"
+import { siteHostFromURL } from "@/lib/site-url"
 
 const invoices = [
   {
     id: "INV-2026030001",
     date: "10 Mar 2026",
     amount: 553890,
-    status: "paid"
+    status: "paid",
   },
   {
     id: "INV-2026020001",
     date: "10 Feb 2026",
     amount: 553890,
-    status: "paid"
+    status: "paid",
   },
   {
     id: "INV-2026010001",
     date: "10 Jan 2026",
     amount: 553890,
-    status: "paid"
+    status: "paid",
   },
-  {
-    id: "INV-2025120001",
-    date: "10 Des 2025",
-    amount: 553890,
-    status: "paid"
-  }
 ]
 
 const paymentMethods = [
@@ -67,239 +60,563 @@ const paymentMethods = [
     name: "Visa",
     last4: "4242",
     expiry: "12/27",
-    isDefault: true
-  }
+    isDefault: true,
+  },
 ]
 
-function formatPrice(price: number) {
-  return new Intl.NumberFormat('id-ID').format(price)
+function formatBytes(value?: number | null): string {
+  if (typeof value !== "number" || Number.isNaN(value) || value < 0) {
+    return "-"
+  }
+
+  const units = ["B", "KB", "MB", "GB", "TB"]
+  let size = value
+  let unitIndex = 0
+
+  while (size >= 1024 && unitIndex < units.length - 1) {
+    size /= 1024
+    unitIndex += 1
+  }
+
+  const digits = size >= 10 || unitIndex === 0 ? 0 : 1
+  return `${size.toFixed(digits)} ${units[unitIndex]}`
+}
+
+function formatCount(value?: number | null): string {
+  if (typeof value !== "number" || Number.isNaN(value) || value < 0) {
+    return "-"
+  }
+  return value.toLocaleString("id-ID")
+}
+
+function formatDateTime(value?: string | null): string {
+  const trimmed = value?.trim()
+  if (!trimmed) {
+    return "Belum tersedia"
+  }
+
+  const date = new Date(trimmed)
+  if (Number.isNaN(date.getTime())) {
+    return "Belum tersedia"
+  }
+
+  return date.toLocaleString("id-ID", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  })
+}
+
+function relativeTime(value?: string | null): string {
+  const trimmed = value?.trim()
+  if (!trimmed) {
+    return "Belum tersedia"
+  }
+
+  const date = new Date(trimmed)
+  if (Number.isNaN(date.getTime())) {
+    return "Belum tersedia"
+  }
+
+  const diffMs = Date.now() - date.getTime()
+  const diffMinutes = Math.floor(diffMs / 60000)
+  if (diffMinutes < 1) return "Baru saja"
+  if (diffMinutes < 60) return `${diffMinutes} menit lalu`
+  const diffHours = Math.floor(diffMinutes / 60)
+  if (diffHours < 24) return `${diffHours} jam lalu`
+  const diffDays = Math.floor(diffHours / 24)
+  return `${diffDays} hari lalu`
+}
+
+function formatSiteStatus(status: string) {
+  switch (status) {
+    case "active":
+      return {
+        label: "Aktif",
+        className: "bg-green-500/10 text-green-600 border-green-500/20",
+      }
+    case "pending":
+    case "provisioning":
+      return {
+        label: "Sedang disiapkan",
+        className: "bg-amber-500/10 text-amber-600 border-amber-500/20",
+      }
+    case "failed":
+      return {
+        label: "Gagal",
+        className: "bg-red-500/10 text-red-600 border-red-500/20",
+      }
+    default:
+      return {
+        label: "Nonaktif",
+        className: "bg-muted text-muted-foreground border-border",
+      }
+  }
+}
+
+function quotaTone(site: SiteSummary) {
+  if (site.usage?.over_limit || site.usage?.warning_level === "over_limit" || site.usage?.warning_level === "critical") {
+    return {
+      label: "Kritis",
+      className: "bg-red-500/10 text-red-600 border-red-500/20",
+    }
+  }
+  if (site.usage?.warning_level === "warning") {
+    return {
+      label: "Waspada",
+      className: "bg-amber-500/10 text-amber-600 border-amber-500/20",
+    }
+  }
+  return {
+    label: "Aman",
+    className: "bg-green-500/10 text-green-600 border-green-500/20",
+  }
+}
+
+function canUpgradeSite(site: SiteSummary) {
+  return site.status === "active" && getSelfServeUpgradeOptions(site.plan_code).length > 0
+}
+
+function upgradeButtonLabel(site: SiteSummary) {
+  if (canUpgradeSite(site)) {
+    return "Upgrade Paket"
+  }
+  if (site.status !== "active") {
+    return "Menunggu Aktif"
+  }
+  if (getSelfServeUpgradeOptions(site.plan_code).length === 0) {
+    return "Paket Tertinggi"
+  }
+  return "Belum Tersedia"
+}
+
+function historyStatusBadge(status: string) {
+  if (status === "applied") {
+    return "bg-green-500/10 text-green-600 border-green-500/20"
+  }
+  return "bg-muted text-muted-foreground border-border"
 }
 
 export default function BillingPage() {
+  const [sites, setSites] = useState<SiteSummary[]>([])
+  const [planChanges, setPlanChanges] = useState<SitePlanChange[]>([])
+  const [loading, setLoading] = useState(true)
+  const [loadingError, setLoadingError] = useState("")
+  const [upgradeDialogOpen, setUpgradeDialogOpen] = useState(false)
+  const [selectedSite, setSelectedSite] = useState<SiteSummary | null>(null)
+
+  const loadBillingContext = useCallback(async () => {
+    try {
+      const [sitesResponse, planChangesResponse] = await Promise.all([
+        api.listSites(),
+        api.listSitePlanChanges(),
+      ])
+      setSites(sitesResponse.sites ?? [])
+      setPlanChanges(planChangesResponse.changes ?? [])
+      setLoadingError("")
+    } catch (error) {
+      setLoadingError(isAPIError(error) ? error.message : "Gagal memuat data langganan situs")
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    void loadBillingContext()
+  }, [loadBillingContext])
+
+  const siteMap = useMemo(
+    () => new Map(sites.map((site) => [site.id, site])),
+    [sites],
+  )
+
+  const usageSummary = useMemo(() => {
+    return sites.reduce(
+      (acc, site) => {
+        acc.siteCount += 1
+        acc.upgradeReady += canUpgradeSite(site) ? 1 : 0
+        acc.usersUsed += site.usage?.users_active_count ?? 0
+        acc.usersLimit += site.users_active_limit
+        acc.storageUsed += site.usage?.storage_bytes_used ?? 0
+        acc.storageLimit += site.storage_bytes_limit
+        return acc
+      },
+      {
+        siteCount: 0,
+        upgradeReady: 0,
+        usersUsed: 0,
+        usersLimit: 0,
+        storageUsed: 0,
+        storageLimit: 0,
+      },
+    )
+  }, [sites])
+
+  const selectedPlan = getTierByCode(selectedSite?.plan_code)
+
+  const handleOpenUpgrade = (site: SiteSummary) => {
+    setSelectedSite(site)
+    setUpgradeDialogOpen(true)
+  }
+
+  const handlePlanChanged = async () => {
+    await loadBillingContext()
+  }
+
+  const handleLoadRetry = async () => {
+    setLoading(true)
+    await loadBillingContext()
+    if (!loadingError) {
+      toast.success("Data tagihan berhasil dimuat ulang")
+    }
+  }
+
   return (
-    <div className="flex min-h-screen flex-col bg-background">
-      <Header />
-      
-      <main className="flex-1 py-8">
-        <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
-          <div className="mb-8">
-            <h1 className="text-2xl font-bold">Tagihan & Langganan</h1>
-            <p className="text-muted-foreground mt-1">Kelola langganan dan riwayat pembayaran Anda</p>
-          </div>
+    <ProtectedRoute>
+      <div className="flex min-h-screen flex-col bg-background">
+        <Header />
 
-          <div className="grid lg:grid-cols-3 gap-8">
-            {/* Main Content */}
-            <div className="lg:col-span-2 space-y-8">
-              {/* Current Plan */}
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between">
-                  <div>
-                    <CardTitle>Paket Saat Ini</CardTitle>
-                    <CardDescription>Detail langganan aktif Anda</CardDescription>
-                  </div>
-                  <Badge className="bg-green-500/10 text-green-600 border-green-500/20">
-                    Aktif
-                  </Badge>
-                </CardHeader>
-                <CardContent>
-                  <div className="flex items-center justify-between mb-6">
+        <main className="flex-1 py-8">
+          <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
+            <div className="mb-8">
+              <h1 className="text-2xl font-bold">Tagihan & Langganan</h1>
+              <p className="text-muted-foreground mt-1">Kelola upgrade paket per-site dan riwayat perubahan paket seluruh situs Anda</p>
+            </div>
+
+            <div className="grid gap-8 lg:grid-cols-3">
+              <div className="space-y-8 lg:col-span-2">
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between">
                     <div>
-                      <h3 className="text-2xl font-bold">{currentPlan.name}</h3>
-                      <p className="text-muted-foreground">
-                        Rp {formatPrice(currentPlan.price)}/{currentPlan.period}
-                      </p>
+                      <CardTitle>Langganan Situs Existing</CardTitle>
+                      <CardDescription>Semua situs existing bisa dikelola dari sini, termasuk upgrade paket per-site.</CardDescription>
                     </div>
-                    <div className="text-right">
-                      <p className="text-sm text-muted-foreground">Tagihan Berikutnya</p>
-                      <p className="font-medium">{currentPlan.nextBilling}</p>
+                    <Badge className="bg-green-500/10 text-green-600 border-green-500/20">
+                      {usageSummary.siteCount} Situs
+                    </Badge>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="mb-6 grid gap-4 md:grid-cols-3">
+                      <div className="rounded-lg border border-border p-4">
+                        <p className="text-sm text-muted-foreground">Site siap upgrade</p>
+                        <p className="mt-2 text-2xl font-semibold">{formatCount(usageSummary.upgradeReady)}</p>
+                      </div>
+                      <div className="rounded-lg border border-border p-4">
+                        <p className="text-sm text-muted-foreground">Total pengguna aktif</p>
+                        <p className="mt-2 text-2xl font-semibold">{formatCount(usageSummary.usersUsed)}</p>
+                      </div>
+                      <div className="rounded-lg border border-border p-4">
+                        <p className="text-sm text-muted-foreground">Total storage terpakai</p>
+                        <p className="mt-2 text-2xl font-semibold">{formatBytes(usageSummary.storageUsed)}</p>
+                      </div>
                     </div>
-                  </div>
 
-                  <div className="flex gap-3">
+                    {loading ? (
+                      <div className="flex items-center justify-center py-10 text-sm text-muted-foreground">
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Memuat daftar situs...
+                      </div>
+                    ) : loadingError ? (
+                      <div className="rounded-lg border border-red-500/20 bg-red-500/5 p-4">
+                        <p className="text-sm font-medium text-red-600">Data tagihan belum bisa dimuat.</p>
+                        <p className="mt-1 text-sm text-muted-foreground">{loadingError}</p>
+                        <Button variant="outline" size="sm" className="mt-3" onClick={() => void handleLoadRetry()}>
+                          Muat Ulang
+                        </Button>
+                      </div>
+                    ) : (
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Situs</TableHead>
+                            <TableHead>Paket Saat Ini</TableHead>
+                            <TableHead>Penggunaan</TableHead>
+                            <TableHead>Status</TableHead>
+                            <TableHead className="text-right">Aksi</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {sites.length > 0 ? (
+                            sites.map((site) => {
+                              const siteStatus = formatSiteStatus(site.status)
+                              const quotaStatus = quotaTone(site)
+                              const planTier = getTierByCode(site.plan_code)
+                              const nextOptions = getSelfServeUpgradeOptions(site.plan_code)
+                              const siteHost = siteHostFromURL(site.site_url, site.subdomain) || site.subdomain
+
+                              return (
+                                <TableRow key={site.id}>
+                                  <TableCell>
+                                    <div>
+                                      <Link href={`/situs/${site.subdomain}`} className="font-medium hover:underline">
+                                        {site.name}
+                                      </Link>
+                                      <p className="text-xs text-muted-foreground">{siteHost}</p>
+                                    </div>
+                                  </TableCell>
+                                  <TableCell>
+                                    <div>
+                                      <p className="font-medium">{planTier?.label ?? site.plan_code}</p>
+                                      <p className="text-xs text-muted-foreground">
+                                        {planTier ? `Rp ${formatPrice(planTier.monthlyPrice)}/bulan` : "Paket existing"}
+                                      </p>
+                                      <p className="text-xs text-muted-foreground">
+                                        {nextOptions.length > 0 ? `${nextOptions.length} opsi upgrade tersedia` : "Tidak ada tier lebih tinggi"}
+                                      </p>
+                                    </div>
+                                  </TableCell>
+                                  <TableCell>
+                                    <div className="space-y-1 text-sm">
+                                      <p>{formatCount(site.usage?.users_active_count ?? 0)} / {formatCount(site.users_active_limit)} pengguna</p>
+                                      <p>{formatBytes(site.usage?.storage_bytes_used ?? 0)} / {formatBytes(site.storage_bytes_limit)}</p>
+                                      <p className="text-xs text-muted-foreground">Update {relativeTime(site.updated_at)}</p>
+                                    </div>
+                                  </TableCell>
+                                  <TableCell>
+                                    <div className="flex flex-col gap-2">
+                                      <Badge variant="outline" className={siteStatus.className}>
+                                        {siteStatus.label}
+                                      </Badge>
+                                      <Badge variant="outline" className={quotaStatus.className}>
+                                        Quota {quotaStatus.label}
+                                      </Badge>
+                                    </div>
+                                  </TableCell>
+                                  <TableCell className="text-right">
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      disabled={!canUpgradeSite(site)}
+                                      onClick={() => handleOpenUpgrade(site)}
+                                    >
+                                      {upgradeButtonLabel(site)}
+                                    </Button>
+                                  </TableCell>
+                                </TableRow>
+                              )
+                            })
+                          ) : (
+                            <TableRow>
+                              <TableCell colSpan={5} className="py-8 text-center text-sm text-muted-foreground">
+                                Belum ada situs existing di akun ini.
+                              </TableCell>
+                            </TableRow>
+                          )}
+                        </TableBody>
+                      </Table>
+                    )}
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Penggunaan Agregat</CardTitle>
+                    <CardDescription>Ringkasan kapasitas seluruh situs existing yang Anda miliki.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-6">
+                    <div>
+                      <div className="mb-2 flex justify-between text-sm">
+                        <span>Situs Moodle</span>
+                        <span>{formatCount(usageSummary.siteCount)} site existing</span>
+                      </div>
+                      <Progress value={Math.min(usageSummary.siteCount * 10, 100)} />
+                    </div>
+
+                    <div>
+                      <div className="mb-2 flex justify-between text-sm">
+                        <span>Total Pengguna Aktif</span>
+                        <span>{formatCount(usageSummary.usersUsed)} / {formatCount(usageSummary.usersLimit)}</span>
+                      </div>
+                      <Progress value={usageSummary.usersLimit > 0 ? (usageSummary.usersUsed / usageSummary.usersLimit) * 100 : 0} />
+                    </div>
+
+                    <div>
+                      <div className="mb-2 flex justify-between text-sm">
+                        <span>Total Storage</span>
+                        <span>{formatBytes(usageSummary.storageUsed)} / {formatBytes(usageSummary.storageLimit)}</span>
+                      </div>
+                      <Progress value={usageSummary.storageLimit > 0 ? (usageSummary.storageUsed / usageSummary.storageLimit) * 100 : 0} />
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Riwayat Perubahan Paket</CardTitle>
+                    <CardDescription>Riwayat upgrade paket sekarang dipusatkan di halaman ini.</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {loading ? (
+                      <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Memuat riwayat paket...
+                      </div>
+                    ) : (
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Situs</TableHead>
+                            <TableHead>Perubahan</TableHead>
+                            <TableHead>Waktu</TableHead>
+                            <TableHead>Status</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {planChanges.length > 0 ? (
+                            planChanges.map((change) => {
+                              const site = siteMap.get(change.site_id)
+                              return (
+                                <TableRow key={change.id}>
+                                  <TableCell>
+                                    <div>
+                                      <p className="font-medium">{site?.name ?? "Situs lama"}</p>
+                                      <p className="text-xs text-muted-foreground">{site?.subdomain ?? change.site_id}</p>
+                                    </div>
+                                  </TableCell>
+                                  <TableCell>
+                                    <div>
+                                      <p className="font-medium">
+                                        {getTierByCode(change.from_plan_code)?.label ?? change.from_plan_code} ke {getTierByCode(change.to_plan_code)?.label ?? change.to_plan_code}
+                                      </p>
+                                      <p className="text-xs text-muted-foreground">Perubahan paket per-site aktif langsung</p>
+                                    </div>
+                                  </TableCell>
+                                  <TableCell>{formatDateTime(change.applied_at)}</TableCell>
+                                  <TableCell>
+                                    <Badge variant="outline" className={historyStatusBadge(change.status)}>
+                                      {change.status === "applied" ? "Applied" : change.status}
+                                    </Badge>
+                                  </TableCell>
+                                </TableRow>
+                              )
+                            })
+                          ) : (
+                            <TableRow>
+                              <TableCell colSpan={4} className="py-8 text-center text-sm text-muted-foreground">
+                                Belum ada perubahan paket untuk situs mana pun.
+                              </TableCell>
+                            </TableRow>
+                          )}
+                        </TableBody>
+                      </Table>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+
+              <div className="space-y-8">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg">Metode Pembayaran</CardTitle>
+                    <CardDescription>Masih mode demo. Payment gateway belum diaktifkan.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    {paymentMethods.map((method) => (
+                      <div
+                        key={method.id}
+                        className="flex items-center gap-3 rounded-lg border border-border p-3"
+                      >
+                        <div className="flex h-10 w-10 items-center justify-center rounded bg-muted">
+                          <CreditCard className="h-5 w-5" />
+                        </div>
+                        <div className="flex-1">
+                          <p className="text-sm font-medium">
+                            {method.name} **** {method.last4}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            Kadaluarsa {method.expiry}
+                          </p>
+                        </div>
+                        {method.isDefault ? (
+                          <Badge variant="secondary" className="text-xs">Default</Badge>
+                        ) : null}
+                      </div>
+                    ))}
+                    <Button variant="outline" className="w-full" disabled>
+                      <Plus className="mr-2 h-4 w-4" />
+                      Tambah Metode
+                    </Button>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg">Aksi Cepat</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-2">
                     <Link href="/harga">
-                      <Button variant="outline">Ubah Paket</Button>
+                      <Button variant="ghost" className="w-full justify-between">
+                        Lihat Katalog Paket
+                        <ArrowUpRight className="h-4 w-4" />
+                      </Button>
                     </Link>
-                    <Button variant="outline" className="text-destructive hover:text-destructive">
-                      Batalkan
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
+                    <Link href="/buat-situs">
+                      <Button variant="ghost" className="w-full justify-between">
+                        Tambah Situs Baru
+                        <ArrowUpRight className="h-4 w-4" />
+                      </Button>
+                    </Link>
+                    <Link href="/dokumentasi">
+                      <Button variant="ghost" className="w-full justify-between">
+                        Bantuan Billing
+                        <ArrowUpRight className="h-4 w-4" />
+                      </Button>
+                    </Link>
+                  </CardContent>
+                </Card>
 
-              {/* Usage */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>Penggunaan</CardTitle>
-                  <CardDescription>Penggunaan resource bulan ini</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                  <div>
-                    <div className="flex justify-between text-sm mb-2">
-                      <span>Situs Moodle</span>
-                      <span>{usage.sites.used} / {usage.sites.limit}</span>
-                    </div>
-                    <Progress value={(usage.sites.used / usage.sites.limit) * 100} />
-                  </div>
-
-                  <div>
-                    <div className="flex justify-between text-sm mb-2">
-                      <span>Total Pengguna</span>
-                      <span>{usage.users.used} / {usage.users.limit}</span>
-                    </div>
-                    <Progress value={(usage.users.used / usage.users.limit) * 100} />
-                  </div>
-
-                  <div>
-                    <div className="flex justify-between text-sm mb-2">
-                      <span>Storage</span>
-                      <span>{usage.storage.used} / {usage.storage.limit} {usage.storage.unit}</span>
-                    </div>
-                    <Progress value={(usage.storage.used / usage.storage.limit) * 100} />
-                  </div>
-
-                  <div>
-                    <div className="flex justify-between text-sm mb-2">
-                      <span>Bandwidth</span>
-                      <span>{usage.bandwidth.used} / {usage.bandwidth.limit} {usage.bandwidth.unit}</span>
-                    </div>
-                    <Progress value={(usage.bandwidth.used / usage.bandwidth.limit) * 100} />
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Invoice History */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>Riwayat Invoice</CardTitle>
-                  <CardDescription>Daftar invoice dan pembayaran</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Invoice</TableHead>
-                        <TableHead>Tanggal</TableHead>
-                        <TableHead>Jumlah</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead className="text-right">Aksi</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {invoices.map((invoice) => (
-                        <TableRow key={invoice.id}>
-                          <TableCell className="font-mono text-sm">{invoice.id}</TableCell>
-                          <TableCell>{invoice.date}</TableCell>
-                          <TableCell>Rp {formatPrice(invoice.amount)}</TableCell>
-                          <TableCell>
-                            {invoice.status === 'paid' ? (
-                              <Badge variant="outline" className="text-green-600 border-green-500/20">
-                                <CheckCircle2 className="h-3 w-3 mr-1" />
-                                Lunas
-                              </Badge>
-                            ) : invoice.status === 'pending' ? (
-                              <Badge variant="outline" className="text-yellow-600 border-yellow-500/20">
-                                <Clock className="h-3 w-3 mr-1" />
-                                Pending
-                              </Badge>
-                            ) : (
-                              <Badge variant="outline" className="text-red-600 border-red-500/20">
-                                <AlertCircle className="h-3 w-3 mr-1" />
-                                Gagal
-                              </Badge>
-                            )}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <Button variant="ghost" size="sm">
-                              <Download className="h-4 w-4" />
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* Sidebar */}
-            <div className="space-y-8">
-              {/* Payment Methods */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg">Metode Pembayaran</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  {paymentMethods.map((method) => (
-                    <div
-                      key={method.id}
-                      className="flex items-center gap-3 p-3 rounded-lg border border-border"
-                    >
-                      <div className="h-10 w-10 bg-muted rounded flex items-center justify-center">
-                        <CreditCard className="h-5 w-5" />
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg">Riwayat Invoice Demo</CardTitle>
+                    <CardDescription>Masih placeholder sampai payment gateway diaktifkan.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {invoices.map((invoice) => (
+                      <div key={invoice.id} className="flex items-center justify-between rounded-lg border border-border p-3">
+                        <div>
+                          <p className="text-sm font-medium">{invoice.id}</p>
+                          <p className="text-xs text-muted-foreground">{invoice.date}</p>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <Badge variant="outline" className="text-green-600 border-green-500/20">
+                            <CheckCircle2 className="mr-1 h-3 w-3" />
+                            Lunas
+                          </Badge>
+                          <Button variant="ghost" size="sm">
+                            <Download className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </div>
-                      <div className="flex-1">
-                        <p className="font-medium text-sm">
-                          {method.name} **** {method.last4}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          Kadaluarsa {method.expiry}
-                        </p>
-                      </div>
-                      {method.isDefault && (
-                        <Badge variant="secondary" className="text-xs">Default</Badge>
-                      )}
-                    </div>
-                  ))}
-                  <Button variant="outline" className="w-full">
-                    <Plus className="h-4 w-4 mr-2" />
-                    Tambah Metode
-                  </Button>
-                </CardContent>
-              </Card>
+                    ))}
+                  </CardContent>
+                </Card>
 
-              {/* Quick Actions */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg">Aksi Cepat</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-2">
-                  <Link href="/harga">
-                    <Button variant="ghost" className="w-full justify-between">
-                      Upgrade Paket
-                      <ArrowUpRight className="h-4 w-4" />
-                    </Button>
-                  </Link>
-                  <Button variant="ghost" className="w-full justify-between">
-                    Download Semua Invoice
-                    <Download className="h-4 w-4" />
-                  </Button>
-                  <Link href="/dokumentasi">
-                    <Button variant="ghost" className="w-full justify-between">
-                      Bantuan Billing
-                      <ArrowUpRight className="h-4 w-4" />
-                    </Button>
-                  </Link>
-                </CardContent>
-              </Card>
-
-              {/* Support */}
-              <Card className="bg-muted/30">
-                <CardContent className="pt-6">
-                  <h3 className="font-semibold mb-2">Butuh Bantuan?</h3>
-                  <p className="text-sm text-muted-foreground mb-4">
-                    Tim billing kami siap membantu pertanyaan seputar pembayaran.
-                  </p>
-                  <Button variant="outline" className="w-full">
-                    Hubungi Support
-                  </Button>
-                </CardContent>
-              </Card>
+                <Card className="bg-muted/30">
+                  <CardContent className="pt-6">
+                    <h3 className="mb-2 font-semibold">Paket Terpilih</h3>
+                    <p className="text-sm text-muted-foreground">
+                      {selectedSite
+                        ? `${selectedSite.name} saat ini memakai ${selectedPlan?.label ?? selectedSite.plan_code}.`
+                        : "Pilih salah satu situs existing di atas untuk membuka flow upgrade paket."}
+                    </p>
+                  </CardContent>
+                </Card>
+              </div>
             </div>
           </div>
-        </div>
-      </main>
+        </main>
 
-      <Footer />
-    </div>
+        <SitePlanUpgradeDialog
+          open={upgradeDialogOpen}
+          onOpenChange={setUpgradeDialogOpen}
+          site={selectedSite}
+          onPlanChanged={handlePlanChanged}
+        />
+
+        <Footer />
+      </div>
+    </ProtectedRoute>
   )
 }

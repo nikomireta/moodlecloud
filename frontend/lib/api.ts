@@ -100,6 +100,7 @@ export type SiteSummary = {
   runtime_health?: string
   users_active_limit: number
   storage_bytes_limit: number
+  usage?: SiteUsageSnapshot | null
   activated_at?: string | null
   created_at: string
   updated_at: string
@@ -171,6 +172,17 @@ export type SiteUsageSnapshot = {
   measured_at?: string | null
   created_at: string
   updated_at: string
+}
+
+export type SitePlanChange = {
+  id: string
+  site_id: string
+  owner_user_id: string
+  from_plan_code: string
+  to_plan_code: string
+  status: string
+  applied_at: string
+  created_at: string
 }
 
 export type SiteBackupItem = {
@@ -678,6 +690,15 @@ export type SiteSettingsResponse = {
   custom_domain_enabled: boolean
 }
 
+export type SitePlanChangeResponse = MessageResponse & {
+  site: SiteSummary
+  usage?: SiteUsageSnapshot | null
+}
+
+export type SitePlanChangesResponse = {
+  changes: SitePlanChange[]
+}
+
 type MessageResponse = {
   message: string
 }
@@ -967,6 +988,14 @@ export const api = {
     return apiFetch<SiteUsageResponse>(`/sites/${encodeURIComponent(siteID)}/usage`)
   },
 
+  listSitePlanChanges() {
+    return apiFetch<SitePlanChangesResponse>("/sites/plan-changes")
+  },
+
+  getSitePlanChanges(siteID: string) {
+    return apiFetch<SitePlanChangesResponse>(`/sites/${encodeURIComponent(siteID)}/plan-changes`)
+  },
+
   getSiteSettings(siteID: string) {
     return apiFetch<SiteSettingsResponse>(`/sites/${encodeURIComponent(siteID)}/settings`)
   },
@@ -1090,6 +1119,15 @@ export const api = {
       method: "PATCH",
       body: JSON.stringify({
         name: input.name,
+      }),
+    })
+  },
+
+  changeSitePlan(siteID: string, input: { planCode: string }) {
+    return apiFetch<SitePlanChangeResponse>(`/sites/${encodeURIComponent(siteID)}/plan-change`, {
+      method: "POST",
+      body: JSON.stringify({
+        plan_code: input.planCode,
       }),
     })
   },

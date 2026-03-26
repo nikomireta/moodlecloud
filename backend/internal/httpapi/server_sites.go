@@ -44,9 +44,8 @@ func (s *Server) handleCreateSite(w http.ResponseWriter, r *http.Request) {
 
 	req.Subdomain = normalizeSubdomain(req.Subdomain)
 	req.PlanCode = strings.TrimSpace(req.PlanCode)
-	req.Region = strings.TrimSpace(req.Region)
 
-	if strings.TrimSpace(req.Name) == "" || req.Subdomain == "" || req.PlanCode == "" || req.Region == "" || strings.TrimSpace(req.AdminName) == "" || strings.TrimSpace(req.AdminEmail) == "" {
+	if strings.TrimSpace(req.Name) == "" || req.Subdomain == "" || req.PlanCode == "" || strings.TrimSpace(req.AdminName) == "" || strings.TrimSpace(req.AdminEmail) == "" {
 		writeError(w, http.StatusBadRequest, "Semua field wajib diisi")
 		return
 	}
@@ -54,13 +53,13 @@ func (s *Server) handleCreateSite(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "Subdomain tidak valid")
 		return
 	}
-	if req.Region != "jakarta" && req.Region != "singapore" {
-		writeError(w, http.StatusBadRequest, "Region tidak didukung")
-		return
-	}
 	plan, err := s.store.GetPlanByCode(r.Context(), req.PlanCode)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "Paket tidak ditemukan")
+		return
+	}
+	if !store.IsSelfServePlanCode(plan.Code) {
+		writeError(w, http.StatusConflict, "Paket ini belum tersedia untuk pembuatan mandiri")
 		return
 	}
 	available, err := s.store.IsSubdomainAvailable(r.Context(), req.Subdomain)
@@ -82,7 +81,7 @@ func (s *Server) handleCreateSite(w http.ResponseWriter, r *http.Request) {
 		Name:        strings.TrimSpace(req.Name),
 		Subdomain:   req.Subdomain,
 		PlanCode:    req.PlanCode,
-		Region:      req.Region,
+		Region:      store.SelfServeDefaultRegion,
 		AdminName:   strings.TrimSpace(req.AdminName),
 		AdminEmail:  auth.SanitizeEmail(req.AdminEmail),
 		SiteURL:     siteURLForSubdomain(s.cfg, req.Subdomain),

@@ -59,30 +59,31 @@ type Plan struct {
 }
 
 type Site struct {
-	ID                uuid.UUID  `json:"id"`
-	OwnerUserID       uuid.UUID  `json:"owner_user_id"`
-	Name              string     `json:"name"`
-	Subdomain         string     `json:"subdomain"`
-	PlanCode          string     `json:"plan_code"`
-	Region            string     `json:"region"`
-	Status            string     `json:"status"`
-	SiteURL           string     `json:"site_url"`
-	AdminURL          string     `json:"admin_url"`
-	AdminName         string     `json:"admin_name"`
-	AdminEmail        string     `json:"admin_email"`
-	MoodleUsername    string     `json:"moodle_username"`
-	ProvisioningStep  string     `json:"provisioning_step"`
-	LastError         string     `json:"last_error"`
-	UsersActiveLimit  int        `json:"users_active_limit"`
-	StorageBytesLimit int64      `json:"storage_bytes_limit"`
-	WebCPUMillicores  int        `json:"web_cpu_millicores"`
-	WebMemoryMiB      int        `json:"web_memory_mib"`
-	CronCPUMillicores int        `json:"cron_cpu_millicores"`
-	CronMemoryMiB     int        `json:"cron_memory_mib"`
-	ActivatedAt       *time.Time `json:"activated_at,omitempty"`
-	RuntimeHealth     string     `json:"runtime_health,omitempty"`
-	CreatedAt         time.Time  `json:"created_at"`
-	UpdatedAt         time.Time  `json:"updated_at"`
+	ID                uuid.UUID          `json:"id"`
+	OwnerUserID       uuid.UUID          `json:"owner_user_id"`
+	Name              string             `json:"name"`
+	Subdomain         string             `json:"subdomain"`
+	PlanCode          string             `json:"plan_code"`
+	Region            string             `json:"region"`
+	Status            string             `json:"status"`
+	SiteURL           string             `json:"site_url"`
+	AdminURL          string             `json:"admin_url"`
+	AdminName         string             `json:"admin_name"`
+	AdminEmail        string             `json:"admin_email"`
+	MoodleUsername    string             `json:"moodle_username"`
+	ProvisioningStep  string             `json:"provisioning_step"`
+	LastError         string             `json:"last_error"`
+	UsersActiveLimit  int                `json:"users_active_limit"`
+	StorageBytesLimit int64              `json:"storage_bytes_limit"`
+	WebCPUMillicores  int                `json:"web_cpu_millicores"`
+	WebMemoryMiB      int                `json:"web_memory_mib"`
+	CronCPUMillicores int                `json:"cron_cpu_millicores"`
+	CronMemoryMiB     int                `json:"cron_memory_mib"`
+	ActivatedAt       *time.Time         `json:"activated_at,omitempty"`
+	RuntimeHealth     string             `json:"runtime_health,omitempty"`
+	Usage             *SiteUsageSnapshot `json:"usage,omitempty"`
+	CreatedAt         time.Time          `json:"created_at"`
+	UpdatedAt         time.Time          `json:"updated_at"`
 }
 
 type SiteRuntimeMetadata struct {
@@ -162,6 +163,17 @@ type SiteUsageSnapshot struct {
 	MeasuredAt        *time.Time `json:"measured_at,omitempty"`
 	CreatedAt         time.Time  `json:"created_at"`
 	UpdatedAt         time.Time  `json:"updated_at"`
+}
+
+type SitePlanChange struct {
+	ID           uuid.UUID `json:"id"`
+	SiteID       uuid.UUID `json:"site_id"`
+	OwnerUserID  uuid.UUID `json:"owner_user_id"`
+	FromPlanCode string    `json:"from_plan_code"`
+	ToPlanCode   string    `json:"to_plan_code"`
+	Status       string    `json:"status"`
+	AppliedAt    time.Time `json:"applied_at"`
+	CreatedAt    time.Time `json:"created_at"`
 }
 
 type SiteBackupSettings struct {
@@ -285,11 +297,26 @@ type UpdateSiteParams struct {
 	Name        string
 }
 
+type UpdateSitePlanParams struct {
+	OwnerUserID uuid.UUID
+	SiteID      uuid.UUID
+	PlanCode    string
+}
+
 type UpdateSiteURLsParams struct {
 	OwnerUserID uuid.UUID
 	SiteID      uuid.UUID
 	SiteURL     string
 	AdminURL    string
+}
+
+type CreateSitePlanChangeParams struct {
+	SiteID       uuid.UUID
+	OwnerUserID  uuid.UUID
+	FromPlanCode string
+	ToPlanCode   string
+	Status       string
+	AppliedAt    time.Time
 }
 
 type UpsertSiteReportConnectionParams struct {

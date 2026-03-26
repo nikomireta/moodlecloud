@@ -354,7 +354,7 @@ export function buildPrimaryAlert(params: {
   if (params.overLimit || params.warningLevel === "over_limit") {
     return {
       title: "Batas paket terlampaui",
-      message: "Pemakaian resource sudah melewati batas paket. Segera kosongkan resource atau upgrade paket.",
+      message: "Pemakaian resource sudah melewati batas paket. Tenant tetap bisa dikelola, tetapi upload baru dan aktivasi user baru diblok sampai usage turun atau paket di-upgrade.",
       iconClassName: "text-red-600",
       boxClassName: "bg-red-500/5 border-red-500/20",
     }
@@ -363,7 +363,7 @@ export function buildPrimaryAlert(params: {
   if (params.warningLevel === "critical") {
     return {
       title: "Pemakaian sangat tinggi",
-      message: "Pemakaian resource sudah sangat tinggi. Pantau storage dan pengguna aktif secepatnya.",
+      message: "Pemakaian resource sudah sangat tinggi. Pantau storage dan pengguna aktif secepatnya, lalu kurangi usage atau siapkan upgrade paket.",
       iconClassName: "text-amber-600",
       boxClassName: "bg-amber-500/5 border-amber-500/20",
     }
@@ -372,7 +372,7 @@ export function buildPrimaryAlert(params: {
   if (params.warningLevel === "warning") {
     return {
       title: "Mendekati batas paket",
-      message: "Pemakaian resource mulai mendekati batas. Pantau kapasitas storage dan pengguna aktif.",
+      message: "Pemakaian resource mulai mendekati batas. Pantau kapasitas storage dan pengguna aktif agar tenant tetap stabil saat trafik naik.",
       iconClassName: "text-amber-600",
       boxClassName: "bg-amber-500/5 border-amber-500/20",
     }

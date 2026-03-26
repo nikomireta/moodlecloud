@@ -19,8 +19,13 @@ namespace local_moodlepilot_report;
 defined('MOODLE_INTERNAL') || die();
 
 use local_moodlepilot_report\local\analytics_repository;
+use local_moodlepilot_report\local\quota_guard;
 
 class observer {
+    public static function user_created(\core\event\user_created $event): void {
+        quota_guard::enforce_after_user_created($event);
+    }
+
     public static function user_loggedin(\core\event\user_loggedin $event): void {
         analytics_repository::track_event($event, [
             'page_type' => 'site',

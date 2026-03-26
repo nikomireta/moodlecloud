@@ -5,9 +5,65 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 )
+
+const SelfServeDefaultRegion = "jakarta"
+
+var selfServePlanCodes = map[string]struct{}{
+	"kelas-10":  {},
+	"kelas-50":  {},
+	"kelas-100": {},
+}
+
+var selfServePlanRanks = map[string]int{
+	"kelas-10":  1,
+	"kelas-50":  2,
+	"kelas-100": 3,
+}
+
+var legacySelfServeUpgradeTargets = map[string]map[string]struct{}{
+	"starter": {
+		"kelas-100": {},
+	},
+}
+
+func IsSelfServePlanCode(code string) bool {
+	_, ok := selfServePlanCodes[strings.TrimSpace(code)]
+	return ok
+}
+
+func SelfServePlanRank(code string) int {
+	return selfServePlanRanks[strings.TrimSpace(code)]
+}
+
+func CanSelfServeUpgradeFromPlanCode(code string) bool {
+	trimmed := strings.TrimSpace(code)
+	if IsSelfServePlanCode(trimmed) {
+		return true
+	}
+	_, ok := legacySelfServeUpgradeTargets[trimmed]
+	return ok
+}
+
+func IsSelfServeUpgradePath(currentCode, targetCode string) bool {
+	currentCode = strings.TrimSpace(currentCode)
+	targetCode = strings.TrimSpace(targetCode)
+	if currentCode == "" || targetCode == "" {
+		return false
+	}
+
+	if allowedTargets, ok := legacySelfServeUpgradeTargets[currentCode]; ok {
+		_, allowed := allowedTargets[targetCode]
+		return allowed
+	}
+
+	currentRank := SelfServePlanRank(currentCode)
+	targetRank := SelfServePlanRank(targetCode)
+	return currentRank > 0 && targetRank > currentRank
+}
 
 func gibibytes(value int64) int64 {
 	return value * 1024 * 1024 * 1024
@@ -333,6 +389,9 @@ func (s *Store) ListPlans(ctx context.Context) ([]Plan, error) {
 		}
 		if err := json.Unmarshal(featuresJSON, &plan.Features); err != nil {
 			return nil, fmt.Errorf("unmarshal plan features: %w", err)
+		}
+		if !IsSelfServePlanCode(plan.Code) {
+			continue
 		}
 		plans = append(plans, plan)
 	}

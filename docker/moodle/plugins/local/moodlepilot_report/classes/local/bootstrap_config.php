@@ -99,6 +99,13 @@ class bootstrap_config {
         return rtrim(self::api_base_url(), '/') . '/v1/internal/moodle/report/connect';
     }
 
+    public static function quota_endpoint(): string {
+        if (self::api_base_url() === '') {
+            return '';
+        }
+        return rtrim(self::api_base_url(), '/') . '/v1/internal/moodle/report/quota';
+    }
+
     public static function plugin_version(): string {
         global $CFG;
 

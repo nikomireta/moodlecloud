@@ -14,10 +14,20 @@
 // You should have received a copy of the GNU General Public License
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
+namespace local_moodlepilot_report;
+
 defined('MOODLE_INTERNAL') || die();
 
-$plugin->component = 'local_moodlepilot_report';
-$plugin->version = 2026032600;
-$plugin->requires = 2022041900;
-$plugin->release = '0.6.4';
-$plugin->maturity = MATURITY_ALPHA;
+use core_files\hook\before_file_created;
+use core_user\hook\before_user_updated;
+use local_moodlepilot_report\local\quota_guard;
+
+class hook_listener {
+    public static function before_file_created(before_file_created $hook): void {
+        quota_guard::enforce_before_file_created($hook);
+    }
+
+    public static function before_user_updated(before_user_updated $hook): void {
+        quota_guard::enforce_before_user_updated($hook);
+    }
+}

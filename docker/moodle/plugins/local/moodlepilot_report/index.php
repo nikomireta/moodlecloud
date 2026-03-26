@@ -17,6 +17,7 @@
 require_once(__DIR__ . '/../../config.php');
 
 use local_moodlepilot_report\local\bootstrap_config;
+use local_moodlepilot_report\local\quota_guard;
 use local_moodlepilot_report\local\tracking_repository;
 
 require_login();
@@ -71,6 +72,68 @@ $renderlist = static function(array $items): string {
 $enabledlabel = static function(bool $enabled): string {
     return $enabled ? 'enabled' : 'disabled';
 };
+
+$quotastatuskey = 'unknown';
+$quotasourcelabel = get_string('bootstrap:not_configured', 'local_moodlepilot_report');
+$quotarows = [
+    [
+        get_string('quota:status_label', 'local_moodlepilot_report'),
+        get_string('quota:status:unknown', 'local_moodlepilot_report'),
+    ],
+];
+
+$quotastate = quota_guard::current_quota_state(true);
+if (is_array($quotastate)) {
+    if (!empty($quotastate['over_limit'])) {
+        $quotastatuskey = 'over_limit';
+    } else if (($quotastate['warning_level'] ?? '') === 'critical') {
+        $quotastatuskey = 'critical';
+    } else if (($quotastate['warning_level'] ?? '') === 'warning') {
+        $quotastatuskey = 'warning';
+    } else {
+        $quotastatuskey = 'normal';
+    }
+
+    $quotasource = trim((string)($quotastate['usage_source'] ?? ''));
+    if ($quotasource !== '') {
+        $quotasourcelabel = get_string('quota:source:' . $quotasource, 'local_moodlepilot_report');
+    }
+
+    $quotarows = [
+        [
+            get_string('quota:plan_label', 'local_moodlepilot_report'),
+            bootstrap_config::display_value(trim((string)($quotastate['plan_code'] ?? ''))),
+        ],
+        [
+            get_string('quota:status_label', 'local_moodlepilot_report'),
+            get_string('quota:status:' . $quotastatuskey, 'local_moodlepilot_report'),
+        ],
+        [
+            get_string('quota:users_label', 'local_moodlepilot_report'),
+            (string)((int)($quotastate['users_active_count'] ?? 0)) . ' / ' . (string)((int)($quotastate['users_active_limit'] ?? 0)),
+        ],
+        [
+            get_string('quota:storage_label', 'local_moodlepilot_report'),
+            display_size((int)($quotastate['storage_bytes_used'] ?? 0)) . ' / ' . display_size((int)($quotastate['storage_bytes_limit'] ?? 0)),
+        ],
+        [
+            get_string('quota:files_label', 'local_moodlepilot_report'),
+            display_size((int)($quotastate['files_bytes_used'] ?? 0)),
+        ],
+        [
+            get_string('quota:database_label', 'local_moodlepilot_report'),
+            display_size((int)($quotastate['database_bytes_used'] ?? 0)),
+        ],
+        [
+            get_string('quota:last_measured_label', 'local_moodlepilot_report'),
+            bootstrap_config::display_value(trim((string)($quotastate['measured_at'] ?? ''))),
+        ],
+        [
+            get_string('quota:source_label', 'local_moodlepilot_report'),
+            $quotasourcelabel,
+        ],
+    ];
+}
 
 $connectionrows = [
     [
@@ -210,6 +273,11 @@ echo $OUTPUT->header();
 echo $OUTPUT->heading(get_string('dashboard:page_heading', 'local_moodlepilot_report'));
 echo html_writer::tag('p', get_string('dashboard:page_intro', 'local_moodlepilot_report'));
 echo $OUTPUT->notification(get_string('dashboard:report_surface_note', 'local_moodlepilot_report'), 'info');
+if ($quotastatuskey === 'over_limit') {
+    echo $OUTPUT->notification(get_string('dashboard:quota_over_limit_notice', 'local_moodlepilot_report'), 'error');
+} else if ($quotastatuskey === 'warning' || $quotastatuskey === 'critical') {
+    echo $OUTPUT->notification(get_string('dashboard:quota_warning_notice', 'local_moodlepilot_report'), 'warning');
+}
 
 echo $rendersection(
     get_string('dashboard:section_connection', 'local_moodlepilot_report'),
@@ -233,6 +301,12 @@ echo $rendersection(
     get_string('dashboard:section_pipeline', 'local_moodlepilot_report'),
     'Technical health for browser heartbeat collection, rollup processing, and snapshot preparation.',
     $renderpairs($pipelinerows)
+);
+
+echo $rendersection(
+    get_string('dashboard:section_quota', 'local_moodlepilot_report'),
+    get_string('quota:description', 'local_moodlepilot_report'),
+    $renderpairs($quotarows)
 );
 
 echo $rendersection(
