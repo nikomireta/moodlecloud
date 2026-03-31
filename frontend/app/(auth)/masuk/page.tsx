@@ -257,11 +257,11 @@ export default function LoginPage() {
 
         <p className="text-center text-xs text-muted-foreground">
           Dengan masuk, Anda menyetujui{" "}
-          <Link href="/syarat" className="underline underline-offset-4 hover:text-foreground">
+          <Link href="/syarat-layanan" className="underline underline-offset-4 hover:text-foreground">
             Syarat Layanan
           </Link>{" "}
           dan{" "}
-          <Link href="/privasi" className="underline underline-offset-4 hover:text-foreground">
+          <Link href="/kebijakan-privasi" className="underline underline-offset-4 hover:text-foreground">
             Kebijakan Privasi
           </Link>{" "}
           kami.

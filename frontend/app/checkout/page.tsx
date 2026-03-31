@@ -378,7 +378,7 @@ export default function CheckoutPage() {
 
                   <p className="text-xs text-center text-muted-foreground">
                     Dengan melanjutkan, Anda menyetujui{" "}
-                    <Link href="/syarat-ketentuan" className="underline">Syarat & Ketentuan</Link>
+                    <Link href="/syarat-layanan" className="underline">Syarat & Ketentuan</Link>
                     {" "}dan{" "}
                     <Link href="/kebijakan-privasi" className="underline">Kebijakan Privasi</Link>
                   </p>

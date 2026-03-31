@@ -310,11 +310,11 @@ export default function RegisterPage() {
                   className="text-sm font-normal text-muted-foreground cursor-pointer leading-snug"
                 >
                   Saya menyetujui{" "}
-                  <Link href="/syarat" className="text-foreground underline-offset-4 hover:underline">
+                  <Link href="/syarat-layanan" className="text-foreground underline-offset-4 hover:underline">
                     Syarat Layanan
                   </Link>{" "}
                   dan{" "}
-                  <Link href="/privasi" className="text-foreground underline-offset-4 hover:underline">
+                  <Link href="/kebijakan-privasi" className="text-foreground underline-offset-4 hover:underline">
                     Kebijakan Privasi
                   </Link>
                 </Label>

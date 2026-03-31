@@ -1,0 +1,27 @@
+<svg width="1200" height="675" viewBox="0 0 1200 675" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="92" y1="86" x2="1116" y2="600" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFE4E6"/>
+      <stop offset="1" stop-color="#FED7AA"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="675" rx="32" fill="#FFF9F7"/>
+  <rect x="32" y="32" width="1136" height="611" rx="28" fill="url(#bg)"/>
+  <rect x="72" y="72" width="198" height="46" rx="23" fill="#9A3412" fill-opacity="0.08"/>
+  <text x="96" y="101" fill="#EA580C" font-family="Arial, sans-serif" font-size="24" font-weight="700">Tips &amp; Trik</text>
+  <circle cx="980" cy="176" r="118" fill="#FDBA74" fill-opacity="0.28"/>
+  <rect x="902" y="290" width="172" height="184" rx="26" fill="#FFFFFF" fill-opacity="0.72"/>
+  <rect x="940" y="334" width="96" height="18" rx="9" fill="#FB923C" fill-opacity="0.26"/>
+  <rect x="940" y="378" width="118" height="18" rx="9" fill="#FB923C" fill-opacity="0.16"/>
+  <text x="72" y="236" fill="#431407" font-family="Arial, sans-serif" font-size="66" font-weight="800">
+    <tspan x="72" dy="0">Strategi Backup</tspan>
+    <tspan x="72" dy="78">Harian yang Aman</tspan>
+  </text>
+  <text x="72" y="408" fill="#7C2D12" font-family="Arial, sans-serif" font-size="30">
+    <tspan x="72" dy="0">Bedakan backup manual, jadwal rutin,</tspan>
+    <tspan x="72" dy="42">retensi, dan momen pemulihan penting.</tspan>
+  </text>
+  <rect x="72" y="534" width="336" height="18" rx="9" fill="#EA580C" fill-opacity="0.16"/>
+  <rect x="72" y="574" width="292" height="18" rx="9" fill="#EA580C" fill-opacity="0.1"/>
+  <text x="72" y="620" fill="#7C2D12" font-family="Arial, sans-serif" font-size="26" font-weight="700">Moodlepilot Indonesia</text>
+</svg>

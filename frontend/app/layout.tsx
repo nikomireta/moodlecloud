@@ -5,17 +5,32 @@ import { ThemeProvider } from '@/components/theme-provider'
 import { AuthProvider } from '@/components/providers/auth-provider'
 import { RuntimeActionsProvider } from '@/components/providers/runtime-actions-provider'
 import { ToastProvider } from '@/components/providers/toast-provider'
+import { StructuredData } from '@/components/seo/structured-data'
+import { RSS_FEED_PATH, SITE_DESCRIPTION, SITE_NAME, SITE_TITLE, buildAbsoluteURL, siteMetadataBase } from '@/lib/seo'
+import { createOrganizationStructuredData, createWebsiteStructuredData } from '@/lib/structured-data'
 import './globals.css'
 
 const inter = Inter({ 
   subsets: ["latin"],
   variable: "--font-inter"
 });
+const shouldEnableAnalytics =
+  process.env.NEXT_PUBLIC_ENABLE_VERCEL_ANALYTICS === "true" || process.env.VERCEL === "1"
 
 export const metadata: Metadata = {
-  title: 'Moodlepilot Indonesia - Kelola Moodle Anda dengan Mudah',
-  description: 'Platform manajemen Moodlepilot terpercaya di Indonesia. Buat, kelola, dan kembangkan situs Moodle Anda dalam hitungan menit.',
-  generator: 'Moodlepilot Indonesia',
+  metadataBase: siteMetadataBase,
+  title: {
+    default: SITE_TITLE,
+    template: `%s | ${SITE_NAME}`,
+  },
+  description: SITE_DESCRIPTION,
+  applicationName: SITE_NAME,
+  generator: SITE_NAME,
+  alternates: {
+    types: {
+      "application/rss+xml": buildAbsoluteURL(RSS_FEED_PATH),
+    },
+  },
   icons: {
     icon: [
       {
@@ -32,6 +47,18 @@ export const metadata: Metadata = {
       },
     ],
     apple: '/apple-icon.png',
+  },
+  openGraph: {
+    title: SITE_TITLE,
+    description: SITE_DESCRIPTION,
+    siteName: SITE_NAME,
+    locale: 'id_ID',
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: SITE_TITLE,
+    description: SITE_DESCRIPTION,
   },
 }
 
@@ -63,7 +90,9 @@ export default function RootLayout({
             </RuntimeActionsProvider>
           </AuthProvider>
         </ThemeProvider>
-        <Analytics />
+        <StructuredData data={createWebsiteStructuredData()} />
+        <StructuredData data={createOrganizationStructuredData()} />
+        {shouldEnableAnalytics ? <Analytics /> : null}
       </body>
     </html>
   )

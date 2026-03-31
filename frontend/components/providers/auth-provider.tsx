@@ -23,6 +23,51 @@ const AUTH_BOOTSTRAP_SKIP_PATHS = new Set([
   "/reset-password",
   "/verifikasi-email",
 ])
+const AUTH_BOOTSTRAP_PUBLIC_PATHS = new Set([
+  "/",
+  "/blog",
+  "/changelog",
+  "/checkout",
+  "/dukungan",
+  "/faq",
+  "/harga",
+  "/kebijakan-privasi",
+  "/kontak",
+  "/tentang",
+  "/syarat-layanan",
+])
+const AUTH_BOOTSTRAP_PUBLIC_PREFIXES = ["/blog/", "/dokumentasi/"]
+
+function isPublicMarketingPath(pathname: string) {
+  if (AUTH_BOOTSTRAP_PUBLIC_PATHS.has(pathname)) {
+    return true
+  }
+
+  if (pathname === "/dokumentasi") {
+    return true
+  }
+
+  return AUTH_BOOTSTRAP_PUBLIC_PREFIXES.some((prefix) => pathname.startsWith(prefix))
+}
+
+function isLikelyNetworkBootstrapError(error: unknown) {
+  return error instanceof TypeError
+}
+
+function isLocalAppHost() {
+  if (typeof window === "undefined") {
+    return false
+  }
+
+  const { hostname } = window.location
+  return (
+    hostname === "localhost" ||
+    hostname === "127.0.0.1" ||
+    hostname.endsWith(".localhost") ||
+    hostname.endsWith(".local") ||
+    hostname.endsWith(".lvh.me")
+  )
+}
 
 function readSessionHint() {
   if (typeof window === "undefined") {
@@ -51,7 +96,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [status, setStatus] = useState<AuthStatus>("loading")
 
   const refresh = useCallback(async () => {
-    const shouldSkipBootstrap = AUTH_BOOTSTRAP_SKIP_PATHS.has(pathname) && !readSessionHint()
+    const hasSessionHint = readSessionHint()
+    const shouldSkipBootstrap =
+      !hasSessionHint &&
+      (AUTH_BOOTSTRAP_SKIP_PATHS.has(pathname) ||
+        (isLocalAppHost() && isPublicMarketingPath(pathname)))
+
     if (shouldSkipBootstrap) {
       setUser(null)
       setStatus("unauthenticated")
@@ -65,7 +115,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setStatus("authenticated")
       return response.user
     } catch (error) {
-      if (!isAPIError(error) || error.status !== 401) {
+      const isUnauthorized = isAPIError(error) && error.status === 401
+      const shouldSilenceInLocalEnvironment = isLocalAppHost() && isLikelyNetworkBootstrapError(error)
+
+      if (!isUnauthorized && !shouldSilenceInLocalEnvironment) {
         console.error("auth bootstrap failed", error)
       }
       writeSessionHint(false)

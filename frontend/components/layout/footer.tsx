@@ -15,16 +15,16 @@ export function Footer() {
           </div>
           
           <nav className="flex flex-wrap items-center justify-center gap-4 text-sm text-muted-foreground">
-            <Link href="/" className="transition-colors hover:text-foreground">
+            <Link href="/tentang" className="transition-colors hover:text-foreground">
               Tentang
             </Link>
-            <Link href="/" className="transition-colors hover:text-foreground">
+            <Link href="/dokumentasi" className="transition-colors hover:text-foreground">
               Dokumentasi
             </Link>
-            <Link href="/" className="transition-colors hover:text-foreground">
+            <Link href="/dukungan" className="transition-colors hover:text-foreground">
               Dukungan
             </Link>
-            <Link href="/" className="transition-colors hover:text-foreground">
+            <Link href="/kebijakan-privasi" className="transition-colors hover:text-foreground">
               Kebijakan Privasi
             </Link>
           </nav>

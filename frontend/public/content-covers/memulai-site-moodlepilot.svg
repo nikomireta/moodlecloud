@@ -1,0 +1,26 @@
+<svg width="1200" height="675" viewBox="0 0 1200 675" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="96" y1="72" x2="1104" y2="603" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#E0F2FE"/>
+      <stop offset="1" stop-color="#DBEAFE"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="675" rx="32" fill="#F8FAFC"/>
+  <rect x="32" y="32" width="1136" height="611" rx="28" fill="url(#bg)"/>
+  <circle cx="1020" cy="152" r="118" fill="#93C5FD" fill-opacity="0.45"/>
+  <circle cx="930" cy="518" r="188" fill="#BFDBFE" fill-opacity="0.55"/>
+  <rect x="72" y="72" width="188" height="46" rx="23" fill="#0F172A" fill-opacity="0.08"/>
+  <text x="96" y="101" fill="#1D4ED8" font-family="Arial, sans-serif" font-size="24" font-weight="700">Tutorial</text>
+  <text x="72" y="236" fill="#0F172A" font-family="Arial, sans-serif" font-size="68" font-weight="800">
+    <tspan x="72" dy="0">Memulai Site</tspan>
+    <tspan x="72" dy="78">Moodlepilot</tspan>
+    <tspan x="72" dy="78">Tanpa Ribet</tspan>
+  </text>
+  <text x="72" y="474" fill="#334155" font-family="Arial, sans-serif" font-size="30">
+    <tspan x="72" dy="0">Provisioning, subdomain, dan aktivasi site</tspan>
+    <tspan x="72" dy="42">dalam satu alur yang mudah diikuti.</tspan>
+  </text>
+  <rect x="72" y="548" width="306" height="18" rx="9" fill="#2563EB" fill-opacity="0.18"/>
+  <rect x="72" y="588" width="250" height="18" rx="9" fill="#2563EB" fill-opacity="0.12"/>
+  <text x="72" y="620" fill="#1E293B" font-family="Arial, sans-serif" font-size="26" font-weight="700">Moodlepilot Indonesia</text>
+</svg>

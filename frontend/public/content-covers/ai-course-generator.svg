@@ -1,0 +1,25 @@
+<svg width="1200" height="675" viewBox="0 0 1200 675" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="92" y1="80" x2="1106" y2="598" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#EDE9FE"/>
+      <stop offset="1" stop-color="#DDD6FE"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="675" rx="32" fill="#FAF8FF"/>
+  <rect x="32" y="32" width="1136" height="611" rx="28" fill="url(#bg)"/>
+  <rect x="72" y="72" width="164" height="46" rx="23" fill="#5B21B6" fill-opacity="0.08"/>
+  <text x="96" y="101" fill="#7C3AED" font-family="Arial, sans-serif" font-size="24" font-weight="700">Berita</text>
+  <circle cx="978" cy="184" r="124" fill="#A78BFA" fill-opacity="0.26"/>
+  <circle cx="1050" cy="472" r="88" fill="#C4B5FD" fill-opacity="0.28"/>
+  <text x="72" y="236" fill="#2E1065" font-family="Arial, sans-serif" font-size="66" font-weight="800">
+    <tspan x="72" dy="0">AI Course Generator</tspan>
+    <tspan x="72" dy="78">&amp; Export MBZ</tspan>
+  </text>
+  <text x="72" y="408" fill="#4C1D95" font-family="Arial, sans-serif" font-size="30">
+    <tspan x="72" dy="0">Jalur eksperimen untuk menyusun outline</tspan>
+    <tspan x="72" dy="42">course dan mengekspor hasil awal.</tspan>
+  </text>
+  <rect x="72" y="534" width="350" height="18" rx="9" fill="#7C3AED" fill-opacity="0.16"/>
+  <rect x="72" y="574" width="278" height="18" rx="9" fill="#7C3AED" fill-opacity="0.1"/>
+  <text x="72" y="620" fill="#4C1D95" font-family="Arial, sans-serif" font-size="26" font-weight="700">Moodlepilot Indonesia</text>
+</svg>
