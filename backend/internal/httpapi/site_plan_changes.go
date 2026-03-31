@@ -78,133 +78,48 @@ func (s *Server) handleChangeSitePlan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	currentSite, err := s.store.GetSiteByIDForOwner(r.Context(), user.ID, siteID)
+	currentSite, targetPlan, err := s.validatePlanChangeRequest(r, user.ID, siteID, req.PlanCode)
 	if err != nil {
-		if errors.Is(err, store.ErrNotFound) {
-			writeError(w, http.StatusNotFound, "Situs tidak ditemukan")
-			return
+		status := http.StatusInternalServerError
+		switch {
+		case errors.Is(err, store.ErrNotFound):
+			status = http.StatusNotFound
+		case errors.Is(err, store.ErrConflict):
+			status = http.StatusConflict
 		}
-		writeError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	if currentSite.Status != "active" {
-		writeError(w, http.StatusConflict, "Situs harus aktif sebelum paket diubah")
-		return
-	}
-	if !store.CanSelfServeUpgradeFromPlanCode(currentSite.PlanCode) {
-		writeError(w, http.StatusConflict, "Paket situs ini belum mendukung upgrade mandiri")
+		writeError(w, status, err.Error())
 		return
 	}
 
-	targetPlan, err := s.store.GetPlanByCode(r.Context(), req.PlanCode)
+	amountSubtotal, err := planAmountForCycle(targetPlan, "monthly")
 	if err != nil {
-		if errors.Is(err, store.ErrNotFound) {
-			writeError(w, http.StatusBadRequest, "Paket tujuan tidak ditemukan")
-			return
-		}
-		writeError(w, http.StatusInternalServerError, err.Error())
+		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	if !store.IsSelfServePlanCode(targetPlan.Code) {
-		writeError(w, http.StatusConflict, "Paket tujuan belum tersedia untuk upgrade mandiri")
-		return
-	}
-	if currentSite.PlanCode == targetPlan.Code {
-		writeError(w, http.StatusConflict, "Paket tujuan sama dengan paket aktif saat ini")
-		return
-	}
-	if !store.IsSelfServeUpgradePath(currentSite.PlanCode, targetPlan.Code) {
-		writeError(w, http.StatusConflict, "Hanya upgrade ke paket self-serve yang lebih tinggi yang diperbolehkan")
-		return
-	}
-
-	provisioningStatus, err := s.store.GetProvisioningStatusBySiteID(r.Context(), user.ID, currentSite.ID)
-	if err != nil {
-		if errors.Is(err, store.ErrNotFound) {
-			writeError(w, http.StatusConflict, "Status provisioning situs belum lengkap untuk upgrade paket")
-			return
-		}
-		writeError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	if provisioningStatus.Runtime == nil {
-		writeError(w, http.StatusConflict, "Runtime situs belum siap untuk upgrade paket")
-		return
-	}
-
-	var customDomain *store.SiteCustomDomain
-	domain, err := s.store.GetSiteCustomDomain(r.Context(), currentSite.ID)
-	if err != nil {
-		if !errors.Is(err, store.ErrNotFound) {
-			writeError(w, http.StatusInternalServerError, err.Error())
-			return
-		}
-	} else {
-		customDomain = &domain
-	}
-
-	updatedSite, updatedUsage, err := s.store.UpdateSitePlan(r.Context(), store.UpdateSitePlanParams{
-		OwnerUserID: user.ID,
-		SiteID:      currentSite.ID,
-		PlanCode:    targetPlan.Code,
-	}, targetPlan, store.HostCapacityPolicy{
-		StorageBytesLimit:  s.cfg.HostStorageBudgetBytes,
-		CPUMillicoresLimit: s.cfg.HostCPUMillicoresBudget,
-		MemoryMiBLimit:     s.cfg.HostMemoryMiBBudget,
-	})
-	if err != nil {
-		if errors.Is(err, store.ErrNotFound) {
-			writeError(w, http.StatusNotFound, "Situs tidak ditemukan")
-			return
-		}
-		if errors.Is(err, store.ErrCapacityExceeded) {
-			writeError(w, http.StatusConflict, err.Error())
-			return
-		}
-		writeError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	if _, err := s.runtime.ReconcileSite(r.Context(), updatedSite, provisioningStatus.Job, provisioningStatus.Runtime, customDomain); err != nil {
-		rollbackSite, rollbackUsage, rollbackErr := s.store.UpdateSitePlan(r.Context(), store.UpdateSitePlanParams{
-			OwnerUserID: user.ID,
-			SiteID:      currentSite.ID,
-			PlanCode:    currentSite.PlanCode,
-		}, store.Plan{
-			Code:              currentSite.PlanCode,
-			UsersActiveLimit:  currentSite.UsersActiveLimit,
-			StorageBytesLimit: currentSite.StorageBytesLimit,
-			WebCPUMillicores:  currentSite.WebCPUMillicores,
-			WebMemoryMiB:      currentSite.WebMemoryMiB,
-			CronCPUMillicores: currentSite.CronCPUMillicores,
-			CronMemoryMiB:     currentSite.CronMemoryMiB,
-		}, store.HostCapacityPolicy{
-			StorageBytesLimit:  s.cfg.HostStorageBudgetBytes,
-			CPUMillicoresLimit: s.cfg.HostCPUMillicoresBudget,
-			MemoryMiBLimit:     s.cfg.HostMemoryMiBBudget,
+	if amountSubtotal > 0 {
+		writeJSON(w, http.StatusAccepted, map[string]any{
+			"site":             currentSite,
+			"checkout_required": true,
+			"message":          "Upgrade berbayar memerlukan checkout. Lanjutkan dari halaman checkout atau endpoint /billing/checkouts.",
 		})
-		if rollbackErr == nil {
-			if _, runtimeRollbackErr := s.runtime.ReconcileSite(r.Context(), rollbackSite, provisioningStatus.Job, provisioningStatus.Runtime, customDomain); runtimeRollbackErr != nil {
-				log.Printf("plan change runtime rollback failed for site=%s: %v", currentSite.Subdomain, runtimeRollbackErr)
-			}
-			_ = rollbackUsage
-		}
+		return
+	}
 
-		message := fmt.Sprintf("Upgrade paket gagal diterapkan: %v", err)
-		if rollbackErr != nil {
-			message = fmt.Sprintf("%s; rollback paket gagal: %v", message, rollbackErr)
-		}
-		writeError(w, http.StatusInternalServerError, message)
+	updatedSite, updatedUsage, err := s.applySitePlanChange(r.Context(), user.ID, currentSite, targetPlan)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
 	if _, auditErr := s.store.CreateSitePlanChange(r.Context(), store.CreateSitePlanChangeParams{
-		SiteID:       currentSite.ID,
-		OwnerUserID:  user.ID,
-		FromPlanCode: currentSite.PlanCode,
-		ToPlanCode:   targetPlan.Code,
-		Status:       "applied",
-		AppliedAt:    time.Now().UTC(),
+		SiteID:        &currentSite.ID,
+		SiteName:      currentSite.Name,
+		SiteSubdomain: currentSite.Subdomain,
+		OwnerUserID:   user.ID,
+		FromPlanCode:  currentSite.PlanCode,
+		ToPlanCode:    targetPlan.Code,
+		Status:        "applied",
+		AppliedAt:     time.Now().UTC(),
 	}); auditErr != nil {
 		log.Printf("site plan change audit failed site=%s: %v", currentSite.Subdomain, auditErr)
 	}

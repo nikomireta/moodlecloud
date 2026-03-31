@@ -380,6 +380,14 @@ func (s *Server) handleDeleteSite(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	if err := s.store.CancelSubscriptionsBySiteID(r.Context(), user.ID, siteID); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if err := s.store.CancelPendingInvoicesBySiteID(r.Context(), user.ID, siteID); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
 	if err := s.store.DeleteSiteForOwner(r.Context(), user.ID, siteID); err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			writeError(w, http.StatusNotFound, "Situs tidak ditemukan")

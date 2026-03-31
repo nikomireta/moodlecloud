@@ -101,7 +101,12 @@ func (s *Store) ListSitesByOwner(ctx context.Context, ownerUserID uuid.UUID) ([]
 
 func (s *Store) IsSubdomainAvailable(ctx context.Context, subdomain string) (bool, error) {
 	var count int
-	err := s.pool.QueryRow(ctx, `SELECT COUNT(*) FROM sites WHERE subdomain = $1`, strings.ToLower(strings.TrimSpace(subdomain))).Scan(&count)
+	err := s.pool.QueryRow(ctx, `
+		SELECT
+			(SELECT COUNT(*) FROM sites WHERE subdomain = $1)
+			+
+			(SELECT COUNT(*) FROM site_checkout_orders WHERE subdomain = $1 AND status IN ('pending_payment', 'paid'))
+	`, strings.ToLower(strings.TrimSpace(subdomain))).Scan(&count)
 	if err != nil {
 		return false, fmt.Errorf("count subdomains: %w", err)
 	}
@@ -827,33 +832,7 @@ func scanSite(row interface {
 }
 
 func validateHostCapacity(ctx context.Context, tx pgx.Tx, plan Plan, capacity HostCapacityPolicy) error {
-	var reservedStorage int64
-	var reservedCPU int64
-	var reservedMemory int64
-	if err := tx.QueryRow(ctx, `
-		SELECT
-			COALESCE(SUM(storage_bytes_limit), 0),
-			COALESCE(SUM(web_cpu_millicores + cron_cpu_millicores), 0),
-			COALESCE(SUM(web_memory_mib + cron_memory_mib), 0)
-		FROM sites
-		WHERE status NOT IN ('failed', 'deleted')
-	`).Scan(&reservedStorage, &reservedCPU, &reservedMemory); err != nil {
-		return fmt.Errorf("read host capacity reservations: %w", err)
-	}
-
-	requestedCPU := int64(plan.WebCPUMillicores + plan.CronCPUMillicores)
-	requestedMemory := int64(plan.WebMemoryMiB + plan.CronMemoryMiB)
-
-	switch {
-	case capacity.StorageBytesLimit > 0 && reservedStorage+plan.StorageBytesLimit > capacity.StorageBytesLimit:
-		return fmt.Errorf("%w: storage host tidak cukup untuk paket %s", ErrCapacityExceeded, plan.Code)
-	case capacity.CPUMillicoresLimit > 0 && reservedCPU+requestedCPU > int64(capacity.CPUMillicoresLimit):
-		return fmt.Errorf("%w: CPU host tidak cukup untuk paket %s", ErrCapacityExceeded, plan.Code)
-	case capacity.MemoryMiBLimit > 0 && reservedMemory+requestedMemory > int64(capacity.MemoryMiBLimit):
-		return fmt.Errorf("%w: memori host tidak cukup untuk paket %s", ErrCapacityExceeded, plan.Code)
-	default:
-		return nil
-	}
+	return validateHostCapacityWithReservations(ctx, tx, plan, capacity, nil)
 }
 
 func validateHostCapacityChange(ctx context.Context, tx pgx.Tx, currentSite Site, targetPlan Plan, capacity HostCapacityPolicy) error {
@@ -865,9 +844,26 @@ func validateHostCapacityChange(ctx context.Context, tx pgx.Tx, currentSite Site
 			COALESCE(SUM(storage_bytes_limit), 0),
 			COALESCE(SUM(web_cpu_millicores + cron_cpu_millicores), 0),
 			COALESCE(SUM(web_memory_mib + cron_memory_mib), 0)
-		FROM sites
-		WHERE status NOT IN ('failed', 'deleted')
-		  AND id <> $1
+		FROM (
+			SELECT
+				storage_bytes_limit,
+				web_cpu_millicores,
+				cron_cpu_millicores,
+				web_memory_mib,
+				cron_memory_mib
+			FROM sites
+			WHERE status NOT IN ('failed', 'deleted')
+			  AND id <> $1
+			UNION ALL
+			SELECT
+				storage_bytes_limit,
+				web_cpu_millicores,
+				cron_cpu_millicores,
+				web_memory_mib,
+				cron_memory_mib
+			FROM site_checkout_orders
+			WHERE status IN ('pending_payment', 'paid')
+		) reservations
 	`, currentSite.ID).Scan(&reservedStorage, &reservedCPU, &reservedMemory); err != nil {
 		return fmt.Errorf("read host capacity reservations for plan change: %w", err)
 	}
@@ -882,6 +878,54 @@ func validateHostCapacityChange(ctx context.Context, tx pgx.Tx, currentSite Site
 		return fmt.Errorf("%w: CPU host tidak cukup untuk paket %s", ErrCapacityExceeded, targetPlan.Code)
 	case capacity.MemoryMiBLimit > 0 && reservedMemory+requestedMemory > int64(capacity.MemoryMiBLimit):
 		return fmt.Errorf("%w: memori host tidak cukup untuk paket %s", ErrCapacityExceeded, targetPlan.Code)
+	default:
+		return nil
+	}
+}
+
+func validateHostCapacityWithReservations(ctx context.Context, tx pgx.Tx, plan Plan, capacity HostCapacityPolicy, excludeOrderID *uuid.UUID) error {
+	var reservedStorage int64
+	var reservedCPU int64
+	var reservedMemory int64
+	if err := tx.QueryRow(ctx, `
+		SELECT
+			COALESCE(SUM(storage_bytes_limit), 0),
+			COALESCE(SUM(web_cpu_millicores + cron_cpu_millicores), 0),
+			COALESCE(SUM(web_memory_mib + cron_memory_mib), 0)
+		FROM (
+			SELECT
+				storage_bytes_limit,
+				web_cpu_millicores,
+				cron_cpu_millicores,
+				web_memory_mib,
+				cron_memory_mib
+			FROM sites
+			WHERE status NOT IN ('failed', 'deleted')
+			UNION ALL
+			SELECT
+				storage_bytes_limit,
+				web_cpu_millicores,
+				cron_cpu_millicores,
+				web_memory_mib,
+				cron_memory_mib
+			FROM site_checkout_orders
+			WHERE status IN ('pending_payment', 'paid')
+				AND ($1::uuid IS NULL OR id <> $1)
+		) reservations
+	`, excludeOrderID).Scan(&reservedStorage, &reservedCPU, &reservedMemory); err != nil {
+		return fmt.Errorf("read host capacity reservations: %w", err)
+	}
+
+	requestedCPU := int64(plan.WebCPUMillicores + plan.CronCPUMillicores)
+	requestedMemory := int64(plan.WebMemoryMiB + plan.CronMemoryMiB)
+
+	switch {
+	case capacity.StorageBytesLimit > 0 && reservedStorage+plan.StorageBytesLimit > capacity.StorageBytesLimit:
+		return fmt.Errorf("%w: storage host tidak cukup untuk paket %s", ErrCapacityExceeded, plan.Code)
+	case capacity.CPUMillicoresLimit > 0 && reservedCPU+requestedCPU > int64(capacity.CPUMillicoresLimit):
+		return fmt.Errorf("%w: CPU host tidak cukup untuk paket %s", ErrCapacityExceeded, plan.Code)
+	case capacity.MemoryMiBLimit > 0 && reservedMemory+requestedMemory > int64(capacity.MemoryMiBLimit):
+		return fmt.Errorf("%w: memori host tidak cukup untuk paket %s", ErrCapacityExceeded, plan.Code)
 	default:
 		return nil
 	}

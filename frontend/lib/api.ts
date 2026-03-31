@@ -177,13 +177,207 @@ export type SiteUsageSnapshot = {
 
 export type SitePlanChange = {
   id: string
-  site_id: string
+  site_id?: string | null
+  site_name: string
+  site_subdomain: string
   owner_user_id: string
   from_plan_code: string
   to_plan_code: string
   status: string
   applied_at: string
   created_at: string
+}
+
+export type BillingPaymentMethod = {
+  id: string
+  customer_id: string
+  owner_user_id: string
+  provider: string
+  provider_token: string
+  type: string
+  brand: string
+  last4: string
+  expiry_month: string
+  expiry_year: string
+  status: string
+  reusable: boolean
+  is_default: boolean
+  created_at: string
+  updated_at: string
+}
+
+export type BillingCollectionMethod = "auto_charge" | "manual_invoice"
+
+export type BillingSubscription = {
+  id: string
+  customer_id: string
+  owner_user_id: string
+  site_id?: string | null
+  site_name: string
+  site_subdomain: string
+  payment_method_id?: string | null
+  provider: string
+  provider_subscription_id: string
+  status: string
+  billing_cycle: string
+  collection_method: BillingCollectionMethod
+  current_plan_code: string
+  pending_plan_code: string
+  currency: string
+  amount_total: number
+  anchor_at?: string | null
+  current_period_start?: string | null
+  current_period_end?: string | null
+  next_charge_at?: string | null
+  last_charge_failed_at?: string | null
+  last_error: string
+  canceled_at?: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type BillingInvoice = {
+  id: string
+  owner_user_id: string
+  customer_id: string
+  site_id?: string | null
+  site_name: string
+  site_subdomain: string
+  subscription_id?: string | null
+  number: string
+  provider: string
+  external_id: string
+  description: string
+  status: string
+  currency: string
+  billing_cycle: string
+  from_plan_code: string
+  to_plan_code: string
+  payment_method_type: string
+  amount_subtotal: number
+  amount_tax: number
+  amount_total: number
+  checkout_url: string
+  redirect_url: string
+  expires_at?: string | null
+  paid_at?: string | null
+  canceled_at?: string | null
+  failed_at?: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type BillingInvoiceItem = {
+  id: string
+  invoice_id: string
+  item_type: string
+  name: string
+  description: string
+  quantity: number
+  unit_amount: number
+  total_amount: number
+  metadata?: Record<string, unknown> | null
+  created_at: string
+  updated_at: string
+}
+
+export type BillingAttempt = {
+  id: string
+  invoice_id: string
+  subscription_id?: string | null
+  provider: string
+  external_id: string
+  payment_method_type: string
+  status: string
+  amount: number
+  redirect_url: string
+  failure_reason: string
+  expires_at?: string | null
+  paid_at?: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type SiteCheckoutOrder = {
+  id: string
+  owner_user_id: string
+  invoice_id: string
+  created_site_id?: string | null
+  status: string
+  site_name: string
+  subdomain: string
+  plan_code: string
+  billing_cycle: string
+  region: string
+  admin_name: string
+  admin_email: string
+  payment_method_type: string
+  amount_total: number
+  users_active_limit: number
+  storage_bytes_limit: number
+  web_cpu_millicores: number
+  web_memory_mib: number
+  cron_cpu_millicores: number
+  cron_memory_mib: number
+  expires_at?: string | null
+  paid_at?: string | null
+  provisioning_started_at?: string | null
+  completed_at?: string | null
+  canceled_at?: string | null
+  last_error: string
+  created_at: string
+  updated_at: string
+}
+
+export type BillingSiteSnapshot = {
+  site_id?: string | null
+  site_name: string
+  site_subdomain: string
+}
+
+export type BillingOverview = {
+  sites: SiteSummary[]
+  changes: SitePlanChange[]
+  invoices: BillingInvoice[]
+  payment_methods: BillingPaymentMethod[]
+  subscriptions: BillingSubscription[]
+}
+
+export type BillingProviderConfig = {
+  provider: string
+  enabled: boolean
+  environment: string
+  client_key: string
+  script_url: string
+  supports_card_tokenization: boolean
+}
+
+export type CreateBillingCheckoutRequest = {
+  siteID: string
+  targetPlanCode: string
+  billingCycle: "monthly" | "yearly"
+  paymentMethodType: "card" | "bank" | "ewallet"
+  fullName: string
+  email: string
+  phone: string
+  organization: string
+  cardTokenID?: string
+}
+
+export type CreateSiteCheckoutRequest = {
+  siteName: string
+  subdomain: string
+  planCode: string
+  billingCycle: "monthly" | "yearly"
+  region: string
+  adminName: string
+  adminEmail: string
+  paymentMethodType: "card" | "bank" | "ewallet"
+  fullName: string
+  email: string
+  phone: string
+  organization: string
+  cardTokenID?: string
 }
 
 export type SiteBackupItem = {
@@ -689,6 +883,24 @@ export type SitePlanChangeResponse = MessageResponse & {
   usage?: SiteUsageSnapshot | null
 }
 
+export type BillingOverviewResponse = {
+  overview: BillingOverview
+}
+
+export type BillingInvoiceResponse = {
+  invoice: BillingInvoice
+  items: BillingInvoiceItem[]
+  latest_attempt?: BillingAttempt | null
+  site_snapshot: BillingSiteSnapshot
+  checkout_order?: SiteCheckoutOrder | null
+}
+
+export type BillingCheckoutResponse = MessageResponse & {
+  invoice: BillingInvoice
+  attempt: BillingAttempt
+  provider: BillingProviderConfig
+}
+
 export type SiteAdminAccessLinkResponse = MessageResponse & {
   login_url: string
   access_token: string
@@ -961,6 +1173,62 @@ export const api = {
   getSubdomainAvailability(value: string) {
     const search = new URLSearchParams({ value })
     return apiFetch<SubdomainAvailabilityResponse>(`/sites/subdomain-availability?${search.toString()}`)
+  },
+
+  getBillingConfig() {
+    return apiFetch<BillingProviderConfig>("/billing/config")
+  },
+
+  getBillingOverview() {
+    return apiFetch<BillingOverviewResponse>("/billing/overview")
+  },
+
+  getBillingInvoice(invoiceID: string) {
+    return apiFetch<BillingInvoiceResponse>(`/billing/invoices/${encodeURIComponent(invoiceID)}`)
+  },
+
+  continueBillingInvoiceCheckout(invoiceID: string) {
+    return apiFetch<BillingCheckoutResponse>(`/billing/invoices/${encodeURIComponent(invoiceID)}/checkout`, {
+      method: "POST",
+    })
+  },
+
+  createBillingCheckout(input: CreateBillingCheckoutRequest) {
+    return apiFetch<BillingCheckoutResponse>("/billing/checkouts", {
+      method: "POST",
+      body: JSON.stringify({
+        site_id: input.siteID,
+        target_plan_code: input.targetPlanCode,
+        billing_cycle: input.billingCycle,
+        payment_method_type: input.paymentMethodType,
+        full_name: input.fullName,
+        email: input.email,
+        phone: input.phone,
+        organization: input.organization,
+        card_token_id: input.cardTokenID,
+      }),
+    })
+  },
+
+  createSiteCheckout(input: CreateSiteCheckoutRequest) {
+    return apiFetch<BillingCheckoutResponse>("/billing/site-checkouts", {
+      method: "POST",
+      body: JSON.stringify({
+        site_name: input.siteName,
+        subdomain: input.subdomain,
+        plan_code: input.planCode,
+        billing_cycle: input.billingCycle,
+        region: input.region,
+        admin_name: input.adminName,
+        admin_email: input.adminEmail,
+        payment_method_type: input.paymentMethodType,
+        full_name: input.fullName,
+        email: input.email,
+        phone: input.phone,
+        organization: input.organization,
+        card_token_id: input.cardTokenID,
+      }),
+    })
   },
 
   createSite(input: CreateSiteRequest) {

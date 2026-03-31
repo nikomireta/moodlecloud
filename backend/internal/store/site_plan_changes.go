@@ -11,6 +11,32 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+func scanSitePlanChange(row interface {
+	Scan(dest ...interface{}) error
+}, change *SitePlanChange) error {
+	var siteID uuid.NullUUID
+	if err := row.Scan(
+		&change.ID,
+		&siteID,
+		&change.SiteName,
+		&change.SiteSubdomain,
+		&change.OwnerUserID,
+		&change.FromPlanCode,
+		&change.ToPlanCode,
+		&change.Status,
+		&change.AppliedAt,
+		&change.CreatedAt,
+	); err != nil {
+		return err
+	}
+	if siteID.Valid {
+		change.SiteID = &siteID.UUID
+	} else {
+		change.SiteID = nil
+	}
+	return nil
+}
+
 func (s *Store) UpdateSitePlan(ctx context.Context, params UpdateSitePlanParams, targetPlan Plan, capacity HostCapacityPolicy) (Site, *SiteUsageSnapshot, error) {
 	targetCode := strings.TrimSpace(params.PlanCode)
 	if targetCode != "" && targetCode != strings.TrimSpace(targetPlan.Code) {
@@ -55,14 +81,16 @@ func (s *Store) UpdateSitePlan(ctx context.Context, params UpdateSitePlanParams,
 func (s *Store) CreateSitePlanChange(ctx context.Context, params CreateSitePlanChangeParams) (SitePlanChange, error) {
 	now := time.Now().UTC()
 	change := SitePlanChange{
-		ID:           uuid.New(),
-		SiteID:       params.SiteID,
-		OwnerUserID:  params.OwnerUserID,
-		FromPlanCode: strings.TrimSpace(params.FromPlanCode),
-		ToPlanCode:   strings.TrimSpace(params.ToPlanCode),
-		Status:       strings.TrimSpace(params.Status),
-		AppliedAt:    params.AppliedAt,
-		CreatedAt:    now,
+		ID:            uuid.New(),
+		SiteID:        params.SiteID,
+		SiteName:      strings.TrimSpace(params.SiteName),
+		SiteSubdomain: strings.ToLower(strings.TrimSpace(params.SiteSubdomain)),
+		OwnerUserID:   params.OwnerUserID,
+		FromPlanCode:  strings.TrimSpace(params.FromPlanCode),
+		ToPlanCode:    strings.TrimSpace(params.ToPlanCode),
+		Status:        strings.TrimSpace(params.Status),
+		AppliedAt:     params.AppliedAt,
+		CreatedAt:     now,
 	}
 	if change.Status == "" {
 		change.Status = "applied"
@@ -71,22 +99,13 @@ func (s *Store) CreateSitePlanChange(ctx context.Context, params CreateSitePlanC
 		change.AppliedAt = now
 	}
 
-	if err := s.pool.QueryRow(ctx, `
+	if err := scanSitePlanChange(s.pool.QueryRow(ctx, `
 		INSERT INTO site_plan_changes (
-			id, site_id, owner_user_id, from_plan_code, to_plan_code, status, applied_at, created_at
+			id, site_id, site_name, site_subdomain, owner_user_id, from_plan_code, to_plan_code, status, applied_at, created_at
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-		RETURNING id, site_id, owner_user_id, from_plan_code, to_plan_code, status, applied_at, created_at
-	`, change.ID, change.SiteID, change.OwnerUserID, change.FromPlanCode, change.ToPlanCode, change.Status, change.AppliedAt, change.CreatedAt).Scan(
-		&change.ID,
-		&change.SiteID,
-		&change.OwnerUserID,
-		&change.FromPlanCode,
-		&change.ToPlanCode,
-		&change.Status,
-		&change.AppliedAt,
-		&change.CreatedAt,
-	); err != nil {
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		RETURNING id, site_id, site_name, site_subdomain, owner_user_id, from_plan_code, to_plan_code, status, applied_at, created_at
+	`, change.ID, change.SiteID, change.SiteName, change.SiteSubdomain, change.OwnerUserID, change.FromPlanCode, change.ToPlanCode, change.Status, change.AppliedAt, change.CreatedAt), &change); err != nil {
 		return SitePlanChange{}, fmt.Errorf("create site plan change: %w", err)
 	}
 
@@ -100,7 +119,7 @@ func (s *Store) ListSitePlanChangesForOwner(ctx context.Context, ownerUserID, si
 
 	rows, err := s.pool.Query(ctx, `
 		SELECT
-			id, site_id, owner_user_id, from_plan_code, to_plan_code, status, applied_at, created_at
+			id, site_id, site_name, site_subdomain, owner_user_id, from_plan_code, to_plan_code, status, applied_at, created_at
 		FROM site_plan_changes
 		WHERE owner_user_id = $1 AND site_id = $2
 		ORDER BY applied_at DESC, created_at DESC
@@ -114,16 +133,7 @@ func (s *Store) ListSitePlanChangesForOwner(ctx context.Context, ownerUserID, si
 	items := make([]SitePlanChange, 0)
 	for rows.Next() {
 		var item SitePlanChange
-		if err := rows.Scan(
-			&item.ID,
-			&item.SiteID,
-			&item.OwnerUserID,
-			&item.FromPlanCode,
-			&item.ToPlanCode,
-			&item.Status,
-			&item.AppliedAt,
-			&item.CreatedAt,
-		); err != nil {
+		if err := scanSitePlanChange(rows, &item); err != nil {
 			return nil, fmt.Errorf("scan site plan change: %w", err)
 		}
 		items = append(items, item)
@@ -138,7 +148,7 @@ func (s *Store) ListSitePlanChangesForOwner(ctx context.Context, ownerUserID, si
 func (s *Store) ListSitePlanChangesByOwner(ctx context.Context, ownerUserID uuid.UUID) ([]SitePlanChange, error) {
 	rows, err := s.pool.Query(ctx, `
 		SELECT
-			id, site_id, owner_user_id, from_plan_code, to_plan_code, status, applied_at, created_at
+			id, site_id, site_name, site_subdomain, owner_user_id, from_plan_code, to_plan_code, status, applied_at, created_at
 		FROM site_plan_changes
 		WHERE owner_user_id = $1
 		ORDER BY applied_at DESC, created_at DESC
@@ -152,16 +162,7 @@ func (s *Store) ListSitePlanChangesByOwner(ctx context.Context, ownerUserID uuid
 	items := make([]SitePlanChange, 0)
 	for rows.Next() {
 		var item SitePlanChange
-		if err := rows.Scan(
-			&item.ID,
-			&item.SiteID,
-			&item.OwnerUserID,
-			&item.FromPlanCode,
-			&item.ToPlanCode,
-			&item.Status,
-			&item.AppliedAt,
-			&item.CreatedAt,
-		); err != nil {
+		if err := scanSitePlanChange(rows, &item); err != nil {
 			return nil, fmt.Errorf("scan site plan change by owner: %w", err)
 		}
 		items = append(items, item)

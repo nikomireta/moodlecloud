@@ -1,10 +1,10 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import { toast } from "sonner"
 import { ArrowUpRight, CheckCircle2, Loader2 } from "lucide-react"
+import { useRouter } from "next/navigation"
 
-import { api, isAPIError, type SiteSummary } from "@/lib/api"
+import { type SiteSummary } from "@/lib/api"
 import { formatPrice, getSelfServeUpgradeOptions, getTierByCode } from "@/lib/pricing"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -28,8 +28,9 @@ export function SitePlanUpgradeDialog({
   open,
   onOpenChange,
   site,
-  onPlanChanged,
+  onPlanChanged: _onPlanChanged,
 }: SitePlanUpgradeDialogProps) {
+  const router = useRouter()
   const upgradeOptions = useMemo(() => getSelfServeUpgradeOptions(site?.plan_code), [site?.plan_code])
   const currentPlan = getTierByCode(site?.plan_code)
 
@@ -52,16 +53,15 @@ export function SitePlanUpgradeDialog({
 
     setSubmitting(true)
     try {
-      const response = await api.changeSitePlan(site.id, { planCode: selectedPlan.code })
-      try {
-        await onPlanChanged()
-      } catch {
-        // Keep the success state from the mutation even if the immediate refetch fails.
-      }
-      toast.success(response.message)
+      const search = new URLSearchParams({
+        site_id: site.id,
+        target_plan_code: selectedPlan.code,
+        billing_cycle: "monthly",
+      })
       onOpenChange(false)
-    } catch (error) {
-      toast.error(isAPIError(error) ? error.message : "Gagal mengubah paket situs")
+      router.push(`/checkout?${search.toString()}`)
+    } catch {
+      // Router navigation should not normally fail, but keep the dialog responsive if it does.
     } finally {
       setSubmitting(false)
     }
@@ -73,7 +73,7 @@ export function SitePlanUpgradeDialog({
         <DialogHeader>
           <DialogTitle>Upgrade Paket Situs</DialogTitle>
           <DialogDescription>
-            Paket berlaku per-site. Untuk demo ini, upgrade aktif langsung setelah dikonfirmasi dan belum memakai payment gateway.
+            Paket berlaku per-site. Upgrade berbayar akan diteruskan ke checkout dan aktif setelah pembayaran terkonfirmasi.
           </DialogDescription>
         </DialogHeader>
 

@@ -111,6 +111,9 @@ func (h Handler) HandleProvisionSiteTask(ctx context.Context, task *asynq.Task) 
 	if err != nil {
 		return h.failJob(ctx, jobID, site, runtimeMetadata, "finalize", err)
 	}
+	if err := h.Store.CompleteSiteCheckoutOrderBySiteID(ctx, site.ID, time.Now().UTC()); err != nil {
+		log.Printf("provisioning: warning: could not complete checkout order site=%s: %v", site.Subdomain, err)
+	}
 
 	log.Printf("provisioning: completed job=%s site=%s", jobID, site.Subdomain)
 

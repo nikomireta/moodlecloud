@@ -8,6 +8,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -20,6 +21,7 @@ import (
 	"moodlepilot/backend/internal/ai"
 	"moodlepilot/backend/internal/auth"
 	"moodlepilot/backend/internal/backup"
+	"moodlepilot/backend/internal/billing"
 	"moodlepilot/backend/internal/config"
 	"moodlepilot/backend/internal/coursegen"
 	"moodlepilot/backend/internal/mail"
@@ -36,6 +38,7 @@ type Server struct {
 	backupStore *backup.Storage
 	aiClient    *ai.Client
 	courseGen   *coursegen.Generator
+	billing     billing.Provider
 }
 
 type listSessionsResponse struct {
@@ -50,7 +53,7 @@ const (
 	sessionContextKey contextKey = "session"
 )
 
-func New(cfg config.Config, st *store.Store, mailer mail.Mailer, client *asynq.Client, runtime provisioning.Runtime, backupStore *backup.Storage, aiClient *ai.Client, courseGen *coursegen.Generator) *Server {
+func New(cfg config.Config, st *store.Store, mailer mail.Mailer, client *asynq.Client, runtime provisioning.Runtime, backupStore *backup.Storage, aiClient *ai.Client, courseGen *coursegen.Generator, billingProvider billing.Provider) *Server {
 	return &Server{
 		cfg:         cfg,
 		store:       st,
@@ -60,6 +63,7 @@ func New(cfg config.Config, st *store.Store, mailer mail.Mailer, client *asynq.C
 		backupStore: backupStore,
 		aiClient:    aiClient,
 		courseGen:   courseGen,
+		billing:     billingProvider,
 	}
 }
 
@@ -72,7 +76,7 @@ func (s *Server) Router() http.Handler {
 	r.Use(chiMiddleware.Timeout(30 * time.Second))
 	r.Use(limitRequestBody(maxRequestBodySize))
 	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   []string{s.cfg.FrontendOrigin},
+		AllowOriginFunc:  s.isAllowedOrigin,
 		AllowedMethods:   []string{"GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-Requested-With"},
 		AllowCredentials: true,
@@ -87,6 +91,8 @@ func (s *Server) Router() http.Handler {
 		r.Get("/healthz", s.handleHealth)
 		r.Get("/plans", s.handleListPlans)
 		r.Get("/sites/subdomain-availability", s.handleSubdomainAvailability)
+		r.Get("/billing/config", s.handleGetBillingConfig)
+		r.Post("/webhooks/midtrans", s.handleMidtransWebhook)
 
 		r.Group(func(r chi.Router) {
 			r.Use(internalRateLimit)
@@ -124,6 +130,11 @@ func (s *Server) Router() http.Handler {
 			r.Get("/sites", s.handleListSites)
 			r.Post("/sites", s.handleCreateSite)
 			r.Get("/sites/plan-changes", s.handleListOwnerSitePlanChanges)
+			r.Get("/billing/overview", s.handleGetBillingOverview)
+			r.Get("/billing/invoices/{invoiceID}", s.handleGetBillingInvoice)
+			r.Post("/billing/invoices/{invoiceID}/checkout", s.handleContinueBillingInvoiceCheckout)
+			r.Post("/billing/checkouts", s.handleCreateBillingCheckout)
+			r.Post("/billing/site-checkouts", s.handleCreateSiteCheckout)
 			r.Get("/sites/{siteID}", s.handleGetSiteByID)
 			r.Patch("/sites/{siteID}", s.handleUpdateSite)
 			r.Delete("/sites/{siteID}", s.handleDeleteSite)
@@ -267,6 +278,50 @@ func (s *Server) clearSessionCookie(w http.ResponseWriter) {
 		SameSite: http.SameSiteLaxMode,
 		MaxAge:   -1,
 	})
+}
+
+func (s *Server) isAllowedOrigin(_ *http.Request, origin string) bool {
+	origin = strings.TrimSpace(origin)
+	if origin == "" {
+		return false
+	}
+	if sameOrigin(origin, s.cfg.FrontendOrigin) {
+		return true
+	}
+	if s.cfg.AppEnv != "development" {
+		return false
+	}
+	parsedOrigin, err := url.Parse(origin)
+	if err != nil {
+		return false
+	}
+	switch strings.ToLower(parsedOrigin.Hostname()) {
+	case "localhost", "127.0.0.1", "lvh.me":
+		return parsedOrigin.Scheme == "http" || parsedOrigin.Scheme == "https"
+	default:
+		return false
+	}
+}
+
+func (s *Server) frontendOriginForRequest(r *http.Request) string {
+	origin := strings.TrimSpace(r.Header.Get("Origin"))
+	if s.isAllowedOrigin(r, origin) {
+		return origin
+	}
+	return s.cfg.FrontendOrigin
+}
+
+func sameOrigin(left, right string) bool {
+	parsedLeft, err := url.Parse(strings.TrimSpace(left))
+	if err != nil {
+		return false
+	}
+	parsedRight, err := url.Parse(strings.TrimSpace(right))
+	if err != nil {
+		return false
+	}
+	return strings.EqualFold(parsedLeft.Scheme, parsedRight.Scheme) &&
+		strings.EqualFold(parsedLeft.Host, parsedRight.Host)
 }
 
 // --- Context helpers ---

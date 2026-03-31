@@ -13,6 +13,7 @@ import (
 	"moodlepilot/backend/internal/ai"
 	"moodlepilot/backend/internal/auth"
 	"moodlepilot/backend/internal/backup"
+	"moodlepilot/backend/internal/billing"
 	"moodlepilot/backend/internal/config"
 	"moodlepilot/backend/internal/coursegen"
 	"moodlepilot/backend/internal/httpapi"
@@ -80,8 +81,9 @@ func main() {
 	aiLogger := slog.Default()
 	aiClient := ai.NewClient(aiLogger, cfg.AiApiKey, cfg.AiBaseURL, cfg.AiModel)
 	courseGen := coursegen.NewGenerator("assets/template.mbz")
+	billingProvider := billing.NewProvider(cfg)
 
-	server := httpapi.New(cfg, st, mailer, asynqClient, runtime, backupStorage, aiClient, courseGen)
+	server := httpapi.New(cfg, st, mailer, asynqClient, runtime, backupStorage, aiClient, courseGen, billingProvider)
 
 	httpServer := &http.Server{
 		Addr:    cfg.HTTPAddr,

@@ -125,6 +125,23 @@ export default function BuatSitusPage() {
 
     setIsSubmitting(true)
     try {
+      const selectedTier = getTierByCode(formData.plan)
+      const requiresCheckout = (selectedTier?.monthlyPrice ?? 0) > 0
+
+      if (requiresCheckout) {
+        const search = new URLSearchParams({
+          site_name: formData.siteName,
+          subdomain: formData.subdomain,
+          plan_code: formData.plan,
+          billing_cycle: "monthly",
+          region: formData.region,
+          admin_name: formData.adminName,
+          admin_email: formData.adminEmail,
+        })
+        router.push(`/checkout?${search.toString()}`)
+        return
+      }
+
       const response = await api.createSite({
         name: formData.siteName,
         subdomain: formData.subdomain,

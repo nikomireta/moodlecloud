@@ -28,41 +28,17 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { api, isAPIError, type SitePlanChange, type SiteSummary } from "@/lib/api"
+import {
+  api,
+  isAPIError,
+  type BillingInvoice,
+  type BillingOverview,
+  type BillingPaymentMethod,
+  type SitePlanChange,
+  type SiteSummary,
+} from "@/lib/api"
 import { formatPrice, getSelfServeUpgradeOptions, getTierByCode } from "@/lib/pricing"
 import { siteHostFromURL } from "@/lib/site-url"
-
-const invoices = [
-  {
-    id: "INV-2026030001",
-    date: "10 Mar 2026",
-    amount: 553890,
-    status: "paid",
-  },
-  {
-    id: "INV-2026020001",
-    date: "10 Feb 2026",
-    amount: 553890,
-    status: "paid",
-  },
-  {
-    id: "INV-2026010001",
-    date: "10 Jan 2026",
-    amount: 553890,
-    status: "paid",
-  },
-]
-
-const paymentMethods = [
-  {
-    id: "1",
-    type: "card",
-    name: "Visa",
-    last4: "4242",
-    expiry: "12/27",
-    isDefault: true,
-  },
-]
 
 function formatBytes(value?: number | null): string {
   if (typeof value !== "number" || Number.isNaN(value) || value < 0) {
@@ -199,9 +175,62 @@ function historyStatusBadge(status: string) {
   return "bg-muted text-muted-foreground border-border"
 }
 
+function invoiceStatusBadge(status: string) {
+  switch (status) {
+    case "paid":
+      return "text-green-600 border-green-500/20"
+    case "pending":
+      return "text-amber-600 border-amber-500/20"
+    case "failed":
+    case "expired":
+    case "canceled":
+      return "text-red-600 border-red-500/20"
+    default:
+      return "text-muted-foreground border-border"
+  }
+}
+
+function invoiceStatusLabel(status: string) {
+  switch (status) {
+    case "paid":
+      return "Lunas"
+    case "pending":
+      return "Pending"
+    case "failed":
+      return "Gagal"
+    case "expired":
+      return "Kedaluwarsa"
+    case "canceled":
+      return "Dibatalkan"
+    default:
+      return status
+  }
+}
+
+function formatInvoiceDate(value?: string | null) {
+  const trimmed = value?.trim()
+  if (!trimmed) {
+    return "Belum tersedia"
+  }
+
+  const date = new Date(trimmed)
+  if (Number.isNaN(date.getTime())) {
+    return "Belum tersedia"
+  }
+
+  return date.toLocaleDateString("id-ID", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  })
+}
+
 export default function BillingPage() {
   const [sites, setSites] = useState<SiteSummary[]>([])
   const [planChanges, setPlanChanges] = useState<SitePlanChange[]>([])
+  const [invoices, setInvoices] = useState<BillingInvoice[]>([])
+  const [paymentMethods, setPaymentMethods] = useState<BillingPaymentMethod[]>([])
+  const [subscriptions, setSubscriptions] = useState<BillingOverview["subscriptions"]>([])
   const [loading, setLoading] = useState(true)
   const [loadingError, setLoadingError] = useState("")
   const [upgradeDialogOpen, setUpgradeDialogOpen] = useState(false)
@@ -209,12 +238,12 @@ export default function BillingPage() {
 
   const loadBillingContext = useCallback(async () => {
     try {
-      const [sitesResponse, planChangesResponse] = await Promise.all([
-        api.listSites(),
-        api.listSitePlanChanges(),
-      ])
-      setSites(sitesResponse.sites ?? [])
-      setPlanChanges(planChangesResponse.changes ?? [])
+      const response = await api.getBillingOverview()
+      setSites(response.overview.sites ?? [])
+      setPlanChanges(response.overview.changes ?? [])
+      setInvoices(response.overview.invoices ?? [])
+      setPaymentMethods(response.overview.payment_methods ?? [])
+      setSubscriptions(response.overview.subscriptions ?? [])
       setLoadingError("")
     } catch (error) {
       setLoadingError(isAPIError(error) ? error.message : "Gagal memuat data langganan situs")
@@ -255,6 +284,10 @@ export default function BillingPage() {
   }, [sites])
 
   const selectedPlan = getTierByCode(selectedSite?.plan_code)
+  const selectedSubscription = useMemo(
+    () => subscriptions.find((subscription) => subscription.site_id === selectedSite?.id) ?? null,
+    [selectedSite?.id, subscriptions],
+  )
 
   const handleOpenUpgrade = (site: SiteSummary) => {
     setSelectedSite(site)
@@ -466,13 +499,13 @@ export default function BillingPage() {
                         <TableBody>
                           {planChanges.length > 0 ? (
                             planChanges.map((change) => {
-                              const site = siteMap.get(change.site_id)
+                              const site = change.site_id ? siteMap.get(change.site_id) : undefined
                               return (
                                 <TableRow key={change.id}>
                                   <TableCell>
                                     <div>
-                                      <p className="font-medium">{site?.name ?? "Situs lama"}</p>
-                                      <p className="text-xs text-muted-foreground">{site?.subdomain ?? change.site_id}</p>
+                                      <p className="font-medium">{site?.name ?? change.site_name ?? "Situs lama"}</p>
+                                      <p className="text-xs text-muted-foreground">{site?.subdomain ?? change.site_subdomain ?? change.site_id ?? "-"}</p>
                                     </div>
                                   </TableCell>
                                   <TableCell>
@@ -510,10 +543,21 @@ export default function BillingPage() {
                 <Card>
                   <CardHeader>
                     <CardTitle className="text-lg">Metode Pembayaran</CardTitle>
-                    <CardDescription>Masih mode demo. Payment gateway belum diaktifkan.</CardDescription>
+                    <CardDescription>Metode yang berhasil dipakai untuk checkout akan muncul di sini.</CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4">
-                    {paymentMethods.map((method) => (
+                    {(paymentMethods.length > 0
+                      ? paymentMethods
+                      : [
+                          {
+                            id: "placeholder",
+                            brand: "Belum ada kartu aktif",
+                            last4: "----",
+                            expiry_month: "--",
+                            expiry_year: "--",
+                            is_default: false,
+                          } as BillingPaymentMethod,
+                        ]).map((method) => (
                       <div
                         key={method.id}
                         className="flex items-center gap-3 rounded-lg border border-border p-3"
@@ -523,13 +567,13 @@ export default function BillingPage() {
                         </div>
                         <div className="flex-1">
                           <p className="text-sm font-medium">
-                            {method.name} **** {method.last4}
+                            {method.brand || "Kartu"} **** {method.last4}
                           </p>
                           <p className="text-xs text-muted-foreground">
-                            Kadaluarsa {method.expiry}
+                            Kadaluarsa {method.expiry_month}/{method.expiry_year}
                           </p>
                         </div>
-                        {method.isDefault ? (
+                        {method.is_default ? (
                           <Badge variant="secondary" className="text-xs">Default</Badge>
                         ) : null}
                       </div>
@@ -569,24 +613,60 @@ export default function BillingPage() {
 
                 <Card>
                   <CardHeader>
-                    <CardTitle className="text-lg">Riwayat Invoice Demo</CardTitle>
-                    <CardDescription>Masih placeholder sampai payment gateway diaktifkan.</CardDescription>
+                    <CardTitle className="text-lg">Riwayat Invoice</CardTitle>
+                    <CardDescription>Invoice terbaru untuk upgrade dan renewal site Anda.</CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-3">
-                    {invoices.map((invoice) => (
+                    {(invoices.length > 0
+                      ? invoices
+                      : [
+                          {
+                            id: "placeholder",
+                            owner_user_id: "",
+                            customer_id: "",
+                            site_id: null,
+                            site_name: "",
+                            site_subdomain: "",
+                            number: "Belum ada invoice",
+                            provider: "",
+                            external_id: "",
+                            description: "",
+                            amount_total: 0,
+                            amount_subtotal: 0,
+                            amount_tax: 0,
+                            status: "pending",
+                            currency: "IDR",
+                            billing_cycle: "monthly",
+                            from_plan_code: "",
+                            to_plan_code: "",
+                            payment_method_type: "",
+                            checkout_url: "",
+                            redirect_url: "",
+                            created_at: new Date().toISOString(),
+                            updated_at: new Date().toISOString(),
+                          } as BillingInvoice,
+                        ]).map((invoice) => (
                       <div key={invoice.id} className="flex items-center justify-between rounded-lg border border-border p-3">
                         <div>
-                          <p className="text-sm font-medium">{invoice.id}</p>
-                          <p className="text-xs text-muted-foreground">{invoice.date}</p>
+                          <p className="text-sm font-medium">{invoice.number}</p>
+                          <p className="text-xs text-muted-foreground">{formatInvoiceDate(invoice.created_at)}</p>
                         </div>
                         <div className="flex items-center gap-3">
-                          <Badge variant="outline" className="text-green-600 border-green-500/20">
+                          <Badge variant="outline" className={invoiceStatusBadge(invoice.status)}>
                             <CheckCircle2 className="mr-1 h-3 w-3" />
-                            Lunas
+                            {invoiceStatusLabel(invoice.status)}
                           </Badge>
-                          <Button variant="ghost" size="sm">
-                            <Download className="h-4 w-4" />
-                          </Button>
+                          {invoice.id === "placeholder" ? (
+                            <Button variant="ghost" size="sm" disabled>
+                              <Download className="h-4 w-4" />
+                            </Button>
+                          ) : (
+                            <Link href={`/tagihan/${invoice.id}`}>
+                              <Button variant="ghost" size="sm">
+                                <Download className="h-4 w-4" />
+                              </Button>
+                            </Link>
+                          )}
                         </div>
                       </div>
                     ))}
@@ -598,7 +678,7 @@ export default function BillingPage() {
                     <h3 className="mb-2 font-semibold">Paket Terpilih</h3>
                     <p className="text-sm text-muted-foreground">
                       {selectedSite
-                        ? `${selectedSite.name} saat ini memakai ${selectedPlan?.label ?? selectedSite.plan_code}.`
+                        ? `${selectedSite.name} saat ini memakai ${selectedPlan?.label ?? selectedSite.plan_code}${selectedSubscription ? ` dengan status ${selectedSubscription.status}.` : "."}`
                         : "Pilih salah satu situs existing di atas untuk membuka flow upgrade paket."}
                     </p>
                   </CardContent>

@@ -7,6 +7,7 @@ import (
 	"github.com/hibiken/asynq"
 
 	"moodlepilot/backend/internal/backup"
+	"moodlepilot/backend/internal/billing"
 	"moodlepilot/backend/internal/config"
 	"moodlepilot/backend/internal/mail"
 	"moodlepilot/backend/internal/provisioning"
@@ -31,6 +32,11 @@ func main() {
 	if err != nil {
 		log.Fatalf("create provisioning runtime: %v", err)
 	}
+	asynqClient := asynq.NewClient(asynq.RedisClientOpt{
+		Addr:     cfg.RedisAddr,
+		Password: cfg.RedisPassword,
+	})
+	defer asynqClient.Close()
 	backupStorage, err := backup.NewStorage(cfg)
 	if err != nil {
 		log.Fatalf("create backup storage: %v", err)
@@ -53,6 +59,24 @@ func main() {
 		RedisAddr:         cfg.RedisAddr,
 		RedisPassword:     cfg.RedisPassword,
 	}
+	billingHandler := billing.Handler{
+		Store:    st,
+		Provider: billing.NewProvider(cfg),
+		Finalizer: billing.Finalizer{
+			Store:       st,
+			AsynqClient: asynqClient,
+			Runtime:     runtime,
+			RuntimeMode: cfg.ProvisioningRuntimeMode,
+			HostCapacityPolicy: store.HostCapacityPolicy{
+				StorageBytesLimit:  cfg.HostStorageBudgetBytes,
+				CPUMillicoresLimit: cfg.HostCPUMillicoresBudget,
+				MemoryMiBLimit:     cfg.HostMemoryMiBBudget,
+			},
+			SiteURLBuilder: func(subdomain string) (string, string) {
+				return provisioning.BuildSiteURLs(cfg, subdomain)
+			},
+		},
+	}
 
 	srv := asynq.NewServer(asynq.RedisClientOpt{
 		Addr:     cfg.RedisAddr,
@@ -72,6 +96,7 @@ func main() {
 	mux.HandleFunc(provisioning.TaskTypeBackupSite, handler.HandleSiteBackupTask)
 	mux.HandleFunc(provisioning.TaskTypeBackupScheduleSweep, handler.HandleBackupScheduleSweepTask)
 	mux.HandleFunc(provisioning.TaskTypeBackupRetentionSweep, handler.HandleBackupRetentionSweepTask)
+	mux.HandleFunc(billing.TaskTypeReconcileBilling, billingHandler.HandleReconcileBillingTask)
 
 	scheduler := asynq.NewScheduler(asynq.RedisClientOpt{
 		Addr:     cfg.RedisAddr,
@@ -91,6 +116,9 @@ func main() {
 	}
 	if _, err := scheduler.Register(cfg.BackupRetentionSweep, provisioning.NewBackupRetentionSweepTask()); err != nil {
 		log.Fatalf("register backup retention sweep: %v", err)
+	}
+	if _, err := scheduler.Register(cfg.BillingReconcileSchedule, billing.NewReconcileBillingTask()); err != nil {
+		log.Fatalf("register billing reconcile schedule: %v", err)
 	}
 	go func() {
 		if err := scheduler.Run(); err != nil {

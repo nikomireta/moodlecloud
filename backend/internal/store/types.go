@@ -169,14 +169,203 @@ type SiteUsageSnapshot struct {
 }
 
 type SitePlanChange struct {
-	ID           uuid.UUID `json:"id"`
-	SiteID       uuid.UUID `json:"site_id"`
-	OwnerUserID  uuid.UUID `json:"owner_user_id"`
-	FromPlanCode string    `json:"from_plan_code"`
-	ToPlanCode   string    `json:"to_plan_code"`
-	Status       string    `json:"status"`
-	AppliedAt    time.Time `json:"applied_at"`
-	CreatedAt    time.Time `json:"created_at"`
+	ID            uuid.UUID  `json:"id"`
+	SiteID        *uuid.UUID `json:"site_id,omitempty"`
+	SiteName      string     `json:"site_name"`
+	SiteSubdomain string     `json:"site_subdomain"`
+	OwnerUserID   uuid.UUID  `json:"owner_user_id"`
+	FromPlanCode  string     `json:"from_plan_code"`
+	ToPlanCode    string     `json:"to_plan_code"`
+	Status        string     `json:"status"`
+	AppliedAt     time.Time  `json:"applied_at"`
+	CreatedAt     time.Time  `json:"created_at"`
+}
+
+type BillingCustomer struct {
+	ID                 uuid.UUID `json:"id"`
+	UserID             uuid.UUID `json:"user_id"`
+	Provider           string    `json:"provider"`
+	ProviderCustomerID string    `json:"provider_customer_id"`
+	FullName           string    `json:"full_name"`
+	Email              string    `json:"email"`
+	Phone              string    `json:"phone"`
+	Organization       string    `json:"organization"`
+	CreatedAt          time.Time `json:"created_at"`
+	UpdatedAt          time.Time `json:"updated_at"`
+}
+
+type BillingPaymentMethod struct {
+	ID            uuid.UUID       `json:"id"`
+	CustomerID    uuid.UUID       `json:"customer_id"`
+	OwnerUserID   uuid.UUID       `json:"owner_user_id"`
+	Provider      string          `json:"provider"`
+	ProviderToken string          `json:"provider_token"`
+	Type          string          `json:"type"`
+	Brand         string          `json:"brand"`
+	Last4         string          `json:"last4"`
+	ExpiryMonth   string          `json:"expiry_month"`
+	ExpiryYear    string          `json:"expiry_year"`
+	Status        string          `json:"status"`
+	Reusable      bool            `json:"reusable"`
+	IsDefault     bool            `json:"is_default"`
+	RawPayload    json.RawMessage `json:"raw_payload,omitempty"`
+	CreatedAt     time.Time       `json:"created_at"`
+	UpdatedAt     time.Time       `json:"updated_at"`
+}
+
+type Subscription struct {
+	ID                     uuid.UUID  `json:"id"`
+	CustomerID             uuid.UUID  `json:"customer_id"`
+	OwnerUserID            uuid.UUID  `json:"owner_user_id"`
+	SiteID                 *uuid.UUID `json:"site_id,omitempty"`
+	SiteName               string     `json:"site_name"`
+	SiteSubdomain          string     `json:"site_subdomain"`
+	PaymentMethodID        *uuid.UUID `json:"payment_method_id,omitempty"`
+	Provider               string     `json:"provider"`
+	ProviderSubscriptionID string   `json:"provider_subscription_id"`
+	Status                 string     `json:"status"`
+	BillingCycle           string     `json:"billing_cycle"`
+	CollectionMethod       string     `json:"collection_method"`
+	CurrentPlanCode        string     `json:"current_plan_code"`
+	PendingPlanCode        string     `json:"pending_plan_code"`
+	Currency               string     `json:"currency"`
+	AmountTotal            int64      `json:"amount_total"`
+	AnchorAt               *time.Time `json:"anchor_at,omitempty"`
+	CurrentPeriodStart     *time.Time `json:"current_period_start,omitempty"`
+	CurrentPeriodEnd       *time.Time `json:"current_period_end,omitempty"`
+	NextChargeAt           *time.Time `json:"next_charge_at,omitempty"`
+	LastChargeFailedAt     *time.Time `json:"last_charge_failed_at,omitempty"`
+	LastError              string     `json:"last_error"`
+	CanceledAt             *time.Time `json:"canceled_at,omitempty"`
+	CreatedAt              time.Time  `json:"created_at"`
+	UpdatedAt              time.Time  `json:"updated_at"`
+}
+
+type Invoice struct {
+	ID                uuid.UUID  `json:"id"`
+	OwnerUserID       uuid.UUID  `json:"owner_user_id"`
+	CustomerID        uuid.UUID  `json:"customer_id"`
+	SiteID            *uuid.UUID `json:"site_id,omitempty"`
+	SiteName          string     `json:"site_name"`
+	SiteSubdomain     string     `json:"site_subdomain"`
+	SubscriptionID    *uuid.UUID `json:"subscription_id,omitempty"`
+	Number            string     `json:"number"`
+	Provider          string     `json:"provider"`
+	ExternalID        string     `json:"external_id"`
+	Description       string     `json:"description"`
+	Status            string     `json:"status"`
+	Currency          string     `json:"currency"`
+	BillingCycle      string     `json:"billing_cycle"`
+	FromPlanCode      string     `json:"from_plan_code"`
+	ToPlanCode        string     `json:"to_plan_code"`
+	PaymentMethodType string     `json:"payment_method_type"`
+	AmountSubtotal    int64      `json:"amount_subtotal"`
+	AmountTax         int64      `json:"amount_tax"`
+	AmountTotal       int64      `json:"amount_total"`
+	CheckoutURL       string     `json:"checkout_url"`
+	RedirectURL       string     `json:"redirect_url"`
+	ExpiresAt         *time.Time `json:"expires_at,omitempty"`
+	PaidAt            *time.Time `json:"paid_at,omitempty"`
+	CanceledAt        *time.Time `json:"canceled_at,omitempty"`
+	FailedAt          *time.Time `json:"failed_at,omitempty"`
+	CreatedAt         time.Time  `json:"created_at"`
+	UpdatedAt         time.Time  `json:"updated_at"`
+}
+
+type InvoiceItem struct {
+	ID          uuid.UUID       `json:"id"`
+	InvoiceID   uuid.UUID       `json:"invoice_id"`
+	ItemType    string          `json:"item_type"`
+	Name        string          `json:"name"`
+	Description string          `json:"description"`
+	Quantity    int             `json:"quantity"`
+	UnitAmount  int64           `json:"unit_amount"`
+	TotalAmount int64           `json:"total_amount"`
+	Metadata    json.RawMessage `json:"metadata,omitempty"`
+	CreatedAt   time.Time       `json:"created_at"`
+	UpdatedAt   time.Time       `json:"updated_at"`
+}
+
+type PaymentAttempt struct {
+	ID                uuid.UUID       `json:"id"`
+	InvoiceID         uuid.UUID       `json:"invoice_id"`
+	SubscriptionID    *uuid.UUID      `json:"subscription_id,omitempty"`
+	Provider          string          `json:"provider"`
+	ExternalID        string          `json:"external_id"`
+	PaymentMethodType string          `json:"payment_method_type"`
+	Status            string          `json:"status"`
+	Amount            int64           `json:"amount"`
+	RedirectURL       string          `json:"redirect_url"`
+	FailureReason     string          `json:"failure_reason"`
+	RawResponse       json.RawMessage `json:"raw_response,omitempty"`
+	ExpiresAt         *time.Time      `json:"expires_at,omitempty"`
+	PaidAt            *time.Time      `json:"paid_at,omitempty"`
+	CreatedAt         time.Time       `json:"created_at"`
+	UpdatedAt         time.Time       `json:"updated_at"`
+}
+
+type ProviderWebhookEvent struct {
+	ID              uuid.UUID       `json:"id"`
+	Provider        string          `json:"provider"`
+	ExternalID      string          `json:"external_id"`
+	EventType       string          `json:"event_type"`
+	Signature       string          `json:"signature"`
+	Payload         json.RawMessage `json:"payload"`
+	ProcessedAt     *time.Time      `json:"processed_at,omitempty"`
+	ProcessingError string          `json:"processing_error"`
+	CreatedAt       time.Time       `json:"created_at"`
+	UpdatedAt       time.Time       `json:"updated_at"`
+}
+
+type BillingOverview struct {
+	Sites           []Site                 `json:"sites"`
+	Changes         []SitePlanChange       `json:"changes"`
+	Invoices        []Invoice              `json:"invoices"`
+	PaymentMethods  []BillingPaymentMethod `json:"payment_methods"`
+	Subscriptions   []Subscription         `json:"subscriptions"`
+}
+
+type SiteCheckoutOrder struct {
+	ID                    uuid.UUID  `json:"id"`
+	OwnerUserID           uuid.UUID  `json:"owner_user_id"`
+	InvoiceID             uuid.UUID  `json:"invoice_id"`
+	CreatedSiteID         *uuid.UUID `json:"created_site_id,omitempty"`
+	Status                string     `json:"status"`
+	SiteName              string     `json:"site_name"`
+	Subdomain             string     `json:"subdomain"`
+	PlanCode              string     `json:"plan_code"`
+	BillingCycle          string     `json:"billing_cycle"`
+	Region                string     `json:"region"`
+	AdminName             string     `json:"admin_name"`
+	AdminEmail            string     `json:"admin_email"`
+	PaymentMethodType     string     `json:"payment_method_type"`
+	AmountTotal           int64      `json:"amount_total"`
+	UsersActiveLimit      int        `json:"users_active_limit"`
+	StorageBytesLimit     int64      `json:"storage_bytes_limit"`
+	WebCPUMillicores      int        `json:"web_cpu_millicores"`
+	WebMemoryMiB          int        `json:"web_memory_mib"`
+	CronCPUMillicores     int        `json:"cron_cpu_millicores"`
+	CronMemoryMiB         int        `json:"cron_memory_mib"`
+	ExpiresAt             *time.Time `json:"expires_at,omitempty"`
+	PaidAt                *time.Time `json:"paid_at,omitempty"`
+	ProvisioningStartedAt *time.Time `json:"provisioning_started_at,omitempty"`
+	CompletedAt           *time.Time `json:"completed_at,omitempty"`
+	CanceledAt            *time.Time `json:"canceled_at,omitempty"`
+	LastError             string     `json:"last_error"`
+	CreatedAt             time.Time  `json:"created_at"`
+	UpdatedAt             time.Time  `json:"updated_at"`
+}
+
+type DueSubscriptionCandidate struct {
+	Subscription  Subscription         `json:"subscription"`
+	Customer      BillingCustomer      `json:"customer"`
+	PaymentMethod BillingPaymentMethod `json:"payment_method"`
+	Site          Site                 `json:"site"`
+}
+
+type PendingInvoiceCandidate struct {
+	Invoice Invoice        `json:"invoice"`
+	Attempt PaymentAttempt `json:"attempt"`
 }
 
 type SiteReportConnectToken struct {
@@ -337,7 +526,9 @@ type UpdateSiteURLsParams struct {
 }
 
 type CreateSitePlanChangeParams struct {
-	SiteID       uuid.UUID
+	SiteID       *uuid.UUID
+	SiteName     string
+	SiteSubdomain string
 	OwnerUserID  uuid.UUID
 	FromPlanCode string
 	ToPlanCode   string
@@ -463,4 +654,137 @@ type CreateNotificationParams struct {
 	Title     string
 	Message   string
 	ActionURL string
+}
+
+type UpsertBillingCustomerParams struct {
+	UserID             uuid.UUID
+	Provider           string
+	ProviderCustomerID string
+	FullName           string
+	Email              string
+	Phone              string
+	Organization       string
+}
+
+type CreateInvoiceWithAttemptParams struct {
+	OwnerUserID        uuid.UUID
+	CustomerID         uuid.UUID
+	SiteID             *uuid.UUID
+	SiteName           string
+	SiteSubdomain      string
+	SubscriptionID     *uuid.UUID
+	Provider           string
+	ExternalID         string
+	Number             string
+	Description        string
+	Status             string
+	Currency           string
+	BillingCycle       string
+	FromPlanCode       string
+	ToPlanCode         string
+	PaymentMethodType  string
+	AmountSubtotal     int64
+	AmountTax          int64
+	AmountTotal        int64
+	CheckoutURL        string
+	RedirectURL        string
+	ExpiresAt          *time.Time
+	ItemType           string
+	ItemName           string
+	ItemDescription    string
+	ItemQuantity       int
+	ItemUnitAmount     int64
+	ItemTotalAmount    int64
+	ItemMetadata       json.RawMessage
+	AttemptStatus      string
+	AttemptRedirectURL string
+	AttemptExpiresAt   *time.Time
+	AttemptRawResponse json.RawMessage
+}
+
+type UpdateInvoicePaymentStateParams struct {
+	InvoiceID          uuid.UUID
+	Status             string
+	CheckoutURL        string
+	RedirectURL        string
+	PaymentMethodType  string
+	AttemptStatus      string
+	AttemptRedirectURL string
+	AttemptFailureReason string
+	AttemptRawResponse json.RawMessage
+	ExpiresAt          *time.Time
+	PaidAt             *time.Time
+	FailedAt           *time.Time
+	CanceledAt         *time.Time
+}
+
+type UpsertBillingPaymentMethodParams struct {
+	CustomerID    uuid.UUID
+	OwnerUserID   uuid.UUID
+	Provider      string
+	ProviderToken string
+	Type          string
+	Brand         string
+	Last4         string
+	ExpiryMonth   string
+	ExpiryYear    string
+	Status        string
+	Reusable      bool
+	IsDefault     bool
+	RawPayload    json.RawMessage
+}
+
+type UpsertSubscriptionParams struct {
+	CustomerID             uuid.UUID
+	OwnerUserID            uuid.UUID
+	SiteID                 *uuid.UUID
+	SiteName               string
+	SiteSubdomain          string
+	PaymentMethodID        *uuid.UUID
+	Provider               string
+	ProviderSubscriptionID string
+	Status                 string
+	BillingCycle           string
+	CollectionMethod       string
+	CurrentPlanCode        string
+	PendingPlanCode        string
+	Currency               string
+	AmountTotal            int64
+	AnchorAt               *time.Time
+	CurrentPeriodStart     *time.Time
+	CurrentPeriodEnd       *time.Time
+	NextChargeAt           *time.Time
+	LastChargeFailedAt     *time.Time
+	LastError              string
+	CanceledAt             *time.Time
+}
+
+type CreateSiteCheckoutOrderParams struct {
+	OwnerUserID       uuid.UUID
+	InvoiceID         uuid.UUID
+	Status            string
+	SiteName          string
+	Subdomain         string
+	PlanCode          string
+	BillingCycle      string
+	Region            string
+	AdminName         string
+	AdminEmail        string
+	PaymentMethodType string
+	AmountTotal       int64
+	UsersActiveLimit  int
+	StorageBytesLimit int64
+	WebCPUMillicores  int
+	WebMemoryMiB      int
+	CronCPUMillicores int
+	CronMemoryMiB     int
+	ExpiresAt         *time.Time
+}
+
+type CreateProviderWebhookEventParams struct {
+	Provider   string
+	ExternalID string
+	EventType  string
+	Signature  string
+	Payload    json.RawMessage
 }

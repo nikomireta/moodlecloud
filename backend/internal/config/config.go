@@ -51,6 +51,7 @@ type Config struct {
 	ReconcileSchedule        string
 	BackupScheduleSweep      string
 	BackupRetentionSweep     string
+	BillingReconcileSchedule string
 	HostStorageBudgetBytes   int64
 	HostCPUMillicoresBudget  int
 	HostMemoryMiBBudget      int
@@ -63,6 +64,10 @@ type Config struct {
 	PlaywrightSeedPassword   string
 	PlaywrightSeedCompany    string
 	PlaywrightSeedOrg        string
+	MidtransServerKey        string
+	MidtransClientKey        string
+	MidtransMerchantID       string
+	MidtransEnv              string
 	AiApiKey                 string
 	AiBaseURL                string
 	AiModel                  string
@@ -106,12 +111,17 @@ func Load() (Config, error) {
 		ReconcileSchedule:        getEnv("RECONCILE_SCHEDULE", "@every 1m"),
 		BackupScheduleSweep:      getEnv("BACKUP_SCHEDULE_SWEEP", "@every 1h"),
 		BackupRetentionSweep:     getEnv("BACKUP_RETENTION_SWEEP", "@every 24h"),
+		BillingReconcileSchedule: getEnv("BILLING_RECONCILE_SCHEDULE", "@every 5m"),
 		RunMigrations:            getEnv("RUN_MIGRATIONS", "true") != "false",
 		PlaywrightSeedName:       getEnv("PLAYWRIGHT_SEED_NAME", "Playwright Test"),
 		PlaywrightSeedEmail:      getEnv("PLAYWRIGHT_SEED_EMAIL", "playwright@example.com"),
 		PlaywrightSeedPassword:   getEnv("PLAYWRIGHT_SEED_PASSWORD", "Playwright123!"),
 		PlaywrightSeedCompany:    getEnv("PLAYWRIGHT_SEED_COMPANY", "Playwright QA"),
 		PlaywrightSeedOrg:        getEnv("PLAYWRIGHT_SEED_ORGANIZATION", "Playwright Testing"),
+		MidtransServerKey:        os.Getenv("MIDTRANS_SERVER_KEY"),
+		MidtransClientKey:        os.Getenv("MIDTRANS_CLIENT_KEY"),
+		MidtransMerchantID:       getEnv("MIDTRANS_MERCHANT_ID", ""),
+		MidtransEnv:              getEnv("MIDTRANS_ENV", "sandbox"),
 		AiApiKey:                 os.Getenv("AI_API_KEY"),
 		AiBaseURL:                getEnv("AI_BASE_URL", "https://api.openai.com/v1"),
 		AiModel:                  getEnv("AI_MODEL", "qwen-max"),

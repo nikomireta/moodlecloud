@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { Header } from "@/components/layout/header"
 import { Footer } from "@/components/layout/footer"
 import { Button } from "@/components/ui/button"
@@ -12,9 +12,42 @@ import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { CheckCircle2, CreditCard, Building2, Wallet, Shield, ArrowLeft, Loader2 } from "lucide-react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
+import Script from "next/script"
+import { useRouter, useSearchParams } from "next/navigation"
+import { toast } from "sonner"
 
-const selectedPlan = {
+import { api, type BillingInvoice, type BillingInvoiceResponse, type BillingProviderConfig, type SiteCheckoutOrder } from "@/lib/api"
+import { getTierByCode } from "@/lib/pricing"
+
+declare global {
+  interface Window {
+    MidtransNew3ds?: {
+      getCardToken: (
+        card: {
+          card_number: string
+          card_exp_month: string
+          card_exp_year: string
+          card_cvv: string
+        },
+        callbacks: {
+          onSuccess: (response: { token_id: string }) => void
+          onFailure: (response: { status_message?: string }) => void
+        },
+      ) => void
+      authenticate: (
+        redirectURL: string,
+        callbacks: {
+          performAuthentication?: (redirectURL: string) => void
+          onSuccess?: (response: unknown) => void
+          onPending?: (response: unknown) => void
+          onFailure?: (response: { status_message?: string }) => void
+        },
+      ) => void
+    }
+  }
+}
+
+const fallbackSelectedPlan = {
   name: "Professional",
   price: 499000,
   period: "bulan",
@@ -23,8 +56,8 @@ const selectedPlan = {
     "1.000 pengguna per situs",
     "100 GB storage",
     "Backup harian",
-    "Support prioritas"
-  ]
+    "Support prioritas",
+  ],
 }
 
 const paymentMethods = [
@@ -32,31 +65,82 @@ const paymentMethods = [
     id: "card",
     name: "Kartu Kredit/Debit",
     description: "Visa, Mastercard, JCB",
-    icon: CreditCard
+    icon: CreditCard,
   },
   {
     id: "bank",
     name: "Transfer Bank",
     description: "BCA, Mandiri, BNI, BRI",
-    icon: Building2
+    icon: Building2,
   },
   {
     id: "ewallet",
     name: "E-Wallet",
     description: "GoPay, OVO, DANA, ShopeePay",
-    icon: Wallet
-  }
+    icon: Wallet,
+  },
 ]
 
 function formatPrice(price: number) {
-  return new Intl.NumberFormat('id-ID').format(price)
+  return new Intl.NumberFormat("id-ID").format(price)
 }
 
-export default function CheckoutPage() {
+function normalizeBillingCycle(value?: string | null) {
+  return value === "yearly" ? "yearly" : "monthly"
+}
+
+function buildSelectedPlan(planCode?: string | null, billingCycle: "monthly" | "yearly" = "monthly") {
+  const tier = getTierByCode(planCode)
+  if (!tier) {
+    return fallbackSelectedPlan
+  }
+
+  return {
+    name: tier.label,
+    price: billingCycle === "yearly" ? tier.yearlyPrice : tier.monthlyPrice,
+    period: billingCycle === "yearly" ? "tahun" : "bulan",
+    features: [
+      "1 situs Moodle",
+      tier.usersLabel,
+      `${tier.storageLabel} storage`,
+      ...tier.highlights.slice(0, 2),
+    ],
+  }
+}
+
+function formatInvoiceNumber(invoice?: BillingInvoice | null) {
+  return invoice?.number ?? "INV-2026031012345"
+}
+
+type CheckoutPageClientProps = {
+  invoiceRef?: string
+}
+
+export function CheckoutPageClient({ invoiceRef = "" }: CheckoutPageClientProps) {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const siteID = searchParams.get("site_id") ?? ""
+  const targetPlanCode = searchParams.get("target_plan_code") ?? ""
+  const siteName = searchParams.get("site_name") ?? ""
+  const siteSubdomain = searchParams.get("subdomain") ?? ""
+  const sitePlanCode = searchParams.get("plan_code") ?? ""
+  const siteRegion = searchParams.get("region") ?? "jakarta"
+  const siteAdminName = searchParams.get("admin_name") ?? ""
+  const siteAdminEmail = searchParams.get("admin_email") ?? ""
+  const invoiceUUID = searchParams.get("invoice_uuid") ?? ""
+  const invoiceID = searchParams.get("invoice_id") ?? ""
+  const orderID = searchParams.get("order_id") ?? ""
+  const billingCycle = normalizeBillingCycle(searchParams.get("billing_cycle"))
+  const isBillingCheckout = siteID !== "" && targetPlanCode !== ""
+  const isSiteCheckout = siteName !== "" && siteSubdomain !== "" && sitePlanCode !== ""
+
   const [paymentMethod, setPaymentMethod] = useState("card")
   const [isProcessing, setIsProcessing] = useState(false)
-  const [step, setStep] = useState<'info' | 'payment' | 'processing' | 'success'>('info')
+  const [step, setStep] = useState<"info" | "payment" | "processing" | "success">("info")
+  const [providerConfig, setProviderConfig] = useState<BillingProviderConfig | null>(null)
+  const [midtransReady, setMidtransReady] = useState(false)
+  const [invoice, setInvoice] = useState<BillingInvoice | null>(null)
+  const [checkoutOrder, setCheckoutOrder] = useState<SiteCheckoutOrder | null>(null)
 
   const [formData, setFormData] = useState({
     fullName: "",
@@ -66,30 +150,277 @@ export default function CheckoutPage() {
     cardNumber: "",
     cardExpiry: "",
     cardCvv: "",
-    cardName: ""
+    cardName: "",
   })
 
+  const selectedPlan = useMemo(
+    () => buildSelectedPlan(invoice?.to_plan_code || targetPlanCode || sitePlanCode || null, billingCycle),
+    [billingCycle, invoice?.to_plan_code, sitePlanCode, targetPlanCode],
+  )
+
+  const applyInvoiceDetail = useCallback((response: BillingInvoiceResponse) => {
+    setInvoice(response.invoice)
+    setCheckoutOrder(response.checkout_order ?? null)
+    if (response.invoice.status === "paid" && response.checkout_order?.subdomain) {
+      router.replace(`/proses-pembuatan/${response.checkout_order.subdomain}`)
+      return true
+    }
+    return response.invoice.status === "paid"
+  }, [router])
+
+  const pollInvoiceUntilPaid = useCallback(async (id: string, maxAttempts = 12) => {
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      try {
+        const response = await api.getBillingInvoice(id)
+        const paid = applyInvoiceDetail(response)
+        if (paid) {
+          setIsProcessing(false)
+          if (!response.checkout_order?.subdomain) {
+            setStep("success")
+          }
+          return true
+        }
+        if (["failed", "expired", "canceled"].includes(response.invoice.status)) {
+          setIsProcessing(false)
+          setStep("info")
+          toast.error("Status pembayaran berakhir tanpa sukses. Coba lagi dari halaman tagihan.")
+          return false
+        }
+      } catch (error) {
+        console.error("poll invoice failed", error)
+      }
+      await new Promise((resolve) => setTimeout(resolve, 2000))
+    }
+    return false
+  }, [applyInvoiceDetail])
+
+  useEffect(() => {
+    let active = true
+
+    async function bootstrap() {
+      try {
+        const [configResponse, meResponse] = await Promise.all([
+          api.getBillingConfig(),
+          (isBillingCheckout || isSiteCheckout) ? api.getMe().catch(() => null) : Promise.resolve(null),
+        ])
+        if (!active) {
+          return
+        }
+        setProviderConfig(configResponse)
+        if (meResponse?.user) {
+          setFormData((current) => ({
+            ...current,
+            fullName: current.fullName || meResponse.user.name || "",
+            email: current.email || meResponse.user.email || "",
+            phone: current.phone || meResponse.user.phone || "",
+            organization: current.organization || meResponse.user.organization || "",
+          }))
+        }
+      } catch (error) {
+        console.error("checkout bootstrap failed", error)
+      }
+    }
+
+    void bootstrap()
+    return () => {
+      active = false
+    }
+  }, [isBillingCheckout, isSiteCheckout])
+
+  useEffect(() => {
+    let active = true
+    const candidates = Array.from(new Set([invoiceRef, orderID, invoiceUUID, invoiceID].filter(Boolean)))
+    if (candidates.length === 0) {
+      return
+    }
+
+    async function loadInvoice() {
+      let lastError: unknown = null
+      for (const candidate of candidates) {
+        try {
+          const response = await api.getBillingInvoice(candidate)
+          if (!active) {
+            return
+          }
+          const paid = applyInvoiceDetail(response)
+          if (paid && !response.checkout_order?.subdomain) {
+            setStep("success")
+          }
+          return
+        } catch (error) {
+          lastError = error
+        }
+      }
+      console.error("load invoice failed", lastError)
+    }
+
+    void loadInvoice()
+    return () => {
+      active = false
+    }
+  }, [applyInvoiceDetail, invoiceID, invoiceRef, invoiceUUID, orderID])
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
-      [e.target.name]: e.target.value
+      [e.target.name]: e.target.value,
     }))
   }
 
+  const submitCheckout = useCallback(async (cardTokenID?: string) => {
+    const response = isSiteCheckout
+      ? await api.createSiteCheckout({
+          siteName,
+          subdomain: siteSubdomain,
+          planCode: sitePlanCode,
+          billingCycle,
+          region: siteRegion,
+          adminName: siteAdminName,
+          adminEmail: siteAdminEmail,
+          paymentMethodType: paymentMethod as "card" | "bank" | "ewallet",
+          fullName: formData.fullName,
+          email: formData.email,
+          phone: formData.phone,
+          organization: formData.organization,
+          cardTokenID,
+        })
+      : await api.createBillingCheckout({
+          siteID,
+          targetPlanCode,
+          billingCycle,
+          paymentMethodType: paymentMethod as "card" | "bank" | "ewallet",
+          fullName: formData.fullName,
+          email: formData.email,
+          phone: formData.phone,
+          organization: formData.organization,
+          cardTokenID,
+        })
+
+    setProviderConfig(response.provider)
+    setInvoice(response.invoice)
+    setCheckoutOrder(null)
+
+    if (response.invoice.status === "paid") {
+      setIsProcessing(false)
+      if (isSiteCheckout) {
+        router.replace(`/proses-pembuatan/${siteSubdomain}`)
+      } else {
+        setStep("success")
+      }
+      return
+    }
+
+    if (paymentMethod !== "card" && response.invoice.checkout_url) {
+      window.location.assign(response.invoice.checkout_url)
+      return
+    }
+
+    if (paymentMethod === "card" && response.attempt.redirect_url && window.MidtransNew3ds) {
+      window.MidtransNew3ds.authenticate(response.attempt.redirect_url, {
+        onSuccess: async () => {
+          const paid = await pollInvoiceUntilPaid(response.invoice.id)
+          if (!paid) {
+            setIsProcessing(false)
+            setStep("info")
+          }
+        },
+        onPending: async () => {
+          const paid = await pollInvoiceUntilPaid(response.invoice.id)
+          if (!paid) {
+            setIsProcessing(false)
+            setStep("info")
+          }
+        },
+        onFailure: (result) => {
+          setIsProcessing(false)
+          setStep("info")
+          toast.error(result.status_message || "Pembayaran kartu gagal diproses")
+        },
+      })
+      return
+    }
+
+    const paid = await pollInvoiceUntilPaid(response.invoice.id, 8)
+    if (!paid) {
+      setIsProcessing(false)
+      setStep("info")
+    }
+  }, [billingCycle, formData.email, formData.fullName, formData.organization, formData.phone, isSiteCheckout, paymentMethod, pollInvoiceUntilPaid, router, siteAdminEmail, siteAdminName, siteID, siteName, sitePlanCode, siteRegion, siteSubdomain, targetPlanCode])
+
   const handleSubmit = async () => {
     setIsProcessing(true)
-    setStep('processing')
-    
-    // Simulate payment processing
-    await new Promise(resolve => setTimeout(resolve, 3000))
-    
-    setIsProcessing(false)
-    setStep('success')
+    setStep("processing")
+
+    if (!isBillingCheckout && !isSiteCheckout) {
+      await new Promise((resolve) => setTimeout(resolve, 3000))
+      setIsProcessing(false)
+      setStep("success")
+      return
+    }
+
+    try {
+      if (paymentMethod !== "card") {
+        await submitCheckout()
+        return
+      }
+
+      if (providerConfig?.provider !== "midtrans") {
+        await submitCheckout()
+        return
+      }
+
+      if (!midtransReady || !window.MidtransNew3ds) {
+        throw new Error("Midtrans belum siap dimuat")
+      }
+
+      const [expMonthRaw, expYearRaw] = formData.cardExpiry.split("/")
+      const expMonth = (expMonthRaw || "").trim()
+      const expYearInput = (expYearRaw || "").trim()
+      const expYear = expYearInput.length === 2 ? `20${expYearInput}` : expYearInput
+
+      await new Promise<void>((resolve, reject) => {
+        window.MidtransNew3ds?.getCardToken(
+          {
+            card_number: formData.cardNumber,
+            card_exp_month: expMonth,
+            card_exp_year: expYear,
+            card_cvv: formData.cardCvv,
+          },
+          {
+            onSuccess: async (response) => {
+              try {
+                await submitCheckout(response.token_id)
+                resolve()
+              } catch (error) {
+                reject(error)
+              }
+            },
+            onFailure: (response) => {
+              reject(new Error(response.status_message || "Gagal membuat token kartu"))
+            },
+          },
+        )
+      })
+    } catch (error) {
+      console.error("checkout failed", error)
+      setIsProcessing(false)
+      setStep("info")
+      toast.error(error instanceof Error ? error.message : "Checkout gagal diproses")
+    }
   }
 
-  if (step === 'success') {
+  if (step === "success") {
     return (
       <div className="flex min-h-screen flex-col bg-background">
+        {providerConfig?.provider === "midtrans" && providerConfig.script_url ? (
+          <Script
+            id="midtrans-script-success"
+            src={providerConfig.script_url}
+            data-environment={providerConfig.environment}
+            data-client-key={providerConfig.client_key}
+            strategy="afterInteractive"
+          />
+        ) : null}
         <Header />
         <main className="flex-1 flex items-center justify-center p-4">
           <Card className="max-w-md w-full text-center">
@@ -103,7 +434,7 @@ export default function CheckoutPage() {
               </p>
               <div className="bg-muted/50 rounded-lg p-4 mb-6 text-left">
                 <p className="text-sm text-muted-foreground mb-1">Nomor Invoice</p>
-                <p className="font-mono font-medium">INV-2026031012345</p>
+                <p className="font-mono font-medium">{formatInvoiceNumber(invoice)}</p>
               </div>
               <div className="space-y-3">
                 <Link href="/dashboard" className="block">
@@ -121,7 +452,7 @@ export default function CheckoutPage() {
     )
   }
 
-  if (step === 'processing') {
+  if (step === "processing") {
     return (
       <div className="flex min-h-screen flex-col bg-background">
         <Header />
@@ -143,21 +474,29 @@ export default function CheckoutPage() {
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
+      {providerConfig?.provider === "midtrans" && providerConfig.script_url ? (
+        <Script
+          id="midtrans-script"
+          src={providerConfig.script_url}
+          data-environment={providerConfig.environment}
+          data-client-key={providerConfig.client_key}
+          strategy="afterInteractive"
+          onLoad={() => setMidtransReady(true)}
+        />
+      ) : null}
       <Header />
-      
+
       <main className="flex-1 py-8">
         <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
-          <Link href="/harga">
+          <Link href={isSiteCheckout ? "/buat-situs" : "/harga"}>
             <Button variant="ghost" size="sm" className="mb-6">
               <ArrowLeft className="mr-2 h-4 w-4" />
-              Kembali ke Harga
+              {isSiteCheckout ? "Kembali ke Buat Situs" : "Kembali ke Harga"}
             </Button>
           </Link>
 
           <div className="grid lg:grid-cols-[1fr_400px] gap-8">
-            {/* Checkout Form */}
             <div className="space-y-8">
-              {/* Step 1: Personal Info */}
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
@@ -215,7 +554,6 @@ export default function CheckoutPage() {
                 </CardContent>
               </Card>
 
-              {/* Step 2: Payment Method */}
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
@@ -250,8 +588,7 @@ export default function CheckoutPage() {
                     })}
                   </RadioGroup>
 
-                  {/* Card Details */}
-                  {paymentMethod === 'card' && (
+                  {paymentMethod === "card" && (
                     <div className="mt-6 space-y-4 pt-6 border-t border-border">
                       <div className="space-y-2">
                         <Label htmlFor="cardNumber">Nomor Kartu</Label>
@@ -298,7 +635,7 @@ export default function CheckoutPage() {
                     </div>
                   )}
 
-                  {paymentMethod === 'bank' && (
+                  {paymentMethod === "bank" && (
                     <div className="mt-6 p-4 bg-muted/50 rounded-lg">
                       <p className="text-sm text-muted-foreground">
                         Setelah checkout, Anda akan menerima instruksi transfer bank melalui email.
@@ -306,7 +643,7 @@ export default function CheckoutPage() {
                     </div>
                   )}
 
-                  {paymentMethod === 'ewallet' && (
+                  {paymentMethod === "ewallet" && (
                     <div className="mt-6 p-4 bg-muted/50 rounded-lg">
                       <p className="text-sm text-muted-foreground">
                         Anda akan diarahkan ke halaman pembayaran e-wallet setelah checkout.
@@ -316,14 +653,12 @@ export default function CheckoutPage() {
                 </CardContent>
               </Card>
 
-              {/* Security Note */}
               <div className="flex items-center gap-3 text-sm text-muted-foreground">
                 <Shield className="h-5 w-5" />
                 <p>Pembayaran Anda dilindungi dengan enkripsi SSL 256-bit</p>
               </div>
             </div>
 
-            {/* Order Summary */}
             <div>
               <Card className="sticky top-8">
                 <CardHeader>
@@ -333,7 +668,7 @@ export default function CheckoutPage() {
                   <div>
                     <div className="flex items-center justify-between mb-2">
                       <h3 className="font-semibold">{selectedPlan.name}</h3>
-                      <Badge>Bulanan</Badge>
+                      <Badge>{billingCycle === "yearly" ? "Tahunan" : "Bulanan"}</Badge>
                     </div>
                     <ul className="space-y-2">
                       {selectedPlan.features.map((feature, idx) => (
@@ -392,4 +727,8 @@ export default function CheckoutPage() {
       <Footer />
     </div>
   )
+}
+
+export default function CheckoutPage() {
+  return <CheckoutPageClient />
 }
