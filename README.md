@@ -1,10 +1,38 @@
 # MoodleCloud2
 
-MoodleCloud2 is a local-first prototype for provisioning and managing Moodle sites. The repo is a monorepo with a Next.js frontend, a Go API, a Go background worker, and Docker-based local infrastructure for Postgres, Redis, Mailpit, Traefik, and Moodle site containers.
+MoodleCloud2 is a local-first Moodle hosting and provisioning dashboard. It lets users create Moodle sites from a web UI, monitor provisioning progress, manage site runtime state, and explore supporting flows such as billing, notifications, documentation, and AI-assisted course generation.
+
+The repo is a monorepo with a Next.js frontend, a Go API, a Go background worker, and Docker-based local infrastructure for Postgres, Redis, Mailpit, Traefik, and Moodle site containers.
 
 ## Dashboard Preview
 
 ![MoodleCloud2 dashboard screenshot](v1.png)
+
+## What This App Does
+
+- Creates Moodle sites through a guided web UI.
+- Provisions local Moodle runtime containers through a Go worker and Redis-backed job queue.
+- Tracks provisioning progress from site creation through final route validation.
+- Lets users manage site details, runtime status, usage, limits, custom domains, and deletion.
+- Provides account, session, notification, billing, documentation, blog, and pricing prototype flows.
+- Includes AI course tooling for generating a course outline and exporting it as a Moodle `.mbz` backup file.
+
+## Core Features
+
+- Authentication: registration, email verification, login/logout, password reset, session management, and profile updates.
+- Site provisioning: subdomain availability checks, site creation, provisioning progress, and success routing.
+- Site management: dashboard site list, site detail pages, runtime start/restart/stop controls, custom domain settings, usage summaries, and site deletion.
+- Platform operations: Postgres persistence, Goose migrations, Redis/Asynq background jobs, Mailpit email delivery, Traefik routing, and Docker-based Moodle runtimes.
+- AI course tooling: prompt-based course outline generation and `.mbz` export.
+- Prototype content: pricing, checkout, billing, documentation, blog, and notification center pages.
+
+## Architecture At A Glance
+
+- The frontend uses `frontend/lib/api.ts` as the shared API client for backend-backed flows.
+- The Go API serves versioned `/v1` HTTP endpoints from `backend/cmd/api`.
+- The Go worker in `backend/cmd/worker` processes provisioning and usage-metering jobs through Asynq.
+- The Docker local runtime creates Moodle containers, per-site databases, volumes, and Traefik routes.
+- Local infrastructure is defined in `docker-compose.yml`.
 
 ## Repository Layout
 
